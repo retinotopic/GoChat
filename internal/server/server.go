@@ -16,15 +16,15 @@ func NewServer(addr string) *Server {
 	return &Server{addr: addr}
 }
 func (s *Server) Run() error {
-	accounHandler := http.HandlerFunc(s.Account)
+	accountHandler := http.HandlerFunc(s.account)
 	http.Handle("/main", templ.Handler(htmx.Main()))
 	http.Handle("/login", templ.Handler(htmx.Login("")))
 	http.Handle("/register", templ.Handler(htmx.Register()))
-	http.Handle("/account", s.mwAccount(accounHandler))
+	http.Handle("/account", s.MWaccount(accountHandler))
 	return http.ListenAndServe(s.addr, nil)
 
 }
-func (s *Server) mwAccount(next http.Handler) http.Handler {
+func (s *Server) MWaccount(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.FormValue("email") == "admin" && r.FormValue("password") == "ADMIN" {
 			next.ServeHTTP(w, r)
@@ -35,6 +35,9 @@ func (s *Server) mwAccount(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
+func (s *Server) account(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("you are logged in"))
+}
+func (s *Server) MWregister(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("you are logged in"))
 }
