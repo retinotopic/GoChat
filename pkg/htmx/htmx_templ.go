@@ -124,7 +124,7 @@ func Register() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form hx-target=\"this\" hx-swap=\"outerHTML\"><input name=\"email\" Your email> <input name=\"password\" Your password> <button hx-get=\"/regnoti\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form hx-target=\"this\" hx-swap=\"outerHTML\"><input name=\"email\" Your email> <input name=\"password\" Your password> <button hx-get=\"/regnotif\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
