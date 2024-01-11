@@ -10,27 +10,21 @@ import (
 	templ "github.com/a-h/templ"
 )
 
-var from = "senderexampl@gmail.com"
-var password = "passwordexampe"
-
-// Receiver email address.
-// smtp server configuration.
-var smtpHost = "smtp.gmail.com"
-var smtpPort = "587"
-
-// Message.
-
-// Authentication.
-var auth = smtp.PlainAuth("", from, password, smtpHost)
-
 type Server struct {
-	addr string
+	addr         string
+	port         string
+	fromsmtp     string
+	passwordsmtp string
+	smtpHost     string
+	smtpPort     string
+	auth         smtp.Auth
 }
 
-func NewServer(addr string) *Server {
-	return &Server{addr: addr}
+func NewServer(addr string, fromsmtp string, passwordsmtp string, smtpHost string, smtpPort string) *Server {
+	return &Server{addr: addr, fromsmtp: fromsmtp, passwordsmtp: passwordsmtp, smtpHost: smtpHost, smtpPort: smtpPort}
 }
 func (s *Server) Run() error {
+	s.auth = smtp.PlainAuth("", s.fromsmtp, s.passwordsmtp, s.smtpHost)
 	accountHandler := http.HandlerFunc(s.account)
 	http.Handle("/main", templ.Handler(htmx.Main()))
 	http.Handle("/login", templ.Handler(htmx.Login("")))
@@ -56,9 +50,9 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) MWregister(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("im here")
+		fmt.Println("im here", r.FormValue("email"))
 
-		err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{r.FormValue("email")}, []byte("hiii"))
+		err := smtp.SendMail(s.smtpHost+":"+s.smtpPort, s.auth, s.fromsmtp, []string{r.FormValue("email")}, []byte("hiii"))
 		if err != nil {
 			fmt.Println(err)
 			return

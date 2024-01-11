@@ -17,10 +17,10 @@ templ Main() {
 }
 templ Register() { 
   @Imphtmx()
-  <form hx-target="this" hx-swap="outerHTML">
+  <form hx-get="/regnotif" hx-target="this" hx-swap="outerHTML">
     <input name="email" Your email/>
     <input name="password" Your password/>
-    <button hx-get="/regnotif">submit form</button>
+    <button type="submit">submit form</button>
   </form>
 }
 templ Login(addit string) {
