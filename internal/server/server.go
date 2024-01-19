@@ -46,7 +46,7 @@ func NewServer(addr string) *Server {
 func (s *Server) Run() error {
 	http.HandleFunc("/login", s.handleGoogleLogin)
 	http.HandleFunc("/callback", s.handleGoogleCallback)
-	http.HandleFunc("/callback", s.handleGoogleCallback)
+	http.HandleFunc("/chat", s.handleGoogleCallback)
 	return http.ListenAndServe(s.addr, nil)
 
 }
@@ -56,7 +56,7 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect) // composing our auth request url
 }
-func (s *Server) account(w http.ResponseWriter, r *http.Request) {
+func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("Authorization")
 	resp2, _ := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + token)
 	err := resp2.Write(w)
@@ -89,7 +89,9 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(authconf.Access_token)
 	fmt.Println(authconf.Expires_in)
 	fmt.Println(authconf.Id_token)      // --------->>>>> to frontend httponly
-	fmt.Println(authconf.Refresh_token) // --------->>>>> to frontend httponly
-	resp2, _ := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + authconf.Id_token)
-	err = resp2.Write(w)
+	fmt.Println(authconf.Refresh_token) // --------->>>>> to frontend httponl
+	cookie := &http.Cookie{Name: "openidtoken", Value: authconf.Id_token + authconf.Refresh_token}
+	http.SetCookie(w, cookie)
+	//resp2, _ := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + authconf.Id_token)
+	//err = resp2.Write(w)
 }
