@@ -1,6 +1,6 @@
-
 import { createSignal, Switch,Match } from "solid-js";
 import login from '.components/login';
+import chat from '.components/chat';
 function App() {
   const [httpcode, setHttpCode] = createSignal(418);
   async function trytologin() {
@@ -17,7 +17,7 @@ function App() {
         <login/>
       </Match>
       <Match when={httpcode()!=401}> 
-        <Chat/>
+        chat app will be here
       </Match>
     </Switch>
   );

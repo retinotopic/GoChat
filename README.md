@@ -1,2 +1,2 @@
 # GoChat
-Room-based chat application
+Room-based chat for 2 people app

@@ -47,6 +47,7 @@ func (s *Server) Run() error {
 	http.HandleFunc("/login", s.handleGoogleLogin)
 	http.HandleFunc("/callback", s.handleGoogleCallback)
 	http.HandleFunc("/chat", s.handleGoogleCallback)
+
 	return http.ListenAndServe(s.addr, nil)
 
 }
@@ -90,7 +91,7 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(authconf.Expires_in)
 	fmt.Println(authconf.Id_token)      // --------->>>>> to frontend httponly
 	fmt.Println(authconf.Refresh_token) // --------->>>>> to frontend httponl
-	cookie := &http.Cookie{Name: "openidtoken", Value: authconf.Id_token + authconf.Refresh_token}
+	cookie := &http.Cookie{Name: "refresh", Value: authconf.Refresh_token, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode}
 	http.SetCookie(w, cookie)
 	//resp2, _ := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + authconf.Id_token)
 	//err = resp2.Write(w)
