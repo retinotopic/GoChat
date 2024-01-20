@@ -1,10 +1,11 @@
 package main
 
 import (
-	server "GoChat/internal/server"
 	"flag"
 	"fmt"
 	"log"
+
+	server "github.com/retinotopic/GoChat/internal/server"
 )
 
 func main() {
