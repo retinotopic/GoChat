@@ -1,0 +1,24 @@
+{
+    "1" : {
+      "Name":"discord",
+      "RedirectURL":  "http://localhost:8080/callback",
+      "ClientID":   "DISCORD_CLIENT_ID",
+      "ClientSecret": "DISCORD_CLIENT_SECRET",
+      "Scopes": "identify",
+      "AuthURL": "https://discord.com/oauth2/authorize",
+      "TokenURL": "https://discord.com/api/oauth2/token",
+      "RevokeURL": "https://discord.com/api/oauth2/token/revoke",
+      "UserinfoURL": "https://discord.com/api/users/@me"
+    },
+    "2" : {
+        "Name":"google",
+        "RedirectURL":  "http://localhost:8080/callback",
+        "ClientID":   "GOOGLE_CLIENT_ID",
+        "ClientSecret": "GOOGLE_CLIENT_SECRET",
+        "Scopes": "email",
+        "AuthURL": "https://accounts.google.com/o/oauth2/auth",
+        "TokenURL": "https://oauth2.googleapis.com/token",
+        "RevokeURL": "https://accounts.google.com/o/oauth2/revoke",
+        "UserinfoURL": "https://www.googleapis.com/oauth2/v3/userinfo"
+      }
+}

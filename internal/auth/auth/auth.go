@@ -1,17 +1,18 @@
 package auth
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 
 	"github.com/retinotopic/pokerGO/pkg/randfuncs"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
 
 var (
-	GoogleConfig     *AuthConfig
-	DiscordConfig    *AuthConfig
 	OauthStateString string
+	ProvidersConfig  providersConfig
 )
 
 type info struct {
@@ -19,37 +20,55 @@ type info struct {
 	Refresh_token string `json:"refresh_token"`
 	Id            string `json:"id"`
 }
-type AuthConfig struct {
+type providersConfig map[string]authConfig
+
+type authConfig struct {
 	Config      *oauth2.Config
-	revokeURL   string
-	userinfoURL string
+	RevokeURL   string
+	UserinfoURL string
+}
+type providerJSON struct {
+	Name         string `json:"Name"`
+	RedirectURL  string `json:"RedirectURL"`
+	ClientID     string `json:"ClientID"`
+	ClientSecret string `json:"ClientSecret"`
+	Scopes       string `json:"Scopes"`
+	AuthURL      string `json:"AuthURL"`
+	TokenURL     string `json:"TokenURL"`
+	RevokeURL    string `json:"RevokeURL"`
+	UserinfoURL  string `json:"UserinfoURL"`
 }
 
 func init() {
 	OauthStateString = randfuncs.RandomString(20, randfuncs.NewSource())
-	GoogleConfig = &AuthConfig{
-		Config: &oauth2.Config{
-			RedirectURL:  "http://localhost:8080/callback",
-			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-			Scopes:       []string{"email"},
-			Endpoint:     google.Endpoint,
-		},
-		revokeURL:   "https://accounts.google.com/o/oauth2/revoke",
-		userinfoURL: "https://www.googleapis.com/oauth2/v3/userinfo",
+	jsonFile, err := os.Open("config.json")
+	jsonByte, err := io.ReadAll(jsonFile)
+	if err != nil {
+		fmt.Println(err, "readall err")
 	}
-	DiscordConfig = &AuthConfig{
-		Config: &oauth2.Config{
-			RedirectURL:  "http://localhost:8080/callback",
-			ClientID:     os.Getenv("DISCORD_CLIENT_ID"),
-			ClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
-			Scopes:       []string{"identify"},
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://discord.com/oauth2/authorize",
-				TokenURL: "https://discord.com/api/oauth2/token",
+	var providersJSON map[string]providerJSON
+	err = json.Unmarshal(jsonByte, &providersJSON)
+	if err != nil {
+		fmt.Println(err, "unM json")
+	}
+	ProvidersConfig = make(providersConfig)
+	for _, v := range providersJSON {
+		ProvidersConfig[v.Name] = authConfig{
+			Config: &oauth2.Config{
+				ClientID:     v.ClientID,
+				ClientSecret: v.ClientSecret,
+				RedirectURL:  v.RedirectURL,
+				Scopes:       []string{v.Scopes},
+				Endpoint: oauth2.Endpoint{
+					AuthURL:  v.AuthURL,
+					TokenURL: v.TokenURL,
+				},
 			},
-		},
-		revokeURL:   "https://discord.com/api/oauth2/token/revoke",
-		userinfoURL: "https://discord.com/api/users/@me",
+			RevokeURL:   v.RevokeURL,
+			UserinfoURL: v.UserinfoURL,
+		}
+
 	}
+	OauthStateString = randfuncs.RandomString(20, randfuncs.NewSource())
+
 }
