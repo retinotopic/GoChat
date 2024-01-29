@@ -3,7 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/retinotopic/GoChat/internal/auth/login"
+	"github.com/gorilla/mux"
+	"github.com/retinotopic/GoChat/internal/auth/auth"
 )
 
 type Server struct {
@@ -14,8 +15,11 @@ func NewServer(addr string) *Server {
 	return &Server{addr: addr}
 }
 func (s *Server) Run() error {
-	http.HandleFunc("/login", login.LoginUser)
-
-	return http.ListenAndServe(s.addr, nil)
+	r := mux.NewRouter()
+	r.HandleFunc("/{provider}/CompleteAuth", func(w http.ResponseWriter, r *http.Request) {
+		provider := mux.Vars(r)["provider"]
+		auth.Providersmap[provider].CompleteAuth(w, r)
+	})
+	return http.ListenAndServe(s.addr, r)
 
 }

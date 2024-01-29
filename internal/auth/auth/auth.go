@@ -1,74 +1,21 @@
 package auth
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"net/http"
 	"os"
 
-	"github.com/retinotopic/pokerGO/pkg/randfuncs"
-	"golang.org/x/oauth2"
+	"github.com/retinotopic/GoChat/internal/auth/providers/google"
+	"github.com/retinotopic/GoChat/internal/auth/providers/stytch"
 )
 
-var (
-	OauthStateString string
-	ProvidersConfig  providersConfig
-)
+type Providers map[string]Authenticator
 
-type info struct {
-	Access_token  string `json:"access_token"`
-	Refresh_token string `json:"refresh_token"`
-	Id            string `json:"id"`
-}
-type providersConfig map[string]authConfig
-
-type authConfig struct {
-	Config      *oauth2.Config
-	RevokeURL   string
-	UserinfoURL string
-}
-type providerJSON struct {
-	Name         string `json:"Name"`
-	RedirectURL  string `json:"RedirectURL"`
-	ClientID     string `json:"ClientID"`
-	ClientSecret string `json:"ClientSecret"`
-	Scopes       string `json:"Scopes"`
-	AuthURL      string `json:"AuthURL"`
-	TokenURL     string `json:"TokenURL"`
-	RevokeURL    string `json:"RevokeURL"`
-	UserinfoURL  string `json:"UserinfoURL"`
+var Providersmap = Providers{
+	"google": google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
+	"stytch": stytch.New(os.Getenv("STYTCH_PROJECT_ID"), os.Getenv("STYTCH_PROJECT_SECRET"), "http://localhost:8080/stytch/CompleteAuth"),
 }
 
-func init() {
-	OauthStateString = randfuncs.RandomString(20, randfuncs.NewSource())
-	jsonFile, err := os.Open("config.json")
-	jsonByte, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println(err, "readall err")
-	}
-	var providersJSON map[string]providerJSON
-	err = json.Unmarshal(jsonByte, &providersJSON)
-	if err != nil {
-		fmt.Println(err, "unM json")
-	}
-	ProvidersConfig = make(providersConfig)
-	for _, v := range providersJSON {
-		ProvidersConfig[v.Name] = authConfig{
-			Config: &oauth2.Config{
-				ClientID:     v.ClientID,
-				ClientSecret: v.ClientSecret,
-				RedirectURL:  v.RedirectURL,
-				Scopes:       []string{v.Scopes},
-				Endpoint: oauth2.Endpoint{
-					AuthURL:  v.AuthURL,
-					TokenURL: v.TokenURL,
-				},
-			},
-			RevokeURL:   v.RevokeURL,
-			UserinfoURL: v.UserinfoURL,
-		}
-
-	}
-	OauthStateString = randfuncs.RandomString(20, randfuncs.NewSource())
-
+type Authenticator interface {
+	BeginAuth(w http.ResponseWriter, r *http.Request)
+	CompleteAuth(w http.ResponseWriter, r *http.Request)
 }
