@@ -41,7 +41,7 @@ func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
 }
 func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	params := &otp.AuthenticateParams{
-		MethodID: "phone-number-test-d5a3b680-e8a3-40c0-b815-ab79986666d0",
+		MethodID: r.FormValue("emailid"),
 		Code:     r.FormValue("code"),
 	}
 
