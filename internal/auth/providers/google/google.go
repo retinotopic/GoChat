@@ -50,8 +50,7 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(token.RefreshToken)
 	fmt.Println(token.Expiry)
 	fmt.Println(token.Extra("id_token"), "extra")
-	req, _ := http.NewRequest(http.MethodGet, "graph.microsoft.com/oidc/userinfo", nil)
-	req.Header.Add("Authorization", "Bearer "+token.Extra("id_token").(string))
-	resp2, _ := http.DefaultClient.Do(req)
+	r.Header.Add("Authorization", "Bearer "+token.Extra("id_token").(string))
+	resp2, _ := http.DefaultClient.Do(r)
 	_ = resp2.Write(w)
 }
