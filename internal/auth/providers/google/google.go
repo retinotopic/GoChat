@@ -15,6 +15,7 @@ type Provider struct {
 	Config           oauth2.Config
 	RevokeURL        string
 	oauthStateString string
+	PublicKey        string
 }
 
 func New(clientid string, clientsecret, redirect string) Provider {
@@ -28,6 +29,7 @@ func New(clientid string, clientsecret, redirect string) Provider {
 		},
 		RevokeURL:        "https://accounts.google.com/o/oauth2/revoke",
 		oauthStateString: randfuncs.RandomString(20, randfuncs.NewSource()),
+		PublicKey:        "-----BEGIN CERTIFICATE-----\nMIIDJjCCAg6gAwIBAgIIbUDYzBFHdOQwDQYJKoZIhvcNAQEFBQAwNjE0MDIGA1UE\nAwwrZmVkZXJhdGVkLXNpZ25vbi5zeXN0ZW0uZ3NlcnZpY2VhY2NvdW50LmNvbTAe\nFw0yNDAxMzEwNDM4MTVaFw0yNDAyMTYxNjUzMTVaMDYxNDAyBgNVBAMMK2ZlZGVy\nYXRlZC1zaWdub24uc3lzdGVtLmdzZXJ2aWNlYWNjb3VudC5jb20wggEiMA0GCSqG\nSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC/d1kvZHY+55tsAKFhcpVbpH4UkNRWZnxP\nJUxYfT5WlWMVhm/LsFloTkCktZzdSGle6DqvrbfQAkjSjDnJ4+eqZmcjmpyTHPRu\nvQWPbtl2D5fg9Y33mB2Tp+kjgnA2ZkWyCJbOYOI/XXyPyMjEw0GIhU9PtHLKSEBl\n42cYLaQNT7zWKinznQrbTkTB9KL9MFPocJtGP9NJDagl8hcM9fyzsqDg9GMM4e3c\nPwKKqwhZvFKRFG5OJT/UCGxu5zd32GQPWs45OFVPpPstVlPvXRa09rVBspSAYi7a\nmaI+jQEJ2duqjOxFU7Bj3TVHvtWVXClO4aic9m7I7UHYWAa5iCi3AgMBAAGjODA2\nMAwGA1UdEwEB/wQCMAAwDgYDVR0PAQH/BAQDAgeAMBYGA1UdJQEB/wQMMAoGCCsG\nAQUFBwMCMA0GCSqGSIb3DQEBBQUAA4IBAQAU1vWzq3YYDQ5P1adxjfs9MYv4s/zN\npS8mQqGN0w27X9wcy5Jix+2Of85fvt4eSkBZgbGeRIfr+Omy8qr9zefwpFoQPkvh\nwM2JDRucjfTPjlhkLFt8yr0ZwwBGziWpCVFBjZhpHdDynhfNaI+RFlO2XHnXuQRS\n4B9c9JyaaaOkPu+XIgb5zP5AIUepVgpDdF/nPWeSBbIBoZLZR5XFCmRW55tVtubp\nBaui/Yclnr/36NTKK8IzOLE/ha5PuQH2Ai3WxbztIresBdadjhKxm7iOz63akWPy\nSJ5/l4Zn2MEu6JLTaVriZMmOmhNLhfmJFO5dTZpA4Vfd5xaN5VG39kjW\n-----END CERTIFICATE-----\n",
 	}
 }
 

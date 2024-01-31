@@ -1,10 +1,16 @@
 package google
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/pascaldekloe/jwt"
 )
 
 func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
@@ -39,5 +45,28 @@ func (p Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 	err = resp2.Write(w)
 	if err != nil {
 		log.Println(err, "error response error")
+	}
+}
+func (p Provider) FetchUser(w http.ResponseWriter, r *http.Request) {
+	block, err := pem.Decode([]byte(p.PublicKey))
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	var cert *x509.Certificate
+	cert, err2 := x509.ParseCertificate(block.Bytes)
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
+	if err2 != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	token, err3 := r.Cookie("token")
+	if err3 != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	claims, err4 := jwt.RSACheck([]byte(token.Value), rsaPublicKey)
+	if err4 != nil {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	if !claims.Valid(time.Now()) {
+		w.WriteHeader(http.StatusBadRequest)
 	}
 }
