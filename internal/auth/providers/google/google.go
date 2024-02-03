@@ -43,13 +43,17 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("state") != p.oauthStateString {
 		fmt.Println("invalid oauth state")
 	}
-
 	code := r.FormValue("code")
-	token, _ := p.Config.Exchange(context.Background(), code)
-	//client := config.Client(context.Background(), token)
-	//resp,_:= client.Get("https://discord.com/api/users/@me")
-	fmt.Println(token.AccessToken)
-	fmt.Println(token.RefreshToken)
+	token, err := p.Config.Exchange(context.Background(), code)
+	if err != nil {
+		fmt.Println(err, "exchange error")
+	}
+	jwt_token := http.Cookie{Name: "jwt_token", Value: token.Extra("id_token").(string), MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
+	refresh_token := http.Cookie{Name: "refresh_token", Value: token.RefreshToken, Path: "/refresh", HttpOnly: true, Secure: true}
+	http.SetCookie(w, &refresh_token)
+	http.SetCookie(w, &jwt_token)
+
+	//////////////
 	fmt.Println(token.Expiry)
 	fmt.Println(token.Extra("id_token"), "extra")
 	r.Header.Add("Authorization", "Bearer "+token.Extra("id_token").(string))
