@@ -17,7 +17,7 @@ func NewServer(addr string) *Server {
 func (s *Server) Run() error {
 	r := mux.NewRouter()
 	r.HandleFunc("/{provider}/BeginAuth", auth.BeginAuthenticator)
-	r.HandleFunc("/{provider}/BeginAuth", auth.CompleteAuthenticator)
+	r.HandleFunc("/{provider}/CompleteAuth", auth.CompleteAuthenticator)
 	return http.ListenAndServe(s.addr, r)
 
 }

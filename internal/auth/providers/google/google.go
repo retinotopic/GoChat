@@ -48,10 +48,10 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err, "exchange error")
 	}
-	jwt_token := http.Cookie{Name: "jwt_token", Value: token.Extra("id_token").(string), MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
-	refresh_token := http.Cookie{Name: "refresh_token", Value: token.RefreshToken, Path: "/refresh", HttpOnly: true, Secure: true}
-	http.SetCookie(w, &refresh_token)
-	http.SetCookie(w, &jwt_token)
+	idToken := http.Cookie{Name: "idToken", Value: token.Extra("id_token").(string), MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
+	refreshToken := http.Cookie{Name: "refreshToken", Value: token.RefreshToken, Path: "/refresh", HttpOnly: true, Secure: true}
+	http.SetCookie(w, &idToken)
+	http.SetCookie(w, &refreshToken)
 
 	//////////////
 	fmt.Println(token.Expiry)

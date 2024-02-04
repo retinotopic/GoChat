@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/pascaldekloe/jwt"
+	"golang.org/x/oauth2/google"
 )
 
 func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
 	form := url.Values{}
-	token, err := r.Cookie("refresh_token")
+	token, err := r.Cookie("refreshToken")
 	if err != nil {
 		log.Println(err, "revoke cookie retrieve err")
 	}
@@ -23,10 +24,16 @@ func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
 	form.Add("grant_type", "refresh_token")
 	form.Add("client_id", p.Config.ClientID)
 	form.Add("client_secret", p.Config.ClientSecret)
-	req, _ := http.NewRequest("POST", "https://login.microsoftonline.com/TenantID/v2.0/oauth2/token", strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", google.Endpoint.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		log.Println(err, "error creating request error")
+	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	resp2, _ := http.DefaultClient.Do(req)
-	_ = resp2.Write(w)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println(err, "error request error")
+	}
+	log.Println(resp.StatusCode)
 
 }
 func (p Provider) Revoke(w http.ResponseWriter, r *http.Request) {
@@ -41,11 +48,12 @@ func (p Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 		log.Println(err, "error request error")
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	resp2, _ := http.DefaultClient.Do(req)
-	err = resp2.Write(w)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Println(err, "error response error")
+		log.Println(err, "error request error")
 	}
+	log.Println(resp.StatusCode)
+
 }
 func (p Provider) FetchUser(w http.ResponseWriter, r *http.Request) {
 	block, err := pem.Decode([]byte(p.PublicKey))

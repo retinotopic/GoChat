@@ -5,14 +5,16 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/retinotopic/GoChat/internal/auth/providers/gfirebase"
 	"github.com/retinotopic/GoChat/internal/auth/providers/google"
 )
 
 type Providers map[string]Authenticator
 
 var providersmap = Providers{
-	"google": google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
-} //"gfirebase":os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	"google":    google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
+	"gfirebase": gfirebase.New(os.Getenv("WEB_API_KEY"), os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), "http://localhost:8080/gfirebase/CompleteAuth"),
+}
 
 type Authenticator interface {
 	BeginAuth(w http.ResponseWriter, r *http.Request)
