@@ -23,7 +23,7 @@ type Provider struct {
 	RedirectURL        string
 	SendOobCodeURL     string
 	SignInWithEmailURL string
-	App                *firebase.App
+	RefreshTokenURL    string
 }
 
 func New(webapikey string, credentials string, redirect string) Provider {
@@ -43,9 +43,9 @@ func New(webapikey string, credentials string, redirect string) Provider {
 		Client:             client,
 		WebApiKey:          webapikey,
 		RedirectURL:        redirect,
-		SendOobCodeURL:     "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode",
-		SignInWithEmailURL: "https://identitytoolkit.googleapis.com/v1/accounts:signInWithEmailLink",
-		App:                app,
+		SendOobCodeURL:     "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=",
+		SignInWithEmailURL: "https://identitytoolkit.googleapis.com/v1/accounts:signInWithEmailLink?key=",
+		RefreshTokenURL:    "https://securetoken.googleapis.com/v1/token?key=",
 	}
 }
 func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +53,7 @@ func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
 	form.Add("requestType", "EMAIL_SIGNIN")
 	form.Add("email", r.FormValue("email"))
 	form.Add("continueUrl", p.RedirectURL)
-	req, err := http.NewRequest("POST", p.SendOobCodeURL+"?key="+p.WebApiKey, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", p.SendOobCodeURL+p.WebApiKey, strings.NewReader(form.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	if err != nil {
 		log.Println(err, "creating request error")
@@ -97,7 +97,7 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	form := url.Values{}
 	form.Add("oobCode", oobCode)
 	form.Add("email", c.Value)
-	req, err := http.NewRequest("POST", p.SignInWithEmailURL+"?key="+p.WebApiKey, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", p.SignInWithEmailURL+p.WebApiKey, strings.NewReader(form.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)

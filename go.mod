@@ -3,7 +3,6 @@ module github.com/retinotopic/GoChat
 go 1.21.4
 
 require (
-	firebase.google.com/go v3.13.0+incompatible
 	firebase.google.com/go/v4 v4.13.0
 	github.com/gorilla/mux v1.8.1
 	github.com/pascaldekloe/jwt v1.12.0
