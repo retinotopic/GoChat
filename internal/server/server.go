@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/retinotopic/GoChat/internal/auth/auth"
+	"github.com/retinotopic/GoChat/internal/auth"
 )
 
 type Server struct {
