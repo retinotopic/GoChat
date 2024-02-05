@@ -6,12 +6,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Authenticator interface {
-	BeginAuth(w http.ResponseWriter, r *http.Request)
-	CompleteAuth(w http.ResponseWriter, r *http.Request)
+type RevokeRefresher interface {
+	Revoke(w http.ResponseWriter, r *http.Request)
+	Refresh(w http.ResponseWriter, r *http.Request)
 }
 
-func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
+func RefreshRoute(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
 	if provider == "" {
 		http.Error(w, "Provider not specified", http.StatusBadRequest)
@@ -21,9 +21,9 @@ func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Provider not found", http.StatusNotFound)
 		return
 	}
-	Providersmap[provider].BeginAuth(w, r)
+	Providersmap[provider].Refresh(w, r)
 }
-func CompleteAuthRoute(w http.ResponseWriter, r *http.Request) {
+func RevokeRoute(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
 	if provider == "" {
 		http.Error(w, "Provider not specified", http.StatusBadRequest)
@@ -31,5 +31,5 @@ func CompleteAuthRoute(w http.ResponseWriter, r *http.Request) {
 	if _, ok := Providersmap[provider]; !ok {
 		http.Error(w, "Provider not found", http.StatusNotFound)
 	}
-	Providersmap[provider].CompleteAuth(w, r)
+	Providersmap[provider].Revoke(w, r)
 }

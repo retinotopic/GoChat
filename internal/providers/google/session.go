@@ -1,9 +1,8 @@
 package google
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
@@ -15,6 +14,7 @@ import (
 )
 
 func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
+	tokens := make(map[string]string)
 	form := url.Values{}
 	token, err := r.Cookie("refreshToken")
 	if err != nil {
@@ -33,12 +33,22 @@ func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err, "error request error")
 	}
+	err = json.NewDecoder(resp.Body).Decode(&tokens)
+	if err != nil {
+		log.Println(err, "json decode error")
+	}
+
+	idToken := http.Cookie{Name: "idToken", Value: tokens["IdToken"], MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
+	refreshToken := http.Cookie{Name: "refreshToken", Value: tokens["RefreshToken"], Path: "/refresh", HttpOnly: true, Secure: true}
+	http.SetCookie(w, &idToken)
+	http.SetCookie(w, &refreshToken)
+
 	log.Println(resp.StatusCode)
 
 }
 func (p Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 	form := url.Values{}
-	token, err := r.Cookie("token")
+	token, err := r.Cookie("refreshToken")
 	if err != nil {
 		log.Println(err, "revoke cookie retrieve err")
 	}
@@ -57,25 +67,18 @@ func (p Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 
 }
 func (p Provider) FetchUser(w http.ResponseWriter, r *http.Request) {
-	block, err := pem.Decode([]byte(p.PublicKey))
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-	}
-	var cert *x509.Certificate
-	cert, err2 := x509.ParseCertificate(block.Bytes)
-	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
-	if err2 != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-	}
 	token, err3 := r.Cookie("token")
 	if err3 != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
-	claims, err4 := jwt.RSACheck([]byte(token.Value), rsaPublicKey)
+	claims, err4 := jwt.RSACheck([]byte(token.Value), p.PublicKey)
 	if err4 != nil {
 		w.WriteHeader(http.StatusBadRequest)
 	}
 	if !claims.Valid(time.Now()) {
 		w.WriteHeader(http.StatusBadRequest)
 	}
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, "user", claims.Subject)
+	r = r.WithContext(ctx)
 }

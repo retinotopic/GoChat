@@ -16,4 +16,5 @@ var Providersmap = Providers{
 
 type AuthFetchRevokeRefresher interface {
 	Authenticator
+	RevokeRefresher
 }

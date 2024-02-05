@@ -80,13 +80,8 @@ func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
 
 }
 
-type firebaseResponse struct {
-	IdToken      string `json:"idToken"`
-	RefreshToken string `json:"refreshToken"`
-}
-
 func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
-	tokens := &firebaseResponse{}
+	tokens := make(map[string]string)
 	c, err := r.Cookie("email")
 	if err != nil {
 		log.Println(err, "cookie retrieve error")
@@ -104,13 +99,13 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err, "request error")
 	}
-	err = json.NewDecoder(resp.Body).Decode(tokens)
+	err = json.NewDecoder(resp.Body).Decode(&tokens)
 	if err != nil {
 		log.Println(err, "json decode error")
 	}
 
-	idToken := http.Cookie{Name: "idToken", Value: tokens.IdToken, MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
-	refreshToken := http.Cookie{Name: "refreshToken", Value: tokens.RefreshToken, Path: "/refresh", HttpOnly: true, Secure: true}
+	idToken := http.Cookie{Name: "idToken", Value: tokens["IdToken"], MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
+	refreshToken := http.Cookie{Name: "refreshToken", Value: tokens["RefreshToken"], Path: "/refresh", HttpOnly: true, Secure: true}
 	http.SetCookie(w, &idToken)
 	http.SetCookie(w, &refreshToken)
 	c = &http.Cookie{
