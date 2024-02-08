@@ -7,7 +7,13 @@ import (
 )
 
 type RevokeRefresher interface {
+	Revoker
+	Refresher
+}
+type Revoker interface {
 	Revoke(w http.ResponseWriter, r *http.Request)
+}
+type Refresher interface {
 	Refresh(w http.ResponseWriter, r *http.Request)
 }
 

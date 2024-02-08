@@ -55,13 +55,13 @@ func New(clientid string, clientsecret, redirect string) Provider {
 	}
 }
 
-func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
+func (p Provider) BeginLoginCreate(w http.ResponseWriter, r *http.Request) {
 	url := p.Config.AuthCodeURL(p.oauthStateString, oauth2.AccessTypeOffline)
 	fmt.Println(url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect) // composing our auth request url
 }
 
-func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
+func (p Provider) CompleteLoginCreate(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("state") != p.oauthStateString {
 		fmt.Println("invalid oauth state")
 	}
@@ -78,7 +78,4 @@ func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	//////////////
 	fmt.Println(token.Expiry)
 	fmt.Println(token.Extra("id_token"), "extra")
-	r.Header.Add("Authorization", "Bearer "+token.Extra("id_token").(string))
-	resp2, _ := http.DefaultClient.Do(r)
-	_ = resp2.Write(w)
 }

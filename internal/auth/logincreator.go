@@ -6,9 +6,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Authenticator interface {
-	BeginAuth(w http.ResponseWriter, r *http.Request)
-	CompleteAuth(w http.ResponseWriter, r *http.Request)
+type LoginCreator interface {
+	BeginLoginCreator
+	CompleteLoginCreator
+}
+type BeginLoginCreator interface {
+	BeginLoginCreate(w http.ResponseWriter, r *http.Request)
+}
+type CompleteLoginCreator interface {
+	CompleteLoginCreate(w http.ResponseWriter, r *http.Request)
 }
 
 func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
@@ -21,7 +27,7 @@ func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Provider not found", http.StatusNotFound)
 		return
 	}
-	Providersmap[provider].BeginAuth(w, r)
+	Providersmap[provider].BeginLoginCreate(w, r)
 }
 func CompleteAuthRoute(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
@@ -31,5 +37,5 @@ func CompleteAuthRoute(w http.ResponseWriter, r *http.Request) {
 	if _, ok := Providersmap[provider]; !ok {
 		http.Error(w, "Provider not found", http.StatusNotFound)
 	}
-	Providersmap[provider].CompleteAuth(w, r)
+	Providersmap[provider].CompleteLoginCreate(w, r)
 }

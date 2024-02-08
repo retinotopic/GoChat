@@ -48,7 +48,7 @@ func New(webapikey string, credentials string, redirect string) Provider {
 		RefreshTokenURL:    "https://securetoken.googleapis.com/v1/token?key=",
 	}
 }
-func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
+func (p Provider) BeginLoginCreate(w http.ResponseWriter, r *http.Request) {
 	form := url.Values{}
 	form.Add("requestType", "EMAIL_SIGNIN")
 	form.Add("email", r.FormValue("email"))
@@ -80,7 +80,7 @@ func (p Provider) BeginAuth(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (p Provider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
+func (p Provider) CompleteLoginCreate(w http.ResponseWriter, r *http.Request) {
 	tokens := make(map[string]string)
 	c, err := r.Cookie("email")
 	if err != nil {
