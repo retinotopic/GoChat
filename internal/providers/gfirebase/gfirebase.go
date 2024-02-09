@@ -106,8 +106,10 @@ func (p Provider) CompleteLoginCreate(w http.ResponseWriter, r *http.Request) {
 
 	idToken := http.Cookie{Name: "idToken", Value: tokens["IdToken"], MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
 	refreshToken := http.Cookie{Name: "refreshToken", Value: tokens["RefreshToken"], Path: "/refresh", HttpOnly: true, Secure: true}
+	providerC := http.Cookie{Name: "provider", Value: "gfirebase", Path: "/", HttpOnly: true, Secure: true}
 	http.SetCookie(w, &idToken)
 	http.SetCookie(w, &refreshToken)
+	http.SetCookie(w, &providerC)
 	c = &http.Cookie{
 		Name:     "email",
 		Value:    "",

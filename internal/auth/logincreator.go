@@ -17,7 +17,7 @@ type CompleteLoginCreator interface {
 	CompleteLoginCreate(w http.ResponseWriter, r *http.Request)
 }
 
-func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
+func BeginLoginCreateRoute(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
 	if provider == "" {
 		http.Error(w, "Provider not specified", http.StatusBadRequest)
@@ -29,7 +29,7 @@ func BeginAuthRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	Providersmap[provider].BeginLoginCreate(w, r)
 }
-func CompleteAuthRoute(w http.ResponseWriter, r *http.Request) {
+func CompleteLoginCreateRoute(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
 	if provider == "" {
 		http.Error(w, "Provider not specified", http.StatusBadRequest)

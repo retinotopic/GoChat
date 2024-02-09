@@ -68,14 +68,18 @@ func (p Provider) CompleteLoginCreate(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	token, err := p.Config.Exchange(context.Background(), code)
 	if err != nil {
-		fmt.Println(err, "exchange error")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	idToken := http.Cookie{Name: "idToken", Value: token.Extra("id_token").(string), MaxAge: 3600, Path: "/", HttpOnly: true, Secure: true}
 	refreshToken := http.Cookie{Name: "refreshToken", Value: token.RefreshToken, Path: "/refresh", HttpOnly: true, Secure: true}
+	providerC := http.Cookie{Name: "provider", Value: "gfirebase", Path: "/", HttpOnly: true, Secure: true}
 	http.SetCookie(w, &idToken)
 	http.SetCookie(w, &refreshToken)
+	http.SetCookie(w, &providerC)
 
 	//////////////
 	fmt.Println(token.Expiry)
 	fmt.Println(token.Extra("id_token"), "extra")
+	w.WriteHeader(http.StatusOK)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	server "github.com/retinotopic/GoChat/internal/server"
+	server "github.com/retinotopic/GoChat/internal/routes"
 )
 
 func main() {
