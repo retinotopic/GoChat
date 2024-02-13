@@ -2,14 +2,8 @@ package auth
 
 import (
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
-type LoginCreator interface {
-	BeginLoginCreator
-	CompleteLoginCreator
-}
 type BeginLoginCreator interface {
 	BeginLoginCreate(w http.ResponseWriter, r *http.Request)
 }
@@ -17,25 +11,16 @@ type CompleteLoginCreator interface {
 	CompleteLoginCreate(w http.ResponseWriter, r *http.Request)
 }
 
-func BeginLoginCreateRoute(w http.ResponseWriter, r *http.Request) {
-	provider := mux.Vars(r)["provider"]
-	if provider == "" {
-		http.Error(w, "Provider not specified", http.StatusBadRequest)
-		return
-	}
-	if _, ok := Providersmap[provider]; !ok {
-		http.Error(w, "Provider not found", http.StatusNotFound)
-		return
-	}
-	Providersmap[provider].BeginLoginCreate(w, r)
+func BeginLoginCreateI(beginLoginCreator BeginLoginCreator) http.Handler {
+	return http.HandlerFunc(beginLoginCreator.BeginLoginCreate)
 }
-func CompleteLoginCreateRoute(w http.ResponseWriter, r *http.Request) {
-	provider := mux.Vars(r)["provider"]
-	if provider == "" {
-		http.Error(w, "Provider not specified", http.StatusBadRequest)
-	}
-	if _, ok := Providersmap[provider]; !ok {
-		http.Error(w, "Provider not found", http.StatusNotFound)
-	}
-	Providersmap[provider].CompleteLoginCreate(w, r)
+func CompleteLoginCreateI(completeLoginCreator CompleteLoginCreator) http.Handler {
+	return http.HandlerFunc(completeLoginCreator.CompleteLoginCreate)
 }
+
+/*func CompleteLoginCreateI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		completeLoginCreator := r.Context().Value("completeLoginCreator").(CompleteLoginCreator)
+		completeLoginCreator.CompleteLoginCreate(w, r)
+	})
+}*/
