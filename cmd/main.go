@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	server "github.com/retinotopic/GoChat/internal/routes"
+	"github.com/retinotopic/GoChat/internal/router"
 )
 
 func main() {
@@ -13,7 +13,7 @@ func main() {
 
 	flag.Parse()
 	fmt.Println(*addr)
-	srv := server.NewServer(*addr)
+	srv := router.NewRouter(*addr)
 	err := srv.Run()
 	if err != nil {
 		log.Println(err)

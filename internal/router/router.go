@@ -1,22 +1,22 @@
-package server
+package router
 
 import (
 	"net/http"
 	"os"
 
-	session "github.com/retinotopic/GoChat/internal/auth"
 	"github.com/retinotopic/GoChat/internal/providers/gfirebase"
 	"github.com/retinotopic/GoChat/internal/providers/google"
+	session "github.com/retinotopic/GoChat/internal/session"
 )
 
-type Server struct {
+type Router struct {
 	addr string
 }
 
-func NewServer(addr string) *Server {
-	return &Server{addr: addr}
+func NewRouter(addr string) *Router {
+	return &Router{addr: addr}
 }
-func (s *Server) Run() error {
+func (s *Router) Run() error {
 	CurrentProviders := session.Session{
 		"google":    google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
 		"gfirebase": gfirebase.New(os.Getenv("WEB_API_KEY"), os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), "http://localhost:8080/gfirebase/CompleteAuth"),
