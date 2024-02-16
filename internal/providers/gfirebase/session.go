@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/retinotopic/GoChat/pkg/safectx"
 )
 
 func (p Provider) Refresh(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +66,6 @@ func (p Provider) FetchUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err, "verify id token err")
 	}
-	ctx := r.Context()
-	ctx = context.WithValue(ctx, "user", token.UID)
-	r = r.WithContext(ctx)
+	ctx := safectx.SetContext(r.Context(), "sub", token.UID)
+	*r = *(r.WithContext(ctx))
 }

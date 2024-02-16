@@ -1,7 +1,6 @@
 package google
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pascaldekloe/jwt"
+	"github.com/retinotopic/GoChat/pkg/safectx"
 	"golang.org/x/oauth2/google"
 )
 
@@ -78,7 +78,9 @@ func (p Provider) FetchUser(w http.ResponseWriter, r *http.Request) {
 	if !claims.Valid(time.Now()) {
 		w.WriteHeader(http.StatusBadRequest)
 	}
-	ctx := r.Context()
+	/*ctx := r.Context()
 	ctx = context.WithValue(ctx, "user", claims.Subject)
-	r = r.WithContext(ctx)
+	r = r.WithContext(ctx)*/
+	ctx := safectx.SetContext(r.Context(), "sub", claims.Subject)
+	*r = *(r.WithContext(ctx))
 }

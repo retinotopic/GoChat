@@ -33,6 +33,9 @@ func New(clientid string, clientsecret, redirect string) Provider {
 		log.Println(err, "request error")
 	}
 	set, err := jwk.ParseReader(resp.Body)
+	if err != nil {
+		log.Println(err, "jwk parse error")
+	}
 	key, ok1 := set.Get(0)
 	n, ok2 := key.Get("n")
 	e, ok3 := key.Get("e")

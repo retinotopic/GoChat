@@ -93,6 +93,9 @@ func (p Provider) CompleteLoginCreate(w http.ResponseWriter, r *http.Request) {
 	form.Add("oobCode", oobCode)
 	form.Add("email", c.Value)
 	req, err := http.NewRequest("POST", p.SignInWithEmailURL+p.WebApiKey, strings.NewReader(form.Encode()))
+	if err != nil {
+		log.Println(err, "creating request error")
+	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)
