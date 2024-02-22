@@ -92,4 +92,21 @@ INSERT INTO room_users (room_id, user_id, unread)
 VALUES (3, 2, 5)
 INSERT INTO users (subject,name) VALUES ('111nhudgokdhgfdidxfd','OKAYEG')
 
+//////////////////
+
+INSERT INTO rooms DEFAULT VALUES
+/
+INSERT INTO users (subject,name) VALUES ('dhdf982hfireb','aboba')
+/
+INSERT INTO messages (payload,room_id,user_id,timestamp) VALUES ('hi aboba',1,1)
+/
+INSERT INTO room_users_info (room_id,user_id,unread) VALUES (3,2,2)
+/
+SELECT payload,room_id,user_id FROM messages WHERE room_id IN (SELECT room_id FROM messages WHERE user_id=1) ORDER BY room_id,timestamp
+/
+SELECT user_id,name FROM users WHERE name LIKE '%%';
+/
+CREATE SEQUENCE room_ids START 1;
+/
+INSERT INTO rooms (room_id) VALUES (nextval('room_ids')) RETURNING room_id
 */
