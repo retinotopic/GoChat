@@ -8,8 +8,10 @@ import (
 )
 
 type PostgresClient struct {
-	sub  string
-	conn *pgxpool.Conn
+	Sub    string
+	Name   string
+	UserID uint64
+	Conn   *pgxpool.Conn
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -19,7 +21,13 @@ func ConnectToDB(connString string) (*pgxpool.Pool, error) {
 }
 func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	// check if user exists
-	_, err := pool.Exec(context.Background(), "SELECT * FROM users WHERE subject=$1", sub)
+	row, err := pool.Query(context.Background(), "SELECT * FROM users WHERE subject=$1", sub)
+	if err != nil {
+		return nil, err
+	}
+	var name string
+	var userid uint64
+	err = row.Scan(&name, &userid)
 	if err != nil {
 		return nil, err
 	}
@@ -28,15 +36,17 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	return &PostgresClient{
-		sub:  sub,
-		conn: conn,
+		Sub:    sub,
+		Conn:   conn,
+		UserID: userid,
+		Name:   name,
 	}, nil
 }
 
 // transaction insert messages plus increment unread messages in room_users table
 func (c *PostgresClient) InsertMessage(room_id int, message string, room_user_id int) error {
 
-	tx, err := c.conn.Begin(context.Background())
+	tx, err := c.Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -51,7 +61,7 @@ func (c *PostgresClient) InsertMessage(room_id int, message string, room_user_id
 	if err != nil {
 		return err
 	}
-	_, err = c.conn.Exec(context.Background(), "UPDATE room_users SET unread=unread+1 WHERE room_id=$2 AND user_id=$3", 1, room_id, room_user_id)
+	_, err = c.Conn.Exec(context.Background(), "UPDATE room_users SET unread=unread+1 WHERE room_id=$2 AND user_id=$3", 1, room_id, room_user_id)
 	if err != nil {
 		return err
 	}
@@ -59,7 +69,7 @@ func (c *PostgresClient) InsertMessage(room_id int, message string, room_user_id
 }
 
 /*
-
+///////////////TEST QUERIES/////////////////////
 
 
 CREATE OR REPLACE FUNCTION notify_new_message()
@@ -146,4 +156,32 @@ JOIN (
 	WHERE user_id = 6
 ) ru ON m.room_id = ru.room_id
 ORDER BY m.room_id,m.timestamp
+
+
+//
+
+
+BEGIN;
+
+
+SELECT * FROM users WHERE user_id IN (1, 5) FOR UPDATE;
+
+
+IF EXISTS (
+  SELECT 1 FROM room_users_info ru1
+  JOIN room_users_info ru2 ON ru1.room_id = ru2.room_id
+  WHERE ru1.user_id = 1 AND ru2.user_id = 5 AND ru1.is_group = false
+) THEN
+  ROLLBACK;
+  RAISE EXCEPTION 'room already exists';
+END IF;
+
+WITH roomval AS (INSERT INTO rooms DEFAULT VALUES RETURNING room_id)
+INSERT INTO room_users_info (user_id, room_id, unread, is_group)
+SELECT 1, room_id, 0, false FROM roomval
+UNION ALL
+SELECT 5, room_id, 0, false FROM roomval;
+
+COMMIT;
+
 */

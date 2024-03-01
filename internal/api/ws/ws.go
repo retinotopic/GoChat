@@ -7,12 +7,15 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"github.com/retinotopic/GoChat/internal/db"
 	"github.com/retinotopic/GoChat/pkg/safectx"
 )
 
 type HandlerWS struct {
 	upgrader *websocket.Upgrader
 	db       *pgxpool.Pool
+	rdb      *redis.Client
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -34,31 +37,40 @@ var upgrader = websocket.Upgrader{
 func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		_, ok := safectx.GetContextString(r.Context(), "sub")
+		sub, ok := safectx.GetContextString(r.Context(), "sub")
 		if !ok {
 			log.Println("no sub")
 			return
 		}
-		conn, err := upgrader.Upgrade(w, r, nil)
+		///////
 
+		//SELECT ALL MESSAGES HERE
+
+		///////
+		dbClient, err := db.NewClient(sub, h.db)
+		if err != nil {
+			log.Println("wrong sub", err)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		poolConn, err := h.db.Acquire(context.Background())
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		go h.WsHandle(poolConn, conn)
+		go h.WsHandle(dbClient, conn)
 	})
 }
-func (h HandlerWS) WsHandle(pconn *pgxpool.Conn, conn *websocket.Conn) {
+func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	defer func() {
-		pconn.Release()
+		dbc.Conn.Release()
 		conn.Close()
 	}()
 	for {
+		h.rdb.Publish(context.Background(), "channel", "message")
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Println(err)
