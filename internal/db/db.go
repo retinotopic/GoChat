@@ -8,10 +8,13 @@ import (
 )
 
 type PostgresClient struct {
-	Sub    string
-	Name   string
-	UserID uint64
-	Conn   *pgxpool.Conn
+	Sub            string
+	Name           string
+	UserID         uint64
+	Conn           *pgxpool.Conn
+	Chats          map[uint32]bool //  room id
+	SearchUserList map[uint32]bool // user id
+	FuncMap        map[string]func(string) error
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -36,15 +39,16 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	return &PostgresClient{
-		Sub:    sub,
-		Conn:   conn,
-		UserID: userid,
-		Name:   name,
+		Sub:     sub,
+		Conn:    conn,
+		UserID:  userid,
+		Name:    name,
+		FuncMap: make(map[string]func(string) error),
 	}, nil
 }
 
 // transaction insert messages plus increment unread messages in room_users table
-func (c *PostgresClient) InsertMessage(room_id int, message string, room_user_id int) error {
+func (c *PostgresClient) SendMessage(data string) error {
 
 	tx, err := c.Conn.Begin(context.Background())
 	if err != nil {
@@ -57,14 +61,13 @@ func (c *PostgresClient) InsertMessage(room_id int, message string, room_user_id
 			tx.Commit(context.Background())
 		}
 	}()
-	_, err = tx.Conn().Exec(context.Background(), "INSERT INTO messages (room_id, message, room_user_id) VALUES ($1, $2, $3)", room_id, message, room_user_id)
-	if err != nil {
-		return err
-	}
-	_, err = c.Conn.Exec(context.Background(), "UPDATE room_users SET unread=unread+1 WHERE room_id=$2 AND user_id=$3", 1, room_id, room_user_id)
-	if err != nil {
-		return err
-	}
+
+	return nil
+}
+func (c *PostgresClient) CreateDuoRoom(data string) error {
+	return nil
+}
+func (c *PostgresClient) CreateGroupRoom(data string) error {
 	return nil
 }
 

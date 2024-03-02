@@ -17,6 +17,10 @@ type HandlerWS struct {
 	db       *pgxpool.Pool
 	rdb      *redis.Client
 }
+type tempJSON struct {
+	Mode string `json:"Mode"`
+	Data string `json:"Data"`
+}
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 func NewHandlerWS(dbc *pgxpool.Pool) *HandlerWS {
@@ -44,7 +48,7 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 		}
 		///////
 
-		//SELECT ALL MESSAGES HERE
+		// "AI" SELECT ALL MESSAGES FROM ROOMS
 
 		///////
 		dbClient, err := db.NewClient(sub, h.db)
@@ -52,6 +56,10 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("wrong sub", err)
 			return
 		}
+		dbClient.FuncMap["SendMessage"] = dbClient.SendMessage
+		dbClient.FuncMap["CreateDuoRoom"] = dbClient.CreateDuoRoom
+		dbClient.FuncMap["CreateGroupRoom"] = dbClient.CreateDuoRoom
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
@@ -61,21 +69,44 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println(err)
 			return
 		}
-		go h.WsHandle(dbClient, conn)
+		go h.WsReceive(dbClient, conn)
+		go h.WsSend(dbClient, conn)
 	})
 }
-func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
+func (h HandlerWS) WsReceive(dbc *db.PostgresClient, conn *websocket.Conn) {
 	defer func() {
 		dbc.Conn.Release()
 		conn.Close()
 	}()
+	rps := h.rdb.Subscribe(context.Background(), "chat")
 	for {
-		h.rdb.Publish(context.Background(), "channel", "message")
-		_, message, err := conn.ReadMessage()
+		message, err := rps.ReceiveMessage(context.Background())
+
+		// dbc.FuncMap[message.PayloadSlice[0]](message.PayloadSlice[1])
 		if err != nil {
 			log.Println(err)
-			return
+			break
 		}
-		log.Println(message)
+		err = conn.WriteJSON(message.Payload)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+	}
+}
+func (h HandlerWS) WsSend(dbc *db.PostgresClient, conn *websocket.Conn) {
+	tempjson := tempJSON{}
+	for {
+		err := conn.ReadJSON(tempjson)
+
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		err = h.rdb.Publish(context.Background(), "chat", "placeholdfer message").Err()
+		if err != nil {
+			log.Println(err)
+			break
+		}
 	}
 }
