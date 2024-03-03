@@ -56,9 +56,6 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("wrong sub", err)
 			return
 		}
-		dbClient.FuncMap["SendMessage"] = dbClient.SendMessage
-		dbClient.FuncMap["CreateDuoRoom"] = dbClient.CreateDuoRoom
-		dbClient.FuncMap["CreateGroupRoom"] = dbClient.CreateDuoRoom
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -81,8 +78,7 @@ func (h HandlerWS) WsReceive(dbc *db.PostgresClient, conn *websocket.Conn) {
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
-
-		// dbc.FuncMap[message.PayloadSlice[0]](message.PayloadSlice[1])
+		message.Pattern = "chat"
 		if err != nil {
 			log.Println(err)
 			break
@@ -96,9 +92,13 @@ func (h HandlerWS) WsReceive(dbc *db.PostgresClient, conn *websocket.Conn) {
 }
 func (h HandlerWS) WsSend(dbc *db.PostgresClient, conn *websocket.Conn) {
 	tempjson := tempJSON{}
+	FuncMap := make(map[string]func(string) error)
+	FuncMap["SendMessage"] = dbc.SendMessage
+	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
+	FuncMap["CreateGroupRoom"] = dbc.CreateGroupRoom
 	for {
 		err := conn.ReadJSON(tempjson)
-
+		FuncMap[tempjson.Mode](tempjson.Data)
 		if err != nil {
 			log.Println(err)
 			break

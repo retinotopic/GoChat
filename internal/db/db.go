@@ -3,18 +3,56 @@ package db
 import (
 	"context"
 	"os"
+	"sort"
+	"strconv"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// worker for creating thread safe private rooms for two people
+type Worker struct {
+	mutex sync.Mutex
+	done  bool
+}
+
+func (w *Worker) CreateRoom(job string) {
+	if w.done {
+		return
+	}
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	//
+	// CREATING ROOM HERE
+	//
+	w.done = true
+
+}
+
+var workers = make(Workers)
+
+type Workers map[string]*Worker
+
+func (ws Workers) GetWorker(user1, user2 int) *Worker {
+	ids := []int{user1, user2}
+	sort.Ints(ids)
+	key := strconv.Itoa(ids[0]) + strconv.Itoa(ids[1])
+	if w, ok := ws[key]; ok {
+		return w
+	}
+	w := &Worker{}
+	ws[key] = w
+	return w
+}
 
 type PostgresClient struct {
 	Sub            string
 	Name           string
 	UserID         uint64
 	Conn           *pgxpool.Conn
-	Chats          map[uint32]bool //  room id
-	SearchUserList map[uint32]bool // user id
-	FuncMap        map[string]func(string) error
+	Chats          map[uint32][]int //  room id of group chat with user ids
+	PrivateChats   map[uint32]bool  // user id of private chat
+	SearchUserList map[uint32]bool  // search user list with user id
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -39,11 +77,10 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	return &PostgresClient{
-		Sub:     sub,
-		Conn:    conn,
-		UserID:  userid,
-		Name:    name,
-		FuncMap: make(map[string]func(string) error),
+		Sub:    sub,
+		Conn:   conn,
+		UserID: userid,
+		Name:   name,
 	}, nil
 }
 
@@ -65,6 +102,8 @@ func (c *PostgresClient) SendMessage(data string) error {
 	return nil
 }
 func (c *PostgresClient) CreateDuoRoom(data string) error {
+	worker := workers.GetWorker(13, 4)
+	worker.CreateRoom("message1")
 	return nil
 }
 func (c *PostgresClient) CreateGroupRoom(data string) error {
