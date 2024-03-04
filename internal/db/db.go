@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,12 +17,12 @@ type Worker struct {
 	done  bool
 }
 
-func (w *Worker) CreateRoom(job string) {
+func (w *Worker) CreateRoom(message string, user1, user2 int) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.done {
 		return
 	}
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
 	//
 	// CREATING ROOM HERE
 	//
@@ -50,8 +51,8 @@ type PostgresClient struct {
 	Name           string
 	UserID         uint64
 	Conn           *pgxpool.Conn
-	Chats          map[uint32][]int //  room id of group chat with user ids
-	PrivateChats   map[uint32]bool  // user id of private chat
+	Rooms          map[uint32][]int //  room id of group chat with user ids
+	DuoRoomUsers   map[uint32]bool  // user id of private chat
 	SearchUserList map[uint32]bool  // search user list with user id
 }
 
@@ -85,8 +86,17 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 }
 
 // transaction insert messages plus increment unread messages in room_users table
-func (c *PostgresClient) SendMessage(data string) error {
-
+func (c *PostgresClient) SendMessage(payload string) error {
+	room := 0
+	_, err := c.Conn.Exec(context.Background(), "INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)", payload, c.UserID, room)
+	return err
+}
+func (c *PostgresClient) CreateDuoRoom(data string) error {
+	worker := workers.GetWorker(13, 4)
+	worker.CreateRoom("message1", 13, 4)
+	return nil
+}
+func (c *PostgresClient) CreateGroupRoom(data string) error {
 	tx, err := c.Conn.Begin(context.Background())
 	if err != nil {
 		return err
@@ -98,16 +108,29 @@ func (c *PostgresClient) SendMessage(data string) error {
 			tx.Commit(context.Background())
 		}
 	}()
-
 	return nil
 }
-func (c *PostgresClient) CreateDuoRoom(data string) error {
-	worker := workers.GetWorker(13, 4)
-	worker.CreateRoom("message1")
-	return nil
-}
-func (c *PostgresClient) CreateGroupRoom(data string) error {
-	return nil
+func (c *PostgresClient) GetMessages(room uint64, offset uint64) (pgx.Rows, error) {
+	if room == 0 {
+		rows, err := c.Conn.Query(context.Background(),
+			`SELECT m.payload, m.user_id, m.room_id
+			FROM messages m
+			WHERE m.room_id = $1
+			ORDER BY m.timestamp
+			LIMIT 100 OFFSET &2`, room, offset)
+		return rows, err
+	} else {
+		rows, err := c.Conn.Query(context.Background(),
+			`SELECT m.payload, m.user_id, m.room_id
+			FROM messages m
+			JOIN (
+				SELECT room_id
+				FROM room_users_info
+				WHERE user_id = $1
+			) ru ON m.room_id = ru.room_id
+			ORDER BY m.room_id,m.timestamp LIMIT 100`, c.UserID)
+		return rows, err
+	}
 }
 
 /*
@@ -152,7 +175,7 @@ INSERT INTO users (subject,name) VALUES ('dhdf982hfireb','aboba')
 /
 INSERT INTO messages (payload,user_id,room_id) VALUES ('hi arolfix',6,14)
 /
-INSERT INTO room_users_info (room_id,user_id,unread) VALUES (3,2,2)
+INSERT INTO room_users_info (room_id,user_id,unread,is_group) VALUES ($1,$2,$3,$4)
 /
 SELECT payload,user_id,room_id FROM messages WHERE room_id IN (SELECT room_id FROM room_users_info WHERE user_id=6) ORDER BY room_id,timestamp
 /
@@ -218,12 +241,12 @@ IF EXISTS (
   RAISE EXCEPTION 'room already exists';
 END IF;
 
-WITH roomval AS (INSERT INTO rooms DEFAULT VALUES RETURNING room_id)
+
+WITH roomval AS (INSERT INTO rooms (name) VALUES ("placeholder") RETURNING room_id)
 INSERT INTO room_users_info (user_id, room_id, unread, is_group)
 SELECT 1, room_id, 0, false FROM roomval
 UNION ALL
 SELECT 5, room_id, 0, false FROM roomval;
-
 COMMIT;
 
 */
