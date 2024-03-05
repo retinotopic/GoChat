@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -12,38 +14,30 @@ import (
 )
 
 // worker for creating thread safe private rooms for two people
-type Worker struct {
-	mutex sync.Mutex
-	done  bool
-}
-
-func (w *Worker) CreateRoom(message string, user1, user2 int) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-	if w.done {
-		return
-	}
-	//
-	// CREATING ROOM HERE
-	//
-	w.done = true
-
-}
 
 var workers = make(Workers)
 
-type Workers map[string]*Worker
+type Workers map[string]*sync.Mutex
 
-func (ws Workers) GetWorker(user1, user2 int) *Worker {
-	ids := []int{user1, user2}
-	sort.Ints(ids)
-	key := strconv.Itoa(ids[0]) + strconv.Itoa(ids[1])
+func (ws Workers) GetWorker(user1, user2 uint64) *sync.Mutex {
+	ids := []uint64{user1, user2}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+	key := strconv.FormatUint(user1, 10) + strconv.FormatUint(user2, 10)
+
 	if w, ok := ws[key]; ok {
 		return w
 	}
-	w := &Worker{}
+	w := &sync.Mutex{}
 	ws[key] = w
 	return w
+}
+
+type tempJSON struct {
+	Mode    string   `json:"Mode"`
+	Message string   `json:"Message"`
+	Users   []uint64 `json:"Users"`
 }
 
 type PostgresClient struct {
@@ -51,9 +45,11 @@ type PostgresClient struct {
 	Name           string
 	UserID         uint64
 	Conn           *pgxpool.Conn
+	Status         string           `json:"status"`
 	Rooms          map[uint32][]int //  room id of group chat with user ids
-	DuoRoomUsers   map[uint32]bool  // user id of private chat
+	DuoRoomUsers   map[uint64]bool  // user id of private chat
 	SearchUserList map[uint32]bool  // search user list with user id
+	Tempjson       tempJSON
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -78,38 +74,63 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	return &PostgresClient{
-		Sub:    sub,
-		Conn:   conn,
-		UserID: userid,
-		Name:   name,
+		Sub:      sub,
+		Conn:     conn,
+		UserID:   userid,
+		Name:     name,
+		Tempjson: tempJSON{},
 	}, nil
 }
 
 // transaction insert messages plus increment unread messages in room_users table
-func (c *PostgresClient) SendMessage(payload string) error {
+func (c *PostgresClient) SendMessage(message string, users []uint64) error {
 	room := 0
-	_, err := c.Conn.Exec(context.Background(), "INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)", payload, c.UserID, room)
+	_, err := c.Conn.Exec(context.Background(), "INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)", message, c.UserID, room)
 	return err
 }
-func (c *PostgresClient) CreateDuoRoom(data string) error {
-	worker := workers.GetWorker(13, 4)
-	worker.CreateRoom("message1", 13, 4)
+func (c *PostgresClient) CreateDuoRoom(message string, users []uint64) error {
+	worker := workers.GetWorker(users[0], users[1])
+	worker.Lock()
+	defer worker.Unlock()
+	c.CreateRoom(message, users)
 	return nil
 }
-func (c *PostgresClient) CreateGroupRoom(data string) error {
+func (c *PostgresClient) CreateRoom(message string, users []uint64) error {
+	if len(message) == 0 {
+		return nil
+	}
 	tx, err := c.Conn.Begin(context.Background())
 	if err != nil {
-		return err
+		log.Println("Error starting transaction:", err)
 	}
-	defer func() {
+	defer tx.Rollback(context.Background())
+
+	var roomID int64
+	err = tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", "placeholder").Scan(&roomID)
+	if err != nil {
+		log.Println("Error inserting room:", err)
+	}
+	stmt, err := tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, unread, is_group) VALUES ($1, $2, $3, $4)")
+	if err != nil {
+		fmt.Println("Error preparing statement:", err)
+	}
+
+	// Выполнение запросов для каждого идентификатора пользователя
+	for _, i := range users {
+		_, err := tx.Exec(context.Background(), stmt.SQL, users[i], roomID, 0, false)
 		if err != nil {
-			tx.Rollback(context.Background())
-		} else {
-			tx.Commit(context.Background())
+			log.Println("Error inserting room_users_info:", err)
 		}
-	}()
-	return nil
+	}
+
+	// Фиксация транзакции
+	err = tx.Commit(context.Background())
+	if err != nil {
+		log.Println("Error committing transaction:", err)
+	}
+	return err
 }
+
 func (c *PostgresClient) GetMessages(room uint64, offset uint64) (pgx.Rows, error) {
 	if room == 0 {
 		rows, err := c.Conn.Query(context.Background(),
@@ -127,7 +148,7 @@ func (c *PostgresClient) GetMessages(room uint64, offset uint64) (pgx.Rows, erro
 				SELECT room_id
 				FROM room_users_info
 				WHERE user_id = $1
-			) ru ON m.room_id = ru.room_id
+			) r ON m.room_id = r.room_id
 			ORDER BY m.room_id,m.timestamp LIMIT 100`, c.UserID)
 		return rows, err
 	}

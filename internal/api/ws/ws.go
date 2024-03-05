@@ -17,10 +17,6 @@ type HandlerWS struct {
 	db       *pgxpool.Pool
 	rdb      *redis.Client
 }
-type tempJSON struct {
-	Mode string `json:"Mode"`
-	Data string `json:"Data"`
-}
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 func NewHandlerWS(dbc *pgxpool.Pool) *HandlerWS {
@@ -74,14 +70,14 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 		dbc.Conn.Release()
 		conn.Close()
 	}()
-	FuncMap := make(map[string]func(string) error)
+	FuncMap := make(map[string]func(string, []uint64) error)
 	FuncMap["SendMessage"] = dbc.SendMessage
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
-	FuncMap["CreateGroupRoom"] = dbc.CreateGroupRoom
-	go h.WsReceive(FuncMap, conn)
-	go h.WsSend(FuncMap, conn)
+	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
+	go h.WsReceive(FuncMap, conn, dbc)
+	go h.WsSend(FuncMap, conn, dbc)
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(string) error, conn *websocket.Conn) {
+func (h HandlerWS) WsReceive(funcMap map[string]func(string, []uint64) error, conn *websocket.Conn, dbc *db.PostgresClient) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	for {
@@ -98,18 +94,20 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(string) error, conn *websoc
 		}
 	}
 }
-func (h HandlerWS) WsSend(funcMap map[string]func(string) error, conn *websocket.Conn) {
-	tempjson := tempJSON{}
+func (h HandlerWS) WsSend(funcMap map[string]func(string, []uint64) error, conn *websocket.Conn, dbc *db.PostgresClient) {
 	for {
-		err := conn.ReadJSON(tempjson)
+
+		err := conn.ReadJSON(dbc.Tempjson)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		err = funcMap[tempjson.Mode](tempjson.Data)
+		err = funcMap[dbc.Tempjson.Mode](dbc.Tempjson.Message, dbc.Tempjson.Users)
 		if err != nil {
 			log.Println(err)
 			break
+		} else {
+			conn.WriteMessage(websocket.TextMessage, []byte("ok"))
 		}
 		err = h.rdb.Publish(context.Background(), "chat", "placeholdfer message").Err()
 		if err != nil {
