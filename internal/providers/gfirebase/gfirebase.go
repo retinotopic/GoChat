@@ -72,7 +72,7 @@ func (p Provider) BeginLoginCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, c)
-
+	w.WriteHeader(http.StatusOK)
 	err = resp.Write(w)
 	if err != nil {
 		log.Println(err, "write error")

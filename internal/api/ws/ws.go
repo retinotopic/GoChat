@@ -70,19 +70,18 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 		dbc.Conn.Release()
 		conn.Close()
 	}()
-	FuncMap := make(map[string]func(string, []uint64) error)
+	FuncMap := make(map[string]func(db.FlowJSON) db.FlowJSON)
 	FuncMap["SendMessage"] = dbc.SendMessage
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	go h.WsReceive(FuncMap, conn, dbc)
 	go h.WsSend(FuncMap, conn, dbc)
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(string, []uint64) error, conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsReceive(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn *websocket.Conn, dbc *db.PostgresClient) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
-		message.Pattern = "chat"
 		if err != nil {
 			log.Println(err)
 			break
@@ -94,22 +93,22 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(string, []uint64) error, co
 		}
 	}
 }
-func (h HandlerWS) WsSend(funcMap map[string]func(string, []uint64) error, conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsSend(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn *websocket.Conn, dbc *db.PostgresClient) {
 	for {
-
-		err := conn.ReadJSON(dbc.Tempjson)
+		flowjson := db.FlowJSON{}
+		err := conn.ReadJSON(flowjson)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		err = funcMap[dbc.Tempjson.Mode](dbc.Tempjson.Message, dbc.Tempjson.Users)
+		flowjson = funcMap[flowjson.Mode](flowjson)
 		if err != nil {
 			log.Println(err)
 			break
 		} else {
-			conn.WriteMessage(websocket.TextMessage, []byte("ok"))
+			conn.WriteJSON(flowjson)
 		}
-		err = h.rdb.Publish(context.Background(), "chat", "placeholdfer message").Err()
+		err = h.rdb.Publish(context.Background(), "chat", flowjson).Err()
 		if err != nil {
 			log.Println(err)
 			break

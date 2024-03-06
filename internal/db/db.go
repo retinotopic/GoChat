@@ -34,10 +34,12 @@ func (ws Workers) GetWorker(user1, user2 uint64) *sync.Mutex {
 	return w
 }
 
-type tempJSON struct {
+type FlowJSON struct {
 	Mode    string   `json:"Mode"`
 	Message string   `json:"Message"`
 	Users   []uint64 `json:"Users"`
+	Room    uint64   `json:"Room"`
+	Status  string   `json:"Status"`
 }
 
 type PostgresClient struct {
@@ -49,7 +51,6 @@ type PostgresClient struct {
 	Rooms          map[uint32][]int //  room id of group chat with user ids
 	DuoRoomUsers   map[uint64]bool  // user id of private chat
 	SearchUserList map[uint32]bool  // search user list with user id
-	Tempjson       tempJSON
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -74,61 +75,61 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	return &PostgresClient{
-		Sub:      sub,
-		Conn:     conn,
-		UserID:   userid,
-		Name:     name,
-		Tempjson: tempJSON{},
+		Sub:    sub,
+		Conn:   conn,
+		UserID: userid,
+		Name:   name,
 	}, nil
 }
 
 // transaction insert messages plus increment unread messages in room_users table
-func (c *PostgresClient) SendMessage(message string, users []uint64) error {
-	room := 0
-	_, err := c.Conn.Exec(context.Background(), "INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)", message, c.UserID, room)
-	return err
+func (c *PostgresClient) SendMessage(flowjson FlowJSON) FlowJSON {
+	_, err := c.Conn.Exec(context.Background(), "INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)", flowjson.Message, flowjson.Users[0], flowjson.Room)
+	if err != nil {
+		log.Println("Error inserting message:", err)
+		flowjson.Status = "insert_error"
+		return flowjson
+	}
+	flowjson.Status = "ok"
+	return flowjson
 }
-func (c *PostgresClient) CreateDuoRoom(message string, users []uint64) error {
-	worker := workers.GetWorker(users[0], users[1])
+func (c *PostgresClient) CreateDuoRoom(flowjson FlowJSON) FlowJSON {
+	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
 	worker.Lock()
 	defer worker.Unlock()
-	c.CreateRoom(message, users)
-	return nil
+	flowjson = c.CreateRoom(flowjson)
+	return c.SendMessage(flowjson)
 }
-func (c *PostgresClient) CreateRoom(message string, users []uint64) error {
-	if len(message) == 0 {
-		return nil
-	}
+func (c *PostgresClient) CreateRoom(flowjson FlowJSON) FlowJSON {
 	tx, err := c.Conn.Begin(context.Background())
 	if err != nil {
 		log.Println("Error starting transaction:", err)
 	}
 	defer tx.Rollback(context.Background())
 
-	var roomID int64
+	var roomID uint64
 	err = tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", "placeholder").Scan(&roomID)
 	if err != nil {
 		log.Println("Error inserting room:", err)
 	}
+	flowjson.Room = roomID
 	stmt, err := tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, unread, is_group) VALUES ($1, $2, $3, $4)")
 	if err != nil {
 		fmt.Println("Error preparing statement:", err)
 	}
 
-	// Выполнение запросов для каждого идентификатора пользователя
-	for _, i := range users {
-		_, err := tx.Exec(context.Background(), stmt.SQL, users[i], roomID, 0, false)
+	for _, i := range flowjson.Users {
+		_, err := tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], roomID, 0, false)
 		if err != nil {
 			log.Println("Error inserting room_users_info:", err)
 		}
 	}
 
-	// Фиксация транзакции
 	err = tx.Commit(context.Background())
 	if err != nil {
 		log.Println("Error committing transaction:", err)
 	}
-	return err
+	return flowjson
 }
 
 func (c *PostgresClient) GetMessages(room uint64, offset uint64) (pgx.Rows, error) {
