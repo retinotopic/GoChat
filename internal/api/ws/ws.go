@@ -4,12 +4,14 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/db"
 	"github.com/retinotopic/GoChat/pkg/safectx"
+	"github.com/retinotopic/GoChat/pkg/strparse"
 )
 
 type HandlerWS struct {
@@ -52,7 +54,14 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("wrong sub", err)
 			return
 		}
-		dbClient.GetMessages(0, 0)
+		flowjson := db.FlowJSON{
+			Mode: "GetMessages",
+			Room: 0,
+		}
+		flowjson = dbClient.GetMessages(flowjson)
+		for flowjson.Rows.Next() {
+			/////////////////
+		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
@@ -80,13 +89,21 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 func (h HandlerWS) WsReceive(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn *websocket.Conn, dbc *db.PostgresClient) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
+	flowjson := db.FlowJSON{}
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
 		if err != nil {
 			log.Println(err)
-			break
 		}
-		err = conn.WriteJSON(message.Payload)
+		flowjson.Mode = message.PayloadSlice[0]
+		flowjson.Message = message.PayloadSlice[1]
+		flowjson.Users = strparse.StringToUint64Slice(message.PayloadSlice[2])
+		flowjson.Room, err = strconv.ParseUint(message.PayloadSlice[3], 10, 64)
+		flowjson.Status = message.PayloadSlice[4]
+		if err != nil {
+			log.Println(err)
+		}
+		err = conn.WriteJSON(flowjson)
 		if err != nil {
 			log.Println(err)
 			break
@@ -102,16 +119,10 @@ func (h HandlerWS) WsSend(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn
 			break
 		}
 		flowjson = funcMap[flowjson.Mode](flowjson)
-		if err != nil {
-			log.Println(err)
-			break
-		} else {
+		if flowjson.Status == "bad" {
 			conn.WriteJSON(flowjson)
-		}
-		err = h.rdb.Publish(context.Background(), "chat", flowjson).Err()
-		if err != nil {
-			log.Println(err)
-			break
+		} else {
+			_ = h.rdb.Publish(context.Background(), "chat", flowjson)
 		}
 	}
 }
