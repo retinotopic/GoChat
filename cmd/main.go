@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"log"
 
-	server "github.com/retinotopic/GoChat/internal/server"
+	"github.com/retinotopic/GoChat/internal/router"
 )
 
 func main() {
 	addr := flag.String("addr", "localhost:8080", "address to listen on")
+
 	flag.Parse()
 	fmt.Println(*addr)
-	srv := server.NewServer(*addr)
+	srv := router.NewRouter(*addr)
 	err := srv.Run()
 	if err != nil {
 		log.Println(err)
