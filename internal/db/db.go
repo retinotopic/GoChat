@@ -54,7 +54,7 @@ type FlowJSON struct {
 	Name    string   `json:"Name"`
 	Offset  string   `json:"Offset"`
 	Status  string   `json:"Status"`
-	Rows    pgx.Rows `json:"Rows"`
+	Rows    pgx.Rows
 }
 
 type PostgresClient struct {
@@ -62,7 +62,6 @@ type PostgresClient struct {
 	Name           string
 	UserID         uint64
 	Conn           *pgxpool.Conn
-	Status         string                `json:"status"`
 	Rooms          map[uint32][]RoomInfo //  room id of group chat with user ids
 	DuoRoomUsers   map[uint64]bool       // user id of private chat
 	SearchUserList map[uint32]bool       // search user list with user id

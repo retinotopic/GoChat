@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/db"
 	"github.com/retinotopic/GoChat/pkg/safectx"
-	"github.com/retinotopic/GoChat/pkg/strparse"
 )
 
 type HandlerWS struct {
@@ -44,11 +44,6 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("no sub")
 			return
 		}
-		///////
-
-		// "AI" SELECT ALL MESSAGES FROM ROOMS
-
-		///////
 		dbClient, err := db.NewClient(sub, h.db)
 		if err != nil {
 			log.Println("wrong sub", err)
@@ -81,6 +76,7 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	}()
 	FuncMap := make(map[string]func(db.FlowJSON) db.FlowJSON)
 	FuncMap["SendMessage"] = dbc.SendMessage
+	FuncMap["GetMessages"] = dbc.GetMessages
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	go h.WsReceive(FuncMap, conn, dbc)
@@ -95,11 +91,9 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(db.FlowJSON) db.FlowJSON, c
 		if err != nil {
 			log.Println(err)
 		}
-		flowjson.Mode = message.PayloadSlice[0]
-		flowjson.Message = message.PayloadSlice[1]
-		flowjson.Users = strparse.StringToUint64Slice(message.PayloadSlice[2])
-		flowjson.Room, err = strconv.ParseUint(message.PayloadSlice[3], 10, 64)
-		flowjson.Status = message.PayloadSlice[4]
+		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
+			panic(err)
+		}
 		if err != nil {
 			log.Println(err)
 		}
@@ -119,10 +113,17 @@ func (h HandlerWS) WsSend(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn
 			break
 		}
 		flowjson = funcMap[flowjson.Mode](flowjson)
-		if flowjson.Status == "bad" {
+		payload, err := json.Marshal(flowjson)
+		if err != nil {
+			log.Println(err, "error marshaling")
+			flowjson.Status = "bad"
+		}
+		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
 			conn.WriteJSON(flowjson)
 		} else {
-			_ = h.rdb.Publish(context.Background(), "chat", flowjson)
+			if err := h.rdb.Publish(context.Background(), strconv.FormatUint(flowjson.Room, 10), payload).Err(); err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
