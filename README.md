@@ -1,2 +1,1 @@
-# GoChat
-Room-based chat for 2 people app
+Chat app both for group rooms for many people and for private conversations between 2 people
