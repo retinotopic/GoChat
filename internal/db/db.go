@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -51,6 +52,8 @@ type FlowJSON struct {
 	Offset  string   `json:"Offset"`
 	Status  string   `json:"Status"`
 	Rows    pgx.Rows
+	Tx      pgx.Tx
+	Err     error
 }
 
 type PostgresClient struct {
@@ -66,7 +69,6 @@ type PostgresClient struct {
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
 	db, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
 	return db, err
-
 }
 func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	// check if user exists
@@ -91,113 +93,89 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		Name:   name,
 	}, nil
 }
+func (c *PostgresClient) TxBegin(flowjson *FlowJSON) {
+	flowjson.Tx, flowjson.Err = c.Conn.Begin(context.Background())
+}
+func (c *PostgresClient) TxCommit(flowjson *FlowJSON) {
+	if flowjson.Err == nil {
+		flowjson.Err = flowjson.Tx.Commit(context.Background())
+	}
+	if flowjson.Err != nil {
+		flowjson.Status = "bad"
+		flowjson.Err = flowjson.Tx.Rollback(context.Background())
+		if flowjson.Err != nil {
+			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
+		}
+	}
+}
 
 // transaction insert messages plus increment unread messages in room_users table
-func (c *PostgresClient) SendMessage(flowjson FlowJSON) FlowJSON {
-	_, err := c.Conn.Exec(context.Background(), messageinsert, flowjson.Message, flowjson.Users[0], flowjson.Room)
-	if err != nil {
-		log.Println("Error inserting message:", err)
-		flowjson.Status = "bad"
-		return flowjson
+func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), messageinsert, flowjson.Message, flowjson.Users[0], flowjson.Room)
+	if flowjson.Err != nil {
+		log.Println("Error inserting message:", flowjson.Err)
+		return
 	}
-	flowjson.Status = "ok"
-	return flowjson
 }
-func (c *PostgresClient) CreateDuoRoom(flowjson FlowJSON) FlowJSON {
+
+func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
 	worker.Mutex.Lock()
 	defer worker.Mutex.Unlock()
 	if _, ok := c.DuoRoomUsers[flowjson.Users[1]]; ok {
-		flowjson.Status = "bad"
 		flowjson.Room = worker.roomid
-		return c.SendMessage(flowjson)
+		c.SendMessage(flowjson)
 	}
-	return c.CreateRoom(flowjson)
+	c.CreateRoom(flowjson)
 }
-func (c *PostgresClient) CreateRoom(flowjson FlowJSON) FlowJSON {
+func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	isGroup := false
 	var roomID uint64
-	tx, err := c.Conn.Begin(context.Background())
-	if err != nil {
-		log.Println("Error starting transaction:", err)
-	}
-	defer func() {
-		if err != nil {
-			flowjson.Status = "bad"
-			err = tx.Rollback(context.Background())
-			if err != nil {
-				log.Println("Error rolling back transaction:", err)
-			}
-		} else {
-			err = tx.Commit(context.Background())
-			if err != nil {
-				flowjson.Status = "bad"
-				log.Println("Error committing transaction:", err)
-				return
-			}
-			if flowjson.Mode == "CreateDuoRoom" {
-				c.DuoRoomUsers[flowjson.Users[1]] = true
-			}
-		}
-	}()
+	var stmt *pgconn.StatementDescription
+	tx := flowjson.Tx
 
-	err = tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", flowjson.Name).Scan(&roomID)
-	if err != nil {
-		log.Println("Error inserting room:", err)
+	flowjson.Err = tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", flowjson.Name).Scan(&roomID)
+	if flowjson.Err != nil {
+		log.Println("Error inserting room:", flowjson.Err)
+		return
 	}
 	flowjson.Room = roomID
-	stmt, err := tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, unread, is_group) VALUES ($1, $2, $3, $4)")
-	if err != nil {
-		fmt.Println("Error preparing statement:", err)
+	stmt, flowjson.Err = tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, is_group) VALUES ($1, $2, $3)")
+	if flowjson.Err != nil {
+		fmt.Println("Error preparing statement:", flowjson.Err)
+		return
 	}
 	if flowjson.Name != "" {
 		isGroup = true
 	}
 	for _, i := range flowjson.Users {
-		_, err := tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], roomID, 0, isGroup)
-		if err != nil {
-			log.Println("Error inserting room_users_info:", err)
+		_, flowjson.Err = tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], roomID, isGroup)
+		if flowjson.Err != nil {
+			log.Println("Error inserting room_users_info:", flowjson.Err)
+			return
 		}
 	}
-
-	if flowjson.Mode == "CreateDuoRoom" {
-		_, err := tx.Exec(context.Background(), messageinsert, flowjson.Message, flowjson.Users[0], flowjson.Room)
-		if err != nil {
-			log.Println("Error inserting message:", err)
-			flowjson.Status = "bad"
-			return flowjson
-		}
-		flowjson.Status = "ok"
-		return flowjson
-	}
-	return flowjson
 }
 
-func (c *PostgresClient) GetMessages(flowjson FlowJSON) FlowJSON {
-	var err error
+func (c *PostgresClient) GetMessages(flowjson *FlowJSON) {
 	if flowjson.Room != 0 {
-		flowjson.Rows, err = c.Conn.Query(context.Background(),
+		flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
 			`SELECT m.payload, m.user_id, m.room_id
 			FROM messages m
 			WHERE m.room_id = $1
 			ORDER BY m.timestamp
 			LIMIT 100 OFFSET &2`, flowjson.Room, flowjson.Offset)
 	} else {
-		flowjson.Rows, err = c.Conn.Query(context.Background(),
-			`SELECT m.payload, m.user_id, m.room_id,r.room_user_info_id,r.unread
+		flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+			`SELECT m.payload, m.user_id, m.room_id,r.room_user_info_id,r.is_group
 			FROM messages m
 			JOIN (
-				SELECT room_id,room_user_info_id,unread
+				SELECT room_id,room_user_info_id,is_group
 				FROM room_users_info
 				WHERE user_id = 1
 			) r ON m.room_id = r.room_id
 			ORDER BY m.room_id,m.timestamp LIMIT 100`, c.UserID)
 	}
-	if err != nil {
-		log.Println("Error getting messages:", err)
-		flowjson.Status = "bad"
-	}
-	return flowjson
 }
 
 /*

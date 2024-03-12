@@ -49,14 +49,6 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("wrong sub", err)
 			return
 		}
-		flowjson := db.FlowJSON{
-			Mode: "GetMessages",
-			Room: 0,
-		}
-		flowjson = dbClient.GetMessages(flowjson)
-		for flowjson.Rows.Next() {
-			/////////////////
-		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
@@ -74,15 +66,23 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 		dbc.Conn.Release()
 		conn.Close()
 	}()
-	FuncMap := make(map[string]func(db.FlowJSON) db.FlowJSON)
+	FuncMap := make(map[string]func(*db.FlowJSON))
 	FuncMap["SendMessage"] = dbc.SendMessage
 	FuncMap["GetMessages"] = dbc.GetMessages
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
+	go func() {
+		flowjson := &db.FlowJSON{}
+		FuncMap["GetMessages"](flowjson)
+		for flowjson.Rows.Next() {
+			// m.payload, m.user_id, m.room_id,r.room_user_info_id, r.is_group, r.unread
+			flowjson.Rows.Scan(&flowjson.Message, &flowjson.Users[0], &flowjson.Room)
+		}
+	}()
 	go h.WsReceive(FuncMap, conn, dbc)
 	go h.WsSend(FuncMap, conn, dbc)
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	flowjson := db.FlowJSON{}
@@ -104,19 +104,22 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(db.FlowJSON) db.FlowJSON, c
 		}
 	}
 }
-func (h HandlerWS) WsSend(funcMap map[string]func(db.FlowJSON) db.FlowJSON, conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
 	for {
-		flowjson := db.FlowJSON{}
+		flowjson := &db.FlowJSON{}
 		err := conn.ReadJSON(flowjson)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		flowjson = funcMap[flowjson.Mode](flowjson)
+		dbc.TxBegin(flowjson)
+		if flowjson.Err != nil {
+			funcMap[flowjson.Mode](flowjson)
+		}
+		dbc.TxCommit(flowjson)
 		payload, err := json.Marshal(flowjson)
 		if err != nil {
-			log.Println(err, "error marshaling")
-			flowjson.Status = "bad"
+			log.Println(err, "marshalling error")
 		}
 		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
 			conn.WriteJSON(flowjson)
