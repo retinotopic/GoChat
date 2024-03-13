@@ -44,16 +44,17 @@ func (ws Workers) GetWorker(user1, user2 uint64) worker {
 }
 
 type FlowJSON struct {
-	Mode    string   `json:"Mode"`
-	Message string   `json:"Message"`
-	Users   []uint64 `json:"Users"`
-	Room    uint64   `json:"Room"`
-	Name    string   `json:"Name"`
-	Offset  string   `json:"Offset"`
-	Status  string   `json:"Status"`
-	Rows    pgx.Rows
-	Tx      pgx.Tx
-	Err     error
+	Mode      string   `json:"Mode"`
+	Message   string   `json:"Message"`
+	Users     []uint64 `json:"Users"`
+	UsersInfo []uint64 `json:"UsersInfo"`
+	Room      uint64   `json:"Room"`
+	Name      string   `json:"Name"`
+	Offset    string   `json:"Offset"`
+	Status    string   `json:"Status"`
+	Rows      pgx.Rows
+	Tx        pgx.Tx
+	Err       error
 }
 
 type PostgresClient struct {
@@ -176,6 +177,13 @@ func (c *PostgresClient) GetMessages(flowjson *FlowJSON) {
 			) r ON m.room_id = r.room_id
 			ORDER BY m.room_id,m.timestamp LIMIT 100`, c.UserID)
 	}
+}
+
+func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
+	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+		`SELECT room_id,room_user_info_id,unread
+		FROM room_users_info
+		WHERE user_id = 1 ORDER BY room_id`, c.UserID)
 }
 
 /*

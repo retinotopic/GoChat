@@ -72,10 +72,10 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	go func() {
-		flowjson := &db.FlowJSON{}
+		flowjson := &db.FlowJSON{Room: 0}
 		FuncMap["GetMessages"](flowjson)
 		for flowjson.Rows.Next() {
-			// m.payload, m.user_id, m.room_id,r.room_user_info_id, r.is_group, r.unread
+			// m.payload, m.user_id, m.room_id
 			flowjson.Rows.Scan(&flowjson.Message, &flowjson.Users[0], &flowjson.Room)
 		}
 	}()
