@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -19,52 +18,47 @@ var messageinsert = `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$
 var workers = make(Workers)
 
 // worker for safely creating private rooms for two people
-type worker struct {
-	Mutex  *sync.Mutex
-	roomid uint64
-}
 
-type Workers map[string]worker
+type Workers map[string]*sync.Mutex
 
-func (ws Workers) GetWorker(user1, user2 uint64) worker {
-	ids := []uint64{user1, user2}
+func (ws Workers) GetWorker(user1, user2 uint32) *sync.Mutex {
+	ids := []uint32{user1, user2}
 	sort.Slice(ids, func(i, j int) bool {
 		return ids[i] < ids[j]
 	})
-	key := strconv.FormatUint(user1, 10) + strconv.FormatUint(user2, 10)
+	key := fmt.Sprintf("%d%d", user1, user2)
 
 	if w, ok := ws[key]; ok {
 		return w
 	}
 	w := &sync.Mutex{}
-	ws[key] = worker{
-		Mutex: w,
-	}
+	ws[key] = w
 	return ws[key]
 }
 
 type FlowJSON struct {
 	Mode      string   `json:"Mode"`
 	Message   string   `json:"Message"`
-	Users     []uint64 `json:"Users"`
-	UsersInfo []uint64 `json:"UsersInfo"`
-	Room      uint64   `json:"Room"`
+	Users     []uint32 `json:"Users"`
+	UsersInfo []uint32 `json:"UsersInfo"`
+	Room      uint32   `json:"Room"`
 	Name      string   `json:"Name"`
 	Offset    string   `json:"Offset"`
 	Status    string   `json:"Status"`
 	Rows      pgx.Rows
 	Tx        pgx.Tx
+	Mutex     *sync.Mutex
 	Err       error
 }
 
 type PostgresClient struct {
 	Sub            string
 	Name           string
-	UserID         uint64
+	UserID         uint32
 	Conn           *pgxpool.Conn
-	Rooms          map[uint32][]uint64 //  room id of group chat with user ids
-	DuoRoomUsers   map[uint64]bool     // user id of private chat
-	SearchUserList map[uint64]bool     // search user list with user id
+	Rooms          map[uint32][]uint32 //  room id of group chat with user ids
+	DuoRoomUsers   map[uint32]uint32   // user id of private chat
+	SearchUserList map[uint32]bool     // search user list with user id
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -78,7 +72,7 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		return nil, err
 	}
 	var name string
-	var userid uint64
+	var userid uint32
 	err = row.Scan(&name, &userid)
 	if err != nil {
 		return nil, err
@@ -121,17 +115,17 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 
 func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
-	worker.Mutex.Lock()
-	defer worker.Mutex.Unlock()
-	if _, ok := c.DuoRoomUsers[flowjson.Users[1]]; ok {
-		flowjson.Room = worker.roomid
+	worker.Lock()
+	flowjson.Mutex = worker
+	if val, ok := c.DuoRoomUsers[flowjson.Users[1]]; ok {
+		flowjson.Room = val
 		c.SendMessage(flowjson)
 	}
 	c.CreateRoom(flowjson)
 }
 func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	isGroup := false
-	var roomID uint64
+	var roomID uint32
 	var stmt *pgconn.StatementDescription
 	tx := flowjson.Tx
 
@@ -181,9 +175,25 @@ func (c *PostgresClient) GetMessages(flowjson *FlowJSON) {
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT room_id,room_user_info_id,unread
+		`SELECT room_id,room_user_info_id,user_id,unread
 		FROM room_users_info
 		WHERE user_id = 1 ORDER BY room_id`, c.UserID)
+}
+func (c *PostgresClient) TxManage(flowjson *FlowJSON, funcMap map[string]func(*FlowJSON)) {
+	c.TxBegin(flowjson)
+	if flowjson.Err != nil {
+		funcMap[flowjson.Mode](flowjson)
+	}
+	c.TxCommit(flowjson)
+	if flowjson.Err != nil {
+		return
+	}
+	switch flowjson.Mode {
+	case "CreateDuoRoom":
+		c.DuoRoomUsers[flowjson.Users[1]] = flowjson.Room
+	case "CreateGroupRoom":
+		c.Rooms[flowjson.Room] = append(c.Rooms[flowjson.Room], flowjson.Users...)
+	}
 }
 
 /*

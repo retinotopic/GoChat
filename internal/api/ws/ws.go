@@ -3,9 +3,9 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -79,10 +79,10 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 			flowjson.Rows.Scan(&flowjson.Message, &flowjson.Users[0], &flowjson.Room)
 		}
 	}()
-	go h.WsReceive(FuncMap, conn, dbc)
+	go h.WsReceive(FuncMap, conn)
 	go h.WsSend(FuncMap, conn, dbc)
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	flowjson := db.FlowJSON{}
@@ -112,19 +112,16 @@ func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket
 			log.Println(err)
 			break
 		}
-		dbc.TxBegin(flowjson)
-		if flowjson.Err != nil {
-			funcMap[flowjson.Mode](flowjson)
-		}
-		dbc.TxCommit(flowjson)
-		payload, err := json.Marshal(flowjson)
-		if err != nil {
-			log.Println(err, "marshalling error")
-		}
+		dbc.TxManage(flowjson, funcMap)
+
 		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
 			conn.WriteJSON(flowjson)
 		} else {
-			if err := h.rdb.Publish(context.Background(), strconv.FormatUint(flowjson.Room, 10), payload).Err(); err != nil {
+			payload, err := json.Marshal(flowjson)
+			if err != nil {
+				log.Println(err, "marshalling error")
+			}
+			if err := h.rdb.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Room), payload).Err(); err != nil {
 				log.Println(err)
 			}
 		}
