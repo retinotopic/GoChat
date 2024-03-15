@@ -115,36 +115,45 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 
 func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
-	worker.Lock()
 	flowjson.Mutex = worker
+	flowjson.Mutex.Lock()
 	if val, ok := c.DuoRoomUsers[flowjson.Users[1]]; ok {
 		flowjson.Room = val
 		c.SendMessage(flowjson)
+		delete(c.DuoRoomUsers, flowjson.Users[1])
+	} else if _, ok := c.SearchUserList[flowjson.Users[1]]; ok {
+		c.CreateRoom(flowjson)
+	} else {
+		flowjson.Err = fmt.Errorf("user not found")
 	}
-	c.CreateRoom(flowjson)
 }
 func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
-	isGroup := false
+	// if len of users is more than 10 issue a error
+	if len(flowjson.Users) > 10 {
+		flowjson.Err = fmt.Errorf("too many users")
+		return
+	}
 	var roomID uint32
-	var stmt *pgconn.StatementDescription
-	tx := flowjson.Tx
 
-	flowjson.Err = tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", flowjson.Name).Scan(&roomID)
+	// create new room and return room id
+	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", flowjson.Name).Scan(&roomID)
 	if flowjson.Err != nil {
 		log.Println("Error inserting room:", flowjson.Err)
 		return
 	}
 	flowjson.Room = roomID
-	stmt, flowjson.Err = tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, is_group) VALUES ($1, $2, $3)")
+	c.AddUserToRoom(flowjson)
+
+}
+func (c *PostgresClient) AddUserToRoom(flowjson *FlowJSON) {
+	var stmt *pgconn.StatementDescription
+	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id, unread) VALUES ($1, $2, $3)")
 	if flowjson.Err != nil {
 		fmt.Println("Error preparing statement:", flowjson.Err)
 		return
 	}
-	if flowjson.Name != "" {
-		isGroup = true
-	}
 	for _, i := range flowjson.Users {
-		_, flowjson.Err = tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], roomID, isGroup)
+		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], flowjson.Room)
 		if flowjson.Err != nil {
 			log.Println("Error inserting room_users_info:", flowjson.Err)
 			return
@@ -152,6 +161,7 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	}
 }
 
+// load messages for a room or last 100 messages for all rooms
 func (c *PostgresClient) GetMessages(flowjson *FlowJSON) {
 	if flowjson.Room != 0 {
 		flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
@@ -179,18 +189,14 @@ func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 		FROM room_users_info
 		WHERE user_id = 1 ORDER BY room_id`, c.UserID)
 }
-func (c *PostgresClient) TxManage(flowjson *FlowJSON, funcMap map[string]func(*FlowJSON)) {
-	c.TxBegin(flowjson)
-	if flowjson.Err != nil {
-		funcMap[flowjson.Mode](flowjson)
-	}
-	c.TxCommit(flowjson)
-	if flowjson.Err != nil {
-		return
+func (c *PostgresClient) UpdateRealtimeInfo(flowjson *FlowJSON) {
+	if flowjson.Mutex != nil {
+		flowjson.Mutex.Unlock()
 	}
 	switch flowjson.Mode {
 	case "CreateDuoRoom":
 		c.DuoRoomUsers[flowjson.Users[1]] = flowjson.Room
+
 	case "CreateGroupRoom":
 		c.Rooms[flowjson.Room] = append(c.Rooms[flowjson.Room], flowjson.Users...)
 	}

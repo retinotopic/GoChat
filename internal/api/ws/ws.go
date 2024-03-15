@@ -71,29 +71,22 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	FuncMap["GetMessages"] = dbc.GetMessages
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
-	go func() {
-		flowjson := &db.FlowJSON{Room: 0}
-		FuncMap["GetMessages"](flowjson)
-		for flowjson.Rows.Next() {
-			// m.payload, m.user_id, m.room_id
-			flowjson.Rows.Scan(&flowjson.Message, &flowjson.Users[0], &flowjson.Room)
-		}
-	}()
-	go h.WsReceive(FuncMap, conn)
+	go h.WsReceive(FuncMap, conn, dbc)
 	go h.WsSend(FuncMap, conn, dbc)
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn) {
+func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
 
 	rps := h.rdb.Subscribe(context.Background(), "chat")
-	flowjson := db.FlowJSON{}
+	flowjson := &db.FlowJSON{}
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
 		if err != nil {
 			log.Println(err)
 		}
 		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
-			panic(err)
+			log.Fatalln(err, "unmarshalling error")
 		}
+		dbc.UpdateRealtimeInfo(flowjson)
 		if err != nil {
 			log.Println(err)
 		}
@@ -112,14 +105,22 @@ func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket
 			log.Println(err)
 			break
 		}
-		dbc.TxManage(flowjson, funcMap)
+		dbc.TxBegin(flowjson)
+		if flowjson.Err != nil {
+			funcMap[flowjson.Mode](flowjson)
+		}
+		dbc.TxCommit(flowjson)
+		if flowjson.Err != nil {
+			return
+		}
 
 		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
 			conn.WriteJSON(flowjson)
 		} else {
+			dbc.UpdateRealtimeInfo(flowjson)
 			payload, err := json.Marshal(flowjson)
 			if err != nil {
-				log.Println(err, "marshalling error")
+				log.Fatalln(err, "marshalling error")
 			}
 			if err := h.rdb.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Room), payload).Err(); err != nil {
 				log.Println(err)

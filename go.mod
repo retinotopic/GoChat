@@ -30,8 +30,10 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.11.0 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgtype v1.14.2 // indirect
 	github.com/jackc/pgx/v5 v5.5.3 // indirect
 	github.com/redis/go-redis/v9 v9.5.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
