@@ -68,7 +68,7 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	}()
 	FuncMap := make(map[string]func(*db.FlowJSON))
 	FuncMap["SendMessage"] = dbc.SendMessage
-	FuncMap["GetMessages"] = dbc.GetMessages
+	FuncMap["GetTopMessages"] = dbc.GetTopMessages
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	go h.WsReceive(FuncMap, conn, dbc)

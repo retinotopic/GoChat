@@ -160,32 +160,41 @@ func (c *PostgresClient) AddUserToRoom(flowjson *FlowJSON) {
 		}
 	}
 }
+func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
+	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+		`SELECT r.room_id, r.name, m.message_id, m.payload, m.user_id, m.timestamp
+		FROM (
+			SELECT rmi.room_id, rm.name
+			FROM rooms rm
+			JOIN (
+				SELECT room_id
+				FROM room_users_info
+				WHERE user_id = $1
+			) rmi ON rmi.room_id = rm.room_id LIMIT 30 OFFSET $2
+		) AS r
+		LEFT JOIN LATERAL (
+			SELECT message_id, payload, user_id, timestamp
+			FROM messages
+			WHERE messages.room_id = r.room_id
+			ORDER BY timestamp DESC
+			LIMIT 30
+		) AS m ON true
+		ORDER BY r.room_id`, c.UserID, flowjson.Offset)
+}
 
 // load messages for a room or last 100 messages for all rooms
-func (c *PostgresClient) GetMessages(flowjson *FlowJSON) {
-	if flowjson.Room != 0 {
-		flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-			`SELECT m.payload, m.user_id, m.room_id
-			FROM messages m
-			WHERE m.room_id = $1
-			ORDER BY m.timestamp
-			LIMIT 100 OFFSET &2`, flowjson.Room, flowjson.Offset)
-	} else {
-		flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-			`SELECT m.payload, m.user_id, m.room_id,r.room_user_info_id,r.is_group
-			FROM messages m
-			JOIN (
-				SELECT room_id,room_user_info_id,is_group
-				FROM room_users_info
-				WHERE user_id = 1
-			) r ON m.room_id = r.room_id
-			ORDER BY m.room_id,m.timestamp LIMIT 100`, c.UserID)
-	}
+func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
+	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+		`SELECT m.payload, m.user_id, m.room_id
+		FROM messages m
+		WHERE m.room_id = $1
+		ORDER BY m.timestamp
+		LIMIT 100 OFFSET $2`, flowjson.Room, flowjson.Offset)
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT room_id,room_user_info_id,user_id,unread
+		`SELECT room_id,room_user_info_id,user_id
 		FROM room_users_info
 		WHERE user_id = 1 ORDER BY room_id`, c.UserID)
 }
@@ -201,121 +210,3 @@ func (c *PostgresClient) UpdateRealtimeInfo(flowjson *FlowJSON) {
 		c.Rooms[flowjson.Room] = append(c.Rooms[flowjson.Room], flowjson.Users...)
 	}
 }
-
-/*
-///////////////TEST QUERIES/////////////////////
-
-
-CREATE OR REPLACE FUNCTION notify_new_message()
-RETURNS TRIGGER AS $$
-DECLARE
-  channel TEXT;
-  user_id INTEGER;
-BEGIN
-
-  user_id := (SELECT user_id FROM room_users WHERE user_id = NEW.room_users_id);
-
-  channel := 'user_' || user_id;
-
-  PERFORM pg_notify(channel, 'new message in room: ' || NEW.room_id);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER new_message_trigger
-AFTER INSERT ON messages
-FOR EACH ROW
-EXECUTE FUNCTION notify_new_message();
-
-
-
-
-	SELECT * FROM rooms WHERE
-
-INSERT INTO room_users (room_id, user_id, unread)
-VALUES (3, 2, 5)
-INSERT INTO users (subject,name) VALUES ('111nhudgokdhgfdidxfd','OKAYEG')
-
-//////////////////
-
-INSERT INTO rooms DEFAULT VALUES
-/
-INSERT INTO users (subject,name) VALUES ('dhdf982hfireb','aboba')
-/
-INSERT INTO messages (payload,user_id,room_id) VALUES ('hi arolfix',6,14)
-/
-INSERT INTO room_users_info (room_id,user_id,unread,is_group) VALUES ($1,$2,$3,$4)
-/
-SELECT payload,user_id,room_id FROM messages WHERE room_id IN (SELECT room_id FROM room_users_info WHERE user_id=6) ORDER BY room_id,timestamp
-/
-SELECT user_id,name FROM users WHERE name LIKE '%%';
-/
-CREATE SEQUENCE room_ids START 1;
-/
-INSERT INTO rooms (room_id) VALUES (nextval('room_ids')) RETURNING room_id
-/
-rooms_room_id_seq
-/
-BEGIN;
-WITH roomval AS (INSERT INTO rooms DEFAULT VALUES RETURNING room_id)
-INSERT INTO room_users_info (user_id, room_id, unread)
-SELECT 1, room_id, 0 FROM roomval
-UNION ALL
-SELECT 5, room_id, 0 FROM roomval;
-COMMIT;
-//
-SELECT payload,user_id FROM messages WHERE ((user_id = 6 OR to_user_id = 6) AND room_id IS NULL) ORDER BY timestamp
-//
-SELECT payload, user_id, room_id
-FROM (
-    SELECT payload, user_id, NULL AS room_id, timestamp
-    FROM messages
-    WHERE (user_id = 6 OR to_user_id = 6) AND room_id IS NULL
-    UNION ALL
-    SELECT m.payload, m.user_id, m.room_id, m.timestamp
-    FROM messages m
-    JOIN (
-        SELECT room_id
-        FROM room_users_info
-        WHERE user_id = 6
-    ) ru ON m.room_id = ru.room_id
-)
-ORDER BY COALESCE(room_id, user_id), timestamp;
-//
-SELECT m.payload, m.user_id, m.room_id
-FROM messages m
-JOIN (
-	SELECT room_id
-	FROM room_users_info
-	WHERE user_id = 6
-) ru ON m.room_id = ru.room_id
-ORDER BY m.room_id,m.timestamp
-
-
-//
-
-
-BEGIN;
-
-
-SELECT * FROM users WHERE user_id IN (1, 5) FOR UPDATE;
-
-
-IF EXISTS (
-  SELECT 1 FROM room_users_info ru1
-  JOIN room_users_info ru2 ON ru1.room_id = ru2.room_id
-  WHERE ru1.user_id = 1 AND ru2.user_id = 5 AND ru1.is_group = false
-) THEN
-  ROLLBACK;
-  RAISE EXCEPTION 'room already exists';
-END IF;
-
-
-WITH roomval AS (INSERT INTO rooms (name) VALUES ("placeholder") RETURNING room_id)
-INSERT INTO room_users_info (user_id, room_id, unread, is_group)
-SELECT 1, room_id, 0, false FROM roomval
-UNION ALL
-SELECT 5, room_id, 0, false FROM roomval;
-COMMIT;
-
-*/
