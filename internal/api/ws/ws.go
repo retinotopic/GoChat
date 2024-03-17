@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -58,10 +59,14 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println(err)
 			return
 		}
-		h.WsHandle(dbClient, conn)
+		err = h.WsHandle(dbClient, conn)
+		if err != nil {
+			//write error to plain http
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	})
 }
-func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
+func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error {
 	defer func() {
 		dbc.Conn.Release()
 		conn.Close()
@@ -73,6 +78,18 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) {
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	go h.WsReceive(FuncMap, conn, dbc)
 	go h.WsSend(FuncMap, conn, dbc)
+	flowjson1 := &db.FlowJSON{}
+	dbc.GetTopMessages(flowjson1)
+	flowjson2 := &db.FlowJSON{}
+	dbc.GetRoomUsersInfo(flowjson2)
+
+	if flowjson1.Err != nil || flowjson2.Err != nil {
+		log.Println(flowjson1.Err)
+		return errors.New("cant get info")
+	}
+	go h.WsGetRoomsMessages(FuncMap, conn, dbc)
+	go h.WsGetRoomsInfo(FuncMap, conn, dbc)
+	return nil
 }
 func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
 
@@ -127,4 +144,10 @@ func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket
 			}
 		}
 	}
+}
+func (h HandlerWS) WsGetRoomsMessages(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
+
+}
+func (h HandlerWS) WsGetRoomsInfo(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
+
 }

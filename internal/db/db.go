@@ -166,10 +166,10 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 		return
 	}
 	flowjson.Room = roomID
-	c.AddUserToRoom(flowjson)
+	c.AddUsersToRoom(flowjson)
 
 }
-func (c *PostgresClient) AddUserToRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	var stmt *pgconn.StatementDescription
 	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id) VALUES ($1, $2)")
 	if flowjson.Err != nil {
@@ -184,7 +184,7 @@ func (c *PostgresClient) AddUserToRoom(flowjson *FlowJSON) {
 		}
 	}
 }
-func (c *PostgresClient) DeleteUserFromRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	var stmt *pgconn.StatementDescription
 	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "delete", "DELETE FROM room_users_info WHERE room_user_info = $1")
 	if flowjson.Err != nil {
