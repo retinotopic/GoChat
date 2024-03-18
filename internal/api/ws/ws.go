@@ -76,8 +76,6 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 	FuncMap["GetTopMessages"] = dbc.GetTopMessages
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
-	go h.WsReceive(FuncMap, conn, dbc)
-	go h.WsSend(FuncMap, conn, dbc)
 	flowjson1 := &db.FlowJSON{}
 	dbc.GetTopMessages(flowjson1)
 	flowjson2 := &db.FlowJSON{}
@@ -89,6 +87,8 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 	}
 	go h.WsGetRoomsMessages(FuncMap, conn, dbc)
 	go h.WsGetRoomsInfo(FuncMap, conn, dbc)
+	go h.WsReceive(FuncMap, conn, dbc)
+	go h.WsSend(FuncMap, conn, dbc)
 	return nil
 }
 func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {

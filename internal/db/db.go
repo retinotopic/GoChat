@@ -51,15 +51,26 @@ type FlowJSON struct {
 	Mutex     *sync.Mutex
 	Err       error
 }
-
+type Rooms struct {
+	m map[uint32][]uint32 //  room id of group chat with user ids
+	sync.Mutex
+}
+type DuoRoomUsers struct {
+	m map[uint32]uint32 //  room id of group chat with user ids
+	sync.Mutex
+}
+type SearchUserList struct {
+	m map[uint32]bool //  room id of group chat with user ids
+	sync.Mutex
+}
 type PostgresClient struct {
 	Sub            string
 	Name           string
 	UserID         uint32
 	Conn           *pgxpool.Conn
-	Rooms          map[uint32][]uint32 //  room id of group chat with user ids
-	DuoRoomUsers   map[uint32]uint32   // user id of private chat and corresponding room id
-	SearchUserList map[uint32]bool     // search user list with user id
+	Rooms          //  room id of group chat with user ids
+	DuoRoomUsers   // user id of private chat and corresponding room id
+	SearchUserList // search user list with user id
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -95,13 +106,15 @@ func (c *PostgresClient) TxBegin(flowjson *FlowJSON) {
 func (c *PostgresClient) TxCommit(flowjson *FlowJSON) {
 	if flowjson.Err == nil {
 		flowjson.Err = flowjson.Tx.Commit(context.Background())
-	}
-	if flowjson.Err != nil {
-		flowjson.Status = "bad"
-		flowjson.Err = flowjson.Tx.Rollback(context.Background())
 		if flowjson.Err != nil {
-			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
+			flowjson.Status = "bad"
+			flowjson.Err = flowjson.Tx.Rollback(context.Background())
+			if flowjson.Err != nil {
+				log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
+			}
 		}
+	} else {
+		flowjson.Status = "bad"
 	}
 }
 
@@ -141,11 +154,13 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
 	flowjson.Mutex = worker
 	flowjson.Mutex.Lock()
-	if val, ok := c.DuoRoomUsers[flowjson.Users[1]]; ok {
+	if val, ok := c.DuoRoomUsers.m[flowjson.Users[1]]; ok {
 		flowjson.Room = val
 		c.SendMessage(flowjson)
-		delete(c.DuoRoomUsers, flowjson.Users[1])
-	} else if _, ok := c.SearchUserList[flowjson.Users[1]]; ok {
+		c.DuoRoomUsers.Mutex.Lock()
+		delete(c.DuoRoomUsers.m, flowjson.Users[1])
+		c.DuoRoomUsers.Mutex.Unlock()
+	} else if _, ok := c.SearchUserList.m[flowjson.Users[1]]; ok {
 		c.CreateRoom(flowjson)
 	} else {
 		flowjson.Err = fmt.Errorf("user not found")
@@ -245,9 +260,13 @@ func (c *PostgresClient) UpdateRealtimeInfo(flowjson *FlowJSON) {
 	}
 	switch flowjson.Mode {
 	case "CreateDuoRoom":
-		c.DuoRoomUsers[flowjson.Users[1]] = flowjson.Room
+		c.DuoRoomUsers.Mutex.Lock()
+		c.DuoRoomUsers.m[flowjson.Users[1]] = flowjson.Room
+		c.DuoRoomUsers.Mutex.Unlock()
 
 	case "CreateGroupRoom":
-		c.Rooms[flowjson.Room] = append(c.Rooms[flowjson.Room], flowjson.Users...)
+		c.Rooms.Mutex.Lock()
+		c.Rooms.m[flowjson.Room] = append(c.Rooms.m[flowjson.Room], flowjson.Users...)
+		c.Rooms.Mutex.Unlock()
 	}
 }
