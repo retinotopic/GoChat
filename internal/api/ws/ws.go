@@ -103,7 +103,6 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websoc
 		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
 			log.Fatalln(err, "unmarshalling error")
 		}
-		dbc.UpdateRealtimeInfo(flowjson)
 		if err != nil {
 			log.Println(err)
 		}
@@ -134,7 +133,6 @@ func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket
 		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
 			conn.WriteJSON(flowjson)
 		} else {
-			dbc.UpdateRealtimeInfo(flowjson)
 			payload, err := json.Marshal(flowjson)
 			if err != nil {
 				log.Fatalln(err, "marshalling error")

@@ -38,27 +38,19 @@ func (ws Workers) GetWorker(user1, user2 uint32) *sync.Mutex {
 }
 
 type FlowJSON struct {
-	Mode      string   `json:"Mode"`
-	Message   string   `json:"Message"`
-	Users     []uint32 `json:"Users"`
-	UsersInfo []uint32 `json:"UsersInfo"`
-	Room      uint32   `json:"Room"`
-	Name      string   `json:"Name"`
-	Offset    string   `json:"Offset"`
-	Status    string   `json:"Status"`
-	Rows      pgx.Rows
-	Tx        pgx.Tx
-	Mutex     *sync.Mutex
-	Err       error
+	Mode    string   `json:"Mode"`
+	Message string   `json:"Message"`
+	Users   []uint32 `json:"Users"`
+	Room    uint32   `json:"Room"`
+	Name    string   `json:"Name"`
+	Offset  string   `json:"Offset"`
+	Status  string   `json:"Status"`
+	Rows    pgx.Rows
+	Tx      pgx.Tx
+	Mutex   *sync.Mutex
+	Err     error
 }
-type Rooms struct {
-	m map[uint32][]uint32 //  room id of group chat with user ids
-	sync.Mutex
-}
-type DuoRoomUsers struct {
-	m map[uint32]uint32 //  room id of group chat with user ids
-	sync.Mutex
-}
+
 type SearchUserList struct {
 	m map[uint32]bool //  room id of group chat with user ids
 	sync.Mutex
@@ -68,8 +60,6 @@ type PostgresClient struct {
 	Name           string
 	UserID         uint32
 	Conn           *pgxpool.Conn
-	Rooms          //  room id of group chat with user ids
-	DuoRoomUsers   // user id of private chat and corresponding room id
 	SearchUserList // search user list with user id
 }
 
@@ -120,30 +110,22 @@ func (c *PostgresClient) TxCommit(flowjson *FlowJSON) {
 
 // transaction insert messages plus increment unread messages in room_users table
 func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), messageinsert, flowjson.Message, flowjson.Users[0], flowjson.Room)
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), messageinsert, flowjson.Message, c.UserID, flowjson.Room)
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
 	}
 	// increment unread messages in room_users table
-	var stmt *pgconn.StatementDescription
-	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "update", "UPDATE room_users_info SET unread=unread+1 WHERE room_user_info = $1")
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), "UPDATE room_users_info SET unread=unread+1,isVisible = true WHERE room_id = $1", flowjson.Room)
 	if flowjson.Err != nil {
 		fmt.Println("Error preparing statement:", flowjson.Err)
 		return
-	}
-	for _, i := range flowjson.Users {
-		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.UsersInfo[i])
-		if flowjson.Err != nil {
-			log.Println("Error inserting room_users_info:", flowjson.Err)
-			return
-		}
 	}
 }
 
 // method for set unread to 0
 func (c *PostgresClient) MarkAsRead(flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Query(context.Background(), "UPDATE room_users_info SET unread=0 WHERE room_user_info = $1", flowjson.UsersInfo[0])
+	_, flowjson.Err = c.Conn.Query(context.Background(), "UPDATE room_users_info SET unread=0 WHERE room_user_info = $1", flowjson.Users[0])
 	if flowjson.Err != nil {
 		log.Println("Error inserting room_users_info:", flowjson.Err)
 	}
@@ -154,13 +136,8 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	worker := workers.GetWorker(flowjson.Users[0], flowjson.Users[1])
 	flowjson.Mutex = worker
 	flowjson.Mutex.Lock()
-	if val, ok := c.DuoRoomUsers.m[flowjson.Users[1]]; ok {
-		flowjson.Room = val
-		c.SendMessage(flowjson)
-		c.DuoRoomUsers.Mutex.Lock()
-		delete(c.DuoRoomUsers.m, flowjson.Users[1])
-		c.DuoRoomUsers.Mutex.Unlock()
-	} else if _, ok := c.SearchUserList.m[flowjson.Users[1]]; ok {
+	flowjson.Name = "private"
+	if _, ok := c.SearchUserList.m[flowjson.Users[1]]; ok {
 		c.CreateRoom(flowjson)
 	} else {
 		flowjson.Err = fmt.Errorf("user not found")
@@ -182,7 +159,6 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	}
 	flowjson.Room = roomID
 	c.AddUsersToRoom(flowjson)
-
 }
 func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	var stmt *pgconn.StatementDescription
@@ -192,6 +168,10 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 		return
 	}
 	for _, i := range flowjson.Users {
+		if _, ok := c.SearchUserList.m[i]; !ok {
+			flowjson.Err = fmt.Errorf("user not found")
+			return
+		}
 		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], flowjson.Room)
 		if flowjson.Err != nil {
 			log.Println("Error inserting room_users_info:", flowjson.Err)
@@ -207,14 +187,12 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 		return
 	}
 	for _, i := range flowjson.Users {
-		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.UsersInfo[i])
+		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i])
 		if flowjson.Err != nil {
 			log.Println("Error inserting room_users_info:", flowjson.Err)
 			return
 		}
 	}
-	//deleting user from room
-	//_, flowjson.Err = flowjson.Tx.Exec(context.Background(), "DELETE FROM room_users_info WHERE room_user_info = $1", flowjson.UsersInfo)
 }
 func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
@@ -225,7 +203,7 @@ func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 			JOIN (
 				SELECT room_id
 				FROM room_users_info
-				WHERE user_id = $1
+				WHERE user_id = $1 AND isVisible = true
 			) rmi ON rmi.room_id = rm.room_id LIMIT 30 OFFSET $2
 		) AS r
 		LEFT JOIN LATERAL (
@@ -253,20 +231,4 @@ func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 		`SELECT room_id,room_user_info_id,user_id
 		FROM room_users_info
 		WHERE user_id = $1 ORDER BY room_id`, c.UserID)
-}
-func (c *PostgresClient) UpdateRealtimeInfo(flowjson *FlowJSON) {
-	if flowjson.Mutex != nil {
-		flowjson.Mutex.Unlock()
-	}
-	switch flowjson.Mode {
-	case "CreateDuoRoom":
-		c.DuoRoomUsers.Mutex.Lock()
-		c.DuoRoomUsers.m[flowjson.Users[1]] = flowjson.Room
-		c.DuoRoomUsers.Mutex.Unlock()
-
-	case "CreateGroupRoom":
-		c.Rooms.Mutex.Lock()
-		c.Rooms.m[flowjson.Room] = append(c.Rooms.m[flowjson.Room], flowjson.Users...)
-		c.Rooms.Mutex.Unlock()
-	}
 }
