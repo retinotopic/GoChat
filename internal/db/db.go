@@ -138,7 +138,21 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	flowjson.Mutex.Lock()
 	flowjson.Name = "private"
 	if _, ok := c.SearchUserList.m[flowjson.Users[1]]; ok {
-		c.CreateRoom(flowjson)
+		var rows pgx.Rows
+		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT ru1.room_id
+			FROM room_users_info ru1
+			JOIN room_users_info ru2 ON ru1.room_id = ru2.room_id AND ru1.user_id != ru2.user_id
+			JOIN rooms r ON ru1.room_id = r.room_id
+			WHERE ru1.user_id = $1 AND ru2.user_id = $2 AND r.isgroup = false
+			LIMIT 1;`, flowjson.Users[0], flowjson.Users[1])
+
+		if !rows.Next() {
+			c.CreateRoom(flowjson)
+		} else {
+			flowjson.Err = fmt.Errorf("room already exists")
+			return
+		}
+
 	} else {
 		flowjson.Err = fmt.Errorf("user not found")
 	}
