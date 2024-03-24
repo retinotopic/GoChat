@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -51,16 +50,16 @@ type FlowJSON struct {
 	Err     error
 }
 
-type SearchUserList struct {
+type UsersToRooms struct {
 	m map[uint32]bool //  room id of group chat with user ids
 	sync.Mutex
 }
 type PostgresClient struct {
-	Sub            string
-	Name           string
-	UserID         uint32
-	Conn           *pgxpool.Conn
-	SearchUserList // search user list with user id
+	Sub          string
+	Name         string
+	UserID       uint32
+	Conn         *pgxpool.Conn
+	UsersToRooms // search user list with user id
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -137,17 +136,15 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	flowjson.Mutex = worker
 	flowjson.Mutex.Lock()
 	flowjson.Name = "private"
-	if _, ok := c.SearchUserList.m[flowjson.Users[1]]; ok {
+	if _, ok := c.UsersToRooms.m[flowjson.Users[1]]; ok {
 		var rows pgx.Rows
-		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT ru1.room_id
-			FROM room_users_info ru1
-			JOIN room_users_info ru2 ON ru1.room_id = ru2.room_id AND ru1.user_id != ru2.user_id
-			JOIN rooms r ON ru1.room_id = r.room_id
-			WHERE ru1.user_id = $1 AND ru2.user_id = $2 AND r.isgroup = false
-			LIMIT 1;`, flowjson.Users[0], flowjson.Users[1])
+		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT user_id1,user_id2
+			FROM duo_rooms_info
+			WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
 
 		if !rows.Next() {
 			c.CreateRoom(flowjson)
+
 		} else {
 			flowjson.Err = fmt.Errorf("room already exists")
 			return
@@ -164,9 +161,12 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 		return
 	}
 	var roomID uint32
-
+	var isDuoRoom bool
+	if flowjson.Mode == "createDuoRoom" {
+		isDuoRoom = true
+	}
 	// create new room and return room id
-	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), "INSERT INTO rooms (name) VALUES ($1) RETURNING room_id", flowjson.Name).Scan(&roomID)
+	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), "INSERT INTO rooms (name,isDuoRoom) VALUES ($1,$2) RETURNING room_id", flowjson.Name, isDuoRoom).Scan(&roomID)
 	if flowjson.Err != nil {
 		log.Println("Error inserting room:", flowjson.Err)
 		return
@@ -175,50 +175,33 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	c.AddUsersToRoom(flowjson)
 }
 func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
-	var stmt *pgconn.StatementDescription
-	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "insert", "INSERT INTO room_users_info (user_id, room_id) VALUES ($1, $2)")
-	if flowjson.Err != nil {
-		fmt.Println("Error preparing statement:", flowjson.Err)
-		return
-	}
-	for _, i := range flowjson.Users {
-		if _, ok := c.SearchUserList.m[i]; !ok {
-			flowjson.Err = fmt.Errorf("user not found")
-			return
-		}
-		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i], flowjson.Room)
-		if flowjson.Err != nil {
-			log.Println("Error inserting room_users_info:", flowjson.Err)
-			return
-		}
-	}
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO room_users_info (user_id, room_id)
+	SELECT users_to_add.user_id, $1
+	FROM (SELECT unnest($2) AS user_id) AS users_to_add
+	JOIN users u ON u.user_id = users_to_add.user_id AND u.allow_group_invites = true
+	JOIN rooms r ON r.room_id = $1 AND r.isgroup = true
+	LEFT JOIN blocked_users bu ON bu.blocked_by_user_id = $3 AND bu.blocked_user_id = users_to_add.user_id
+	WHERE bu.blocked_by_user_id IS NULL;`, flowjson.Room, flowjson.Users, c.UserID)
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
-	var stmt *pgconn.StatementDescription
-	stmt, flowjson.Err = flowjson.Tx.Prepare(context.Background(), "delete", "DELETE FROM room_users_info WHERE room_user_info = $1")
-	if flowjson.Err != nil {
-		fmt.Println("Error preparing statement:", flowjson.Err)
-		return
-	}
-	for _, i := range flowjson.Users {
-		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), stmt.SQL, flowjson.Users[i])
-		if flowjson.Err != nil {
-			log.Println("Error inserting room_users_info:", flowjson.Err)
-			return
-		}
-	}
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `
+	DELETE FROM room_users_info
+	WHERE room_id = $1
+	  AND EXISTS (
+		SELECT 1
+		FROM (SELECT unnest($2) AS user_id) AS users_to_remove
+		JOIN users u ON u.user_id = users_to_remove.user_id
+		JOIN rooms r ON r.room_id = $1 AND r.isgroup = true AND r.owner = $3
+		WHERE room_users_info.user_id = users_to_remove.user_id
+	  );`, flowjson.Room, flowjson.Users, c.UserID)
 }
 func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id, m.payload, m.user_id, m.timestamp
 		FROM (
-			SELECT rmi.room_id
-			FROM rooms rm
-			JOIN (
-				SELECT room_id
-				FROM room_users_info
-				WHERE user_id = $1 AND isVisible = true
-			) rmi ON rmi.room_id = rm.room_id LIMIT 30 OFFSET $2
+			SELECT room_id
+			FROM room_users_info
+			WHERE user_id = $1 AND is_visible = true LIMIT 30 OFFSET $2
 		) AS r
 		LEFT JOIN LATERAL (
 			SELECT payload, user_id, timestamp
