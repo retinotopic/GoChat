@@ -138,15 +138,18 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	flowjson.Name = "private"
 	if _, ok := c.UsersToRooms.m[flowjson.Users[1]]; ok {
 		var rows pgx.Rows
-		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT user_id1,user_id2
+		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT room_id
 			FROM duo_rooms_info
 			WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
-
+		if flowjson.Err != nil {
+			log.Println("retrieve unique duo room error", flowjson.Err)
+			return
+		}
 		if !rows.Next() {
 			c.CreateRoom(flowjson)
-
 		} else {
-			flowjson.Err = fmt.Errorf("room already exists")
+			rows.Scan(&flowjson.Room)
+			c.AddUsersToRoom(flowjson)
 			return
 		}
 
@@ -175,13 +178,27 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	c.AddUsersToRoom(flowjson)
 }
 func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO room_users_info (user_id, room_id)
-	SELECT users_to_add.user_id, $1
-	FROM (SELECT unnest($2) AS user_id) AS users_to_add
-	JOIN users u ON u.user_id = users_to_add.user_id AND u.allow_group_invites = true
-	JOIN rooms r ON r.room_id = $1 AND r.isgroup = true
-	LEFT JOIN blocked_users bu ON bu.blocked_by_user_id = $3 AND bu.blocked_user_id = users_to_add.user_id
-	WHERE bu.blocked_by_user_id IS NULL;`, flowjson.Room, flowjson.Users, c.UserID)
+	query := `
+			INSERT INTO room_users_info (user_id, room_id)
+			SELECT users_to_add.user_id, $1
+			FROM (SELECT unnest($2) AS user_id) AS users_to_add
+			JOIN users u ON u.user_id = users_to_add.user_id AND %s
+			JOIN rooms r ON r.room_id = $1 AND r.isgroup = $3
+			LEFT JOIN blocked_users bu ON bu.blocked_by_user_id = $4 AND bu.blocked_user_id = users_to_add.user_id
+			WHERE bu.blocked_by_user_id IS NULL;
+	`
+	var condition string
+	var isgroup bool
+	if flowjson.Mode != "createDuoRoom" {
+		condition = "u.allow_group_invites = true"
+	} else {
+		condition = "u.allow_direct_messages = true"
+		isgroup = true
+	}
+
+	query = fmt.Sprintf(query, condition)
+
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, flowjson.Users, isgroup, c.UserID)
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `
