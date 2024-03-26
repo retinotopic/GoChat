@@ -201,16 +201,24 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, flowjson.Users, isgroup, c.UserID)
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `
-	DELETE FROM room_users_info
-	WHERE room_id = $1
-	  AND EXISTS (
-		SELECT 1
-		FROM (SELECT unnest($2) AS user_id) AS users_to_remove
-		JOIN users u ON u.user_id = users_to_remove.user_id
-		JOIN rooms r ON r.room_id = $1 AND r.isgroup = true AND r.owner = $3
-		WHERE room_users_info.user_id = users_to_remove.user_id
-	  );`, flowjson.Room, flowjson.Users, c.UserID)
+	query := `DELETE FROM room_users_info
+	WHERE room_id IN (
+		SELECT room_id
+		FROM rooms 
+		WHERE room_id = $1 %s AND isgroup = $2
+	) 
+	AND ru.user_id = ANY($3);`
+	var condition string
+	var isgroup bool
+	ownerstr := fmt.Sprintf("AND owner = %s", fmt.Sprint(flowjson.Room))
+	if flowjson.Mode != "createDuoRoom" {
+		condition = ownerstr
+	} else {
+		condition = ""
+		isgroup = true
+	}
+	query = fmt.Sprintf(query, condition)
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, isgroup, flowjson.Users)
 }
 func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
