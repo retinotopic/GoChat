@@ -54,12 +54,18 @@ type UsersToRooms struct {
 	m map[uint32]bool //  room id of group chat with user ids
 	sync.Mutex
 }
+
+type Rooms struct {
+	m map[uint32]bool //  room id of group chat with user ids
+	sync.Mutex
+}
 type PostgresClient struct {
 	Sub          string
 	Name         string
 	UserID       uint32
 	Conn         *pgxpool.Conn
-	UsersToRooms // search user list with user id
+	UsersToRooms // current users
+	Rooms
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -109,24 +115,16 @@ func (c *PostgresClient) TxCommit(flowjson *FlowJSON) {
 
 // transaction insert messages plus increment unread messages in room_users table
 func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
+	//validating if room exists in our map
+	if _, ok := c.Rooms.m[flowjson.Room]; !ok {
+		flowjson.Err = errors.New("room not found")
+		return
+	}
+
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), messageinsert, flowjson.Message, c.UserID, flowjson.Room)
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
-	}
-	// increment unread messages in room_users table
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), "UPDATE room_users_info SET unread=unread+1,isVisible = true WHERE room_id = $1", flowjson.Room)
-	if flowjson.Err != nil {
-		fmt.Println("Error preparing statement:", flowjson.Err)
-		return
-	}
-}
-
-// method for set unread to 0
-func (c *PostgresClient) MarkAsRead(flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Query(context.Background(), "UPDATE room_users_info SET unread=0 WHERE room_user_info = $1", flowjson.Users[0])
-	if flowjson.Err != nil {
-		log.Println("Error inserting room_users_info:", flowjson.Err)
 	}
 }
 
@@ -178,6 +176,12 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 	c.AddUsersToRoom(flowjson)
 }
 func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
+	if flowjson.Mode == "AddUsersToRoom" {
+		if _, ok := c.Rooms.m[flowjson.Room]; !ok {
+			flowjson.Err = errors.New("room not found")
+			return
+		}
+	}
 	query := `
 			INSERT INTO room_users_info (user_id, room_id)
 			SELECT users_to_add.user_id, $1
@@ -191,9 +195,9 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	var isgroup bool
 	if flowjson.Mode != "createDuoRoom" {
 		condition = "u.allow_group_invites = true"
+		isgroup = true
 	} else {
 		condition = "u.allow_direct_messages = true"
-		isgroup = true
 	}
 
 	query = fmt.Sprintf(query, condition)
@@ -201,6 +205,12 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, flowjson.Users, isgroup, c.UserID)
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
+	if flowjson.Mode == "DeleteUsersFromRoom" {
+		if _, ok := c.Rooms.m[flowjson.Room]; !ok {
+			flowjson.Err = errors.New("room not found")
+			return
+		}
+	}
 	query := `DELETE FROM room_users_info
 	WHERE room_id IN (
 		SELECT room_id
@@ -213,16 +223,16 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	ownerstr := fmt.Sprintf("AND owner = %s", fmt.Sprint(flowjson.Room))
 	if flowjson.Mode != "createDuoRoom" {
 		condition = ownerstr
+		isgroup = true
 	} else {
 		condition = ""
-		isgroup = true
 	}
 	query = fmt.Sprintf(query, condition)
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, isgroup, flowjson.Users)
 }
 func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT r.room_id, m.payload, m.user_id, m.timestamp
+		`SELECT r.room_id, m.message_id,m.payload, m.user_id, m.timestamp
 		FROM (
 			SELECT room_id
 			FROM room_users_info
