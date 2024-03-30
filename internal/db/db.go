@@ -127,6 +127,30 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 		return
 	}
 }
+func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
+	var rows pgx.Rows
+	rows, flowjson.Err = flowjson.Tx.Query(context.Background(), `SELECT room_id
+		FROM duo_rooms_info
+		WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
+	if flowjson.Err != nil {
+		log.Println("retrieve unique duo room error", flowjson.Err)
+		return
+	}
+	if !rows.Next() {
+		flowjson.Err = errors.New("user not found")
+	} else {
+		rows.Scan(&flowjson.Room)
+		c.DeleteUsersFromRoom(flowjson)
+	}
+
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
+		VALUES ($3, $1)
+		ON CONFLICT DO NOTHING;`, flowjson.Message, c.UserID, flowjson.Room)
+	if flowjson.Err != nil {
+		log.Println("Error inserting message:", flowjson.Err)
+		return
+	}
+}
 
 // method for safely creating unique duo room
 func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
@@ -217,7 +241,7 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 		FROM rooms 
 		WHERE room_id = $1 %s AND isgroup = $2
 	) 
-	AND ru.user_id = ANY($3);`
+	AND user_id = ANY($3);`
 	var condition string
 	var isgroup bool
 	ownerstr := fmt.Sprintf("AND owner = %s", fmt.Sprint(flowjson.Room))
@@ -236,7 +260,7 @@ func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 		FROM (
 			SELECT room_id
 			FROM room_users_info
-			WHERE user_id = $1 AND is_visible = true LIMIT 30 OFFSET $2
+			WHERE user_id = $1 AND is_visible = true LIMIT 30
 		) AS r
 		LEFT JOIN LATERAL (
 			SELECT payload, user_id, timestamp
@@ -245,7 +269,7 @@ func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
 			ORDER BY timestamp DESC
 			LIMIT 30
 		) AS m ON true
-		ORDER BY r.room_id`, c.UserID, flowjson.Offset)
+		ORDER BY r.room_id`, c.UserID)
 }
 
 // load messages for a room or last 100 messages for all rooms
