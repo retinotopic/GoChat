@@ -73,11 +73,11 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 	}()
 	FuncMap := make(map[string]func(*db.FlowJSON))
 	FuncMap["SendMessage"] = dbc.SendMessage
-	FuncMap["GetTopMessages"] = dbc.GetTopMessages
+	FuncMap["GetTopMessages"] = dbc.GetAllRooms
 	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
 	flowjson1 := &db.FlowJSON{}
-	dbc.GetTopMessages(flowjson1)
+	dbc.GetAllRooms(flowjson1)
 	flowjson2 := &db.FlowJSON{}
 	dbc.GetRoomUsersInfo(flowjson2)
 

@@ -66,6 +66,8 @@ type PostgresClient struct {
 	Conn         *pgxpool.Conn
 	UsersToRooms // current users
 	Rooms
+	RoomsPagination  []uint32
+	PaginationOffset uint8
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -127,6 +129,8 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 		return
 	}
 }
+
+// blocking user and delete user from duo room
 func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
 	var rows pgx.Rows
 	rows, flowjson.Err = flowjson.Tx.Query(context.Background(), `SELECT room_id
@@ -144,10 +148,10 @@ func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
 	}
 
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
-		VALUES ($3, $1)
-		ON CONFLICT DO NOTHING;`, flowjson.Message, c.UserID, flowjson.Room)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING;`, flowjson.Users[0], flowjson.Users[1])
 	if flowjson.Err != nil {
-		log.Println("Error inserting message:", flowjson.Err)
+		log.Println("Error blocking user:", flowjson.Err)
 		return
 	}
 }
@@ -254,37 +258,48 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	query = fmt.Sprintf(query, condition)
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, isgroup, flowjson.Users)
 }
-func (c *PostgresClient) GetTopMessages(flowjson *FlowJSON) {
+
+func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT r.room_id, m.message_id,m.payload, m.user_id, m.timestamp
-		FROM (
-			SELECT room_id
-			FROM room_users_info
-			WHERE user_id = $1 AND is_visible = true LIMIT 30
-		) AS r
-		LEFT JOIN LATERAL (
-			SELECT payload, user_id, timestamp
-			FROM messages
-			WHERE messages.room_id = r.room_id
-			ORDER BY timestamp DESC
-			LIMIT 30
-		) AS m ON true
-		ORDER BY r.room_id`, c.UserID)
+		`SELECT r.room_id
+		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
+		WHERE ru.user_id = $1 AND is_visible = true 
+		ORDER BY r.last_activity DESC;
+		`, c.UserID)
+
+	if flowjson.Err != nil {
+		log.Println("Error retrieving rooms:", flowjson.Err)
+		return
+	}
+	defer c.Rooms.Mutex.Unlock()
+	c.Rooms.Mutex.Lock()
+	i := 1
+	var roomID uint32
+	for flowjson.Rows.Next() {
+		flowjson.Rows.Scan(&roomID)
+		if i < 30 {
+			flowjson.Rows.Scan(&roomID)
+			c.Rooms.m[roomID] = true
+		} else {
+			c.Rooms.m[roomID] = false
+		}
+		i++
+		c.RoomsPagination = append(c.RoomsPagination, roomID)
+	}
 }
 
-// load messages for a room or last 100 messages for all rooms
+// load messages from a room
 func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT m.payload, m.user_id, m.room_id
-		FROM messages m
-		WHERE m.room_id = $1
-		ORDER BY m.timestamp
-		LIMIT 100 OFFSET $2`, flowjson.Room, flowjson.Offset)
+		`SELECT payload,user_id,
+		FROM messages 
+		WHERE room_id = $1 AND message_id < $2
+		ORDER BY message_id DESC`, flowjson.Room, flowjson.Offset)
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT room_id,room_user_info_id,user_id
-		FROM room_users_info
-		WHERE user_id = $1 ORDER BY room_id`, c.UserID)
+		`SELECT u.user_id,u.name
+		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
+		WHERE ru.room_id = $1`, c.UserID)
 }
