@@ -273,17 +273,10 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 	}
 	defer c.Rooms.Mutex.Unlock()
 	c.Rooms.Mutex.Lock()
-	i := 1
 	var roomID uint32
 	for flowjson.Rows.Next() {
 		flowjson.Rows.Scan(&roomID)
-		if i < 30 {
-			flowjson.Rows.Scan(&roomID)
-			c.Rooms.m[roomID] = true
-		} else {
-			c.Rooms.m[roomID] = false
-		}
-		i++
+		c.Rooms.m[roomID] = false
 		c.RoomsPagination = append(c.RoomsPagination, roomID)
 	}
 }
@@ -295,6 +288,28 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
 		ORDER BY message_id DESC`, flowjson.Room, flowjson.Offset)
+}
+
+func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
+	i := c.PaginationOffset
+	arrayquery := make([]uint32, 0, 30)
+	for ; i < c.PaginationOffset+30; i++ {
+		if val, ok := c.Rooms.m[c.RoomsPagination[i]]; !val && ok {
+			arrayquery = append(arrayquery, c.RoomsPagination[i])
+		}
+	}
+	c.PaginationOffset += 30
+	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+		`SELECT r.room_id,m.message_id, m.payload, m.user_id, m.timestamp
+		FROM unnest($1) AS r(room_id)
+		LEFT JOIN LATERAL (
+			SELECT message_id, payload, user_id, timestamp
+			FROM messages
+			WHERE messages.room_id = r.room_id
+			ORDER BY timestamp DESC
+			LIMIT 30
+		) AS m ON true
+		ORDER BY r.room_id`, arrayquery)
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
