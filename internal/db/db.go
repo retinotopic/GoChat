@@ -185,11 +185,6 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	}
 }
 func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
-	// if len of users is more than 10 issue a error
-	if len(flowjson.Users) > 10 {
-		flowjson.Err = errors.New("too many users")
-		return
-	}
 	var roomID uint32
 	var isDuoRoom bool
 	if flowjson.Mode == "createDuoRoom" {
@@ -219,6 +214,11 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	}
 	if len(flowjson.Users)+int(usercount) > 10 {
 		flowjson.Err = errors.New("too many users in room")
+		return
+	}
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `UPDATE rooms SET user_count = user_count + $1 WHERE room_id = $2`, len(flowjson.Users), flowjson.Room)
+	if flowjson.Err != nil {
+		log.Println("Error updating user count in room:", flowjson.Err)
 		return
 	}
 	query := `
