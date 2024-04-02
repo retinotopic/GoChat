@@ -67,6 +67,7 @@ type PostgresClient struct {
 	UsersToRooms // current users
 	Rooms
 	RoomsPagination  []uint32
+	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
 }
 
@@ -210,6 +211,16 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 			return
 		}
 	}
+	var usercount uint8
+	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), `SELECT user_count FROM rooms WHERE room_id = $1 FOR UPDATE;`, flowjson.Room).Scan(&usercount)
+	if flowjson.Err != nil {
+		log.Println("Error retrieving user count:", flowjson.Err)
+		return
+	}
+	if len(flowjson.Users)+int(usercount) > 10 {
+		flowjson.Err = errors.New("too many users in room")
+		return
+	}
 	query := `
 			INSERT INTO room_users_info (user_id, room_id)
 			SELECT users_to_add.user_id, $1
@@ -231,6 +242,7 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	query = fmt.Sprintf(query, condition)
 
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Room, flowjson.Users, isgroup, c.UserID)
+
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	if flowjson.Mode == "DeleteUsersFromRoom" {
@@ -268,7 +280,7 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 		`, c.UserID)
 
 	if flowjson.Err != nil {
-		log.Println("Error retrieving rooms:", flowjson.Err)
+		log.Println("Error getting all rooms:", flowjson.Err)
 		return
 	}
 	defer c.Rooms.Mutex.Unlock()
@@ -291,9 +303,8 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 }
 
 func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
-	i := c.PaginationOffset
 	arrayquery := make([]uint32, 0, 30)
-	for ; i < c.PaginationOffset+30; i++ {
+	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
 		if val, ok := c.Rooms.m[c.RoomsPagination[i]]; !val && ok {
 			arrayquery = append(arrayquery, c.RoomsPagination[i])
 		}
