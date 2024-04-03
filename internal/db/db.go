@@ -113,6 +113,10 @@ func (c *PostgresClient) TxCommit(flowjson *FlowJSON) {
 		}
 	} else {
 		flowjson.Status = "bad"
+		flowjson.Err = flowjson.Tx.Rollback(context.Background())
+		if flowjson.Err != nil {
+			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
+		}
 	}
 }
 
@@ -129,30 +133,52 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
 	}
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `UPDATE rooms
+		SET last_activity = NOW()
+		WHERE room_id = $1 AND NOW() - last_activity > INTERVAL '24 hours'`, flowjson.Room)
+	if flowjson.Err != nil {
+		log.Println("Error inserting message:", flowjson.Err)
+		return
+	}
 }
 
 // blocking user and delete user from duo room
 func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
-	var rows pgx.Rows
-	rows, flowjson.Err = flowjson.Tx.Query(context.Background(), `SELECT room_id
-		FROM duo_rooms_info
-		WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
-	if flowjson.Err != nil {
-		log.Println("retrieve unique duo room error", flowjson.Err)
+	var placeholder int
+	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), `SELECT 1 FROM blocked_users 
+	WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1]).Scan(&placeholder)
+	if flowjson.Err == nil {
+		flowjson.Err = errors.New("user already blocked")
 		return
 	}
-	if !rows.Next() {
-		flowjson.Err = errors.New("user not found")
-	} else {
-		rows.Scan(&flowjson.Room)
+	var row = flowjson.Tx.QueryRow(context.Background(), `SELECT room_id
+		FROM duo_rooms_info
+		WHERE user_id1 = $1 AND user_id2 = $2;`, c.UserID, flowjson.Users[1])
+	flowjson.Err = row.Scan(&flowjson.Room)
+	if flowjson.Err == nil {
 		c.DeleteUsersFromRoom(flowjson)
 	}
 
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
-		VALUES ($1, $2)
-		ON CONFLICT DO NOTHING;`, flowjson.Users[0], flowjson.Users[1])
+		VALUES ($1, $2)`, flowjson.Users[0], flowjson.Users[1])
 	if flowjson.Err != nil {
-		log.Println("Error blocking user:", flowjson.Err)
+		log.Println("Error blocking user", flowjson.Err)
+		return
+	}
+}
+func (c *PostgresClient) UnblockUser(flowjson *FlowJSON) {
+	var placeholder int
+	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), `
+		SELECT 1 FROM blocked_users 
+		WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1]).Scan(&placeholder)
+	if flowjson.Err != nil {
+		flowjson.Err = errors.New("this user is not blocked")
+		return
+	}
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `DELETE FROM blocked_users 
+			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1])
+	if flowjson.Err != nil {
+		log.Println("Error unblocking user", flowjson.Err)
 		return
 	}
 }
@@ -164,18 +190,13 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	flowjson.Mutex.Lock()
 	flowjson.Name = "private"
 	if _, ok := c.UsersToRooms.m[flowjson.Users[1]]; ok {
-		var rows pgx.Rows
-		rows, flowjson.Err = c.Conn.Query(context.Background(), `SELECT room_id
+		var row = flowjson.Tx.QueryRow(context.Background(), `SELECT room_id
 			FROM duo_rooms_info
 			WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
+		flowjson.Err = row.Scan(&flowjson.Room)
 		if flowjson.Err != nil {
-			log.Println("retrieve unique duo room error", flowjson.Err)
-			return
-		}
-		if !rows.Next() {
 			c.CreateRoom(flowjson)
 		} else {
-			rows.Scan(&flowjson.Room)
 			c.AddUsersToRoom(flowjson)
 			return
 		}
@@ -216,7 +237,7 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 		flowjson.Err = errors.New("too many users in room")
 		return
 	}
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `UPDATE rooms SET user_count = user_count + $1 WHERE room_id = $2`, len(flowjson.Users), flowjson.Room)
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `UPDATE rooms SET user_count = user_count + $1 WHERE room_id = ANY($2)`, len(flowjson.Users), flowjson.Room)
 	if flowjson.Err != nil {
 		log.Println("Error updating user count in room:", flowjson.Err)
 		return
