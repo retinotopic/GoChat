@@ -79,7 +79,7 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 	flowjson1 := &db.FlowJSON{}
 	dbc.GetAllRooms(flowjson1)
 	flowjson2 := &db.FlowJSON{}
-	dbc.GetRoomUsersInfo(flowjson2)
+	dbc.GetMessagesFromNextRooms(flowjson2)
 
 	if flowjson1.Err != nil || flowjson2.Err != nil {
 		log.Println(flowjson1.Err)
@@ -92,9 +92,21 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 	return nil
 }
 func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
-
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	flowjson := &db.FlowJSON{}
+	dbc.GetAllRooms(flowjson)
+	for flowjson.Rows.Next() {
+		flowjson.Err = flowjson.Rows.Scan(&flowjson.Room)
+		if flowjson.Err != nil {
+			log.Println(flowjson.Err)
+			break
+		}
+		err := conn.WriteJSON(flowjson)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+	}
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
 		if err != nil {

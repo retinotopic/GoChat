@@ -293,7 +293,7 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 }
 
 func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 AND is_visible = true 
@@ -316,7 +316,7 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 
 // load messages from a room
 func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
@@ -331,7 +331,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 		}
 	}
 	c.PaginationOffset += 30
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT r.room_id,m.message_id, m.payload, m.user_id, m.timestamp
 		FROM unnest($1) AS r(room_id)
 		LEFT JOIN LATERAL (
@@ -345,8 +345,13 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
 		WHERE ru.room_id = $1`, c.UserID)
+}
+
+func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
+	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
 }
