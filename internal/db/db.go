@@ -316,14 +316,25 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 
 // load messages from a room
 func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
+	var payload string
+	var user_id int
 	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
 		ORDER BY message_id DESC`, flowjson.Room, flowjson.Offset)
+	for flowjson.Rows.Next() {
+		flowjson.Rows.Scan(&user_id, &payload)
+		// send in channel here
+	}
 }
 
 func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
+	var room_id int
+	var message_id int
+	var payload string
+	var user_id int
+
 	arrayquery := make([]uint32, 0, 30)
 	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
 		if val, ok := c.Rooms.m[c.RoomsPagination[i]]; !val && ok {
@@ -332,7 +343,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	}
 	c.PaginationOffset += 30
 	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
-		`SELECT r.room_id,m.message_id, m.payload, m.user_id, m.timestamp
+		`SELECT r.room_id,m.message_id, m.payload, m.user_id
 		FROM unnest($1) AS r(room_id)
 		LEFT JOIN LATERAL (
 			SELECT message_id, payload, user_id, timestamp
@@ -342,16 +353,32 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			LIMIT 30
 		) AS m ON true
 		ORDER BY r.room_id`, arrayquery)
+	for flowjson.Rows.Next() {
+		flowjson.Rows.Scan(&user_id, &message_id, &payload, &room_id)
+		// send in channel here
+	}
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
+	var user_id int
+	var name string
 	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
 		WHERE ru.room_id = $1`, c.UserID)
+	for flowjson.Rows.Next() {
+		flowjson.Rows.Scan(&user_id, &name)
+		// send in channel here
+	}
 }
 
 func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
+	var user_id int
+	var name string
 	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
+	for flowjson.Rows.Next() {
+		flowjson.Rows.Scan(&user_id, &name)
+		// send in channel here
+	}
 }
