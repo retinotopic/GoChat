@@ -55,10 +55,6 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println(err)
 			return
 		}
-		if err != nil {
-			log.Println(err)
-			return
-		}
 		err = h.WsHandle(dbClient, conn)
 		if err != nil {
 			//write error to plain http
@@ -85,8 +81,7 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 		log.Println(flowjson1.Err)
 		return errors.New("cant get info")
 	}
-	go h.WsGetRoomsMessages(FuncMap, conn, dbc)
-	go h.WsGetRoomsInfo(FuncMap, conn, dbc)
+
 	go h.WsReceive(FuncMap, conn, dbc)
 	go h.WsSend(FuncMap, conn, dbc)
 	return nil
@@ -94,19 +89,7 @@ func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error 
 func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
 	rps := h.rdb.Subscribe(context.Background(), "chat")
 	flowjson := &db.FlowJSON{}
-	dbc.GetAllRooms(flowjson)
-	for flowjson.Rows.Next() {
-		flowjson.Err = flowjson.Rows.Scan(&flowjson.Room)
-		if flowjson.Err != nil {
-			log.Println(flowjson.Err)
-			break
-		}
-		err := conn.WriteJSON(flowjson)
-		if err != nil {
-			log.Println(err)
-			break
-		}
-	}
+
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
 		if err != nil {
@@ -154,10 +137,4 @@ func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket
 			}
 		}
 	}
-}
-func (h HandlerWS) WsGetRoomsMessages(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
-
-}
-func (h HandlerWS) WsGetRoomsInfo(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
-
 }
