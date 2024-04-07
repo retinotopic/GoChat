@@ -7,28 +7,28 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/db"
 	"github.com/retinotopic/GoChat/pkg/safectx"
 )
 
 type HandlerWS struct {
-	upgrader *websocket.Upgrader
-	db       *pgxpool.Pool
-	rdb      *redis.Client
+	Rc   *redis.Client
+	DBc  *db.PostgresClient
+	Conn *websocket.Conn
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
-func NewHandlerWS(dbc *pgxpool.Pool) *HandlerWS {
+func NewHandlerWS(dbc *db.PostgresClient, conn *websocket.Conn) *HandlerWS {
 	return &HandlerWS{
-		upgrader: &websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-		},
-		db: dbc,
+		DBc:  dbc,
+		Conn: conn,
+		Rc: redis.NewClient(&redis.Options{
+			Addr: "localhost:6379",
+		}),
 	}
 }
 
@@ -37,7 +37,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
+func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 		sub, ok := safectx.GetContextString(r.Context(), "sub")
@@ -45,7 +45,7 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println("no sub")
 			return
 		}
-		dbClient, err := db.NewClient(sub, h.db)
+		dbconn, err := db.ConnectToDB(os.Getenv("DATABASE_URL"))
 		if err != nil {
 			log.Println("wrong sub", err)
 			return
@@ -55,39 +55,42 @@ func (h HandlerWS) WsConnect(next http.Handler) http.Handler {
 			log.Println(err)
 			return
 		}
-		err = h.WsHandle(dbClient, conn)
+
+		dbc, err := db.NewClient(sub, dbconn)
 		if err != nil {
 			//write error to plain http
 			w.WriteHeader(http.StatusInternalServerError)
 		}
+		wsc := NewHandlerWS(dbc, conn)
+		wsc.WsHandle()
 	})
 }
-func (h HandlerWS) WsHandle(dbc *db.PostgresClient, conn *websocket.Conn) error {
+func (h HandlerWS) WsHandle() error {
 	defer func() {
-		dbc.Conn.Release()
-		conn.Close()
+		h.DBc.Conn.Release()
+		h.Conn.Close()
 	}()
 	FuncMap := make(map[string]func(*db.FlowJSON))
-	FuncMap["SendMessage"] = dbc.SendMessage
-	FuncMap["GetTopMessages"] = dbc.GetAllRooms
-	FuncMap["CreateDuoRoom"] = dbc.CreateDuoRoom
-	FuncMap["CreateGroupRoom"] = dbc.CreateRoom
+	FuncMap["SendMessage"] = h.DBc.SendMessage
+	FuncMap["GetTopMessages"] = h.DBc.GetAllRooms
+	FuncMap["CreateDuoRoom"] = h.DBc.CreateDuoRoom
+	FuncMap["CreateGroupRoom"] = h.DBc.CreateRoom
 	flowjson1 := &db.FlowJSON{}
-	dbc.GetAllRooms(flowjson1)
+	h.DBc.GetAllRooms(flowjson1)
 	flowjson2 := &db.FlowJSON{}
-	dbc.GetMessagesFromNextRooms(flowjson2)
+	h.DBc.GetMessagesFromNextRooms(flowjson2)
 
 	if flowjson1.Err != nil || flowjson2.Err != nil {
 		log.Println(flowjson1.Err)
 		return errors.New("cant get info")
 	}
 
-	go h.WsReceive(FuncMap, conn, dbc)
-	go h.WsSend(FuncMap, conn, dbc)
+	go h.WsReceive(FuncMap)
+	go h.WsSend(FuncMap)
 	return nil
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
-	rps := h.rdb.Subscribe(context.Background(), "chat")
+func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
+	rps := h.Rc.Subscribe(context.Background(), "chat")
 	flowjson := &db.FlowJSON{}
 
 	for {
@@ -101,38 +104,38 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON), conn *websoc
 		if err != nil {
 			log.Println(err)
 		}
-		err = conn.WriteJSON(flowjson)
+		err = h.Conn.WriteJSON(flowjson)
 		if err != nil {
 			log.Println(err)
 			break
 		}
 	}
 }
-func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON), conn *websocket.Conn, dbc *db.PostgresClient) {
+func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON)) {
 	for {
 		flowjson := &db.FlowJSON{}
-		err := conn.ReadJSON(flowjson)
+		err := h.Conn.ReadJSON(flowjson)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		dbc.TxBegin(flowjson)
+		h.DBc.TxBegin(flowjson)
 		if flowjson.Err != nil {
 			funcMap[flowjson.Mode](flowjson)
 		}
-		dbc.TxCommit(flowjson)
+		h.DBc.TxCommit(flowjson)
 		if flowjson.Err != nil {
 			return
 		}
 
 		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
-			conn.WriteJSON(flowjson)
+			h.Conn.WriteJSON(flowjson)
 		} else {
 			payload, err := json.Marshal(flowjson)
 			if err != nil {
 				log.Fatalln(err, "marshalling error")
 			}
-			if err := h.rdb.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Room), payload).Err(); err != nil {
+			if err := h.Rc.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Room), payload).Err(); err != nil {
 				log.Println(err)
 			}
 		}
