@@ -16,7 +16,6 @@ import (
 )
 
 type HandlerWS struct {
-	Rc   *redis.Client
 	DBc  *db.PostgresClient
 	Conn *websocket.Conn
 }
@@ -26,9 +25,6 @@ func NewHandlerWS(dbc *db.PostgresClient, conn *websocket.Conn) *HandlerWS {
 	return &HandlerWS{
 		DBc:  dbc,
 		Conn: conn,
-		Rc: redis.NewClient(&redis.Options{
-			Addr: "localhost:6379",
-		}),
 	}
 }
 
@@ -36,6 +32,10 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
+
+var redisClient = redis.NewClient(&redis.Options{
+	Addr: "localhost:6379",
+})
 
 func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,11 @@ func WsConnect(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		wsc := NewHandlerWS(dbc, conn)
-		wsc.WsHandle()
+		err = wsc.WsHandle()
+		if err != nil {
+			//write error to plain http
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	})
 }
 func (h HandlerWS) WsHandle() error {
@@ -72,7 +76,7 @@ func (h HandlerWS) WsHandle() error {
 	}()
 	FuncMap := make(map[string]func(*db.FlowJSON))
 	FuncMap["SendMessage"] = h.DBc.SendMessage
-	FuncMap["GetTopMessages"] = h.DBc.GetAllRooms
+	FuncMap["GetAllRooms"] = h.DBc.GetAllRooms
 	FuncMap["CreateDuoRoom"] = h.DBc.CreateDuoRoom
 	FuncMap["CreateGroupRoom"] = h.DBc.CreateRoom
 	flowjson1 := &db.FlowJSON{}
@@ -89,8 +93,8 @@ func (h HandlerWS) WsHandle() error {
 	go h.WsSend(FuncMap)
 	return nil
 }
-func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
-	rps := h.Rc.Subscribe(context.Background(), "chat")
+func (h *HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
+	rps := redisClient.Subscribe(context.Background(), "chat")
 	flowjson := &db.FlowJSON{}
 
 	for {
@@ -111,33 +115,21 @@ func (h HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
 		}
 	}
 }
-func (h HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON)) {
+func (h *HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON)) {
 	for {
 		flowjson := &db.FlowJSON{}
 		err := h.Conn.ReadJSON(flowjson)
 		if err != nil {
-			log.Println(err)
-			break
-		}
-		h.DBc.TxBegin(flowjson)
-		if flowjson.Err != nil {
-			funcMap[flowjson.Mode](flowjson)
-		}
-		h.DBc.TxCommit(flowjson)
-		if flowjson.Err != nil {
 			return
 		}
+		h.DBc.TxManage(flowjson, funcMap[flowjson.Mode])
 
-		if flowjson.Status == "bad" || flowjson.Status == "senderonly" {
-			h.Conn.WriteJSON(flowjson)
-		} else {
-			payload, err := json.Marshal(flowjson)
-			if err != nil {
-				log.Fatalln(err, "marshalling error")
-			}
-			if err := h.Rc.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Room), payload).Err(); err != nil {
-				log.Println(err)
-			}
+		payload, err := json.Marshal(flowjson)
+		if err != nil {
+			log.Fatalln(err, "marshalling error")
+		}
+		if err := redisClient.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Rooms[0]), payload).Err(); err != nil {
+			log.Println(err)
 		}
 	}
 }
