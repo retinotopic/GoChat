@@ -33,17 +33,13 @@ type FindUsersList struct {
 	sync.Mutex
 }
 
-type Rooms struct {
-	m map[uint32]bool //  room id of group chat with user ids
-	sync.Mutex
-}
 type PostgresClient struct {
-	Sub           string
-	Name          string
-	UserID        uint32
-	Conn          *pgxpool.Conn
-	FindUsersList // current users
-	Rooms
+	Sub              string
+	Name             string
+	UserID           uint32
+	Conn             *pgxpool.Conn
+	FindUsersList    // current users
+	Rooms            map[uint32]bool
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
@@ -109,12 +105,6 @@ func (c *PostgresClient) txCommit(flowjson *FlowJSON) {
 
 // transaction insert messages plus increment unread messages in room_users table
 func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
-	//validating if room exists in our map
-	if _, ok := c.Rooms.m[flowjson.Rooms[0]]; !ok {
-		flowjson.Err = errors.New("room not found")
-		return
-	}
-
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), messageinsert, flowjson.Message, c.UserID, flowjson.Rooms[0])
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
@@ -207,8 +197,8 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 }
 func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	if flowjson.Mode == "AddUsersToRoom" {
-		if _, ok := c.Rooms.m[flowjson.Rooms[0]]; !ok {
-			flowjson.Err = errors.New("room not found")
+		if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
+			flowjson.Err = errors.New("you have no permission to add users to this room")
 			return
 		}
 	}
@@ -252,8 +242,8 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	if flowjson.Mode == "DeleteUsersFromRoom" {
-		if _, ok := c.Rooms.m[flowjson.Rooms[0]]; !ok {
-			flowjson.Err = errors.New("room not found")
+		if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
+			flowjson.Err = errors.New("you have no permission to delete users from this room")
 			return
 		}
 	}
@@ -278,7 +268,7 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 }
 
 func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
-	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 AND is_visible = true 
@@ -289,13 +279,9 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 		log.Println("Error getting all rooms:", flowjson.Err)
 		return
 	}
-	defer c.Rooms.Mutex.Unlock()
-	c.Rooms.Mutex.Lock()
-	var roomID uint32
 	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&roomID)
-		c.Rooms.m[roomID] = false
-		c.RoomsPagination = append(c.RoomsPagination, roomID)
+		flowjson.Rows.Scan(&flowjson.Rooms[0])
+		c.RoomsPagination = append(c.RoomsPagination, flowjson.Rooms[0])
 	}
 }
 
