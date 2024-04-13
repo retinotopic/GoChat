@@ -3,8 +3,6 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,15 +14,17 @@ import (
 )
 
 type HandlerWS struct {
-	DBc  *db.PostgresClient
-	Conn *websocket.Conn
+	DBc     *db.PostgresClient
+	Conn    *websocket.Conn
+	WriteCh chan []byte
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 func NewHandlerWS(dbc *db.PostgresClient, conn *websocket.Conn) *HandlerWS {
 	return &HandlerWS{
-		DBc:  dbc,
-		Conn: conn,
+		DBc:     dbc,
+		Conn:    conn,
+		WriteCh: make(chan []byte, 256),
 	}
 }
 
@@ -74,26 +74,13 @@ func (h HandlerWS) WsHandle() error {
 		h.DBc.Conn.Release()
 		h.Conn.Close()
 	}()
-	FuncMap := make(map[string]func(*db.FlowJSON))
-	FuncMap["SendMessage"] = h.DBc.SendMessage
-	FuncMap["GetAllRooms"] = h.DBc.GetAllRooms
-	FuncMap["CreateDuoRoom"] = h.DBc.CreateDuoRoom
-	FuncMap["CreateGroupRoom"] = h.DBc.CreateRoom
-	flowjson1 := &db.FlowJSON{}
-	h.DBc.GetAllRooms(flowjson1)
-	flowjson2 := &db.FlowJSON{}
-	h.DBc.GetMessagesFromNextRooms(flowjson2)
+	h.DBc.GetAllRooms(&db.FlowJSON{})
 
-	if flowjson1.Err != nil || flowjson2.Err != nil {
-		log.Println(flowjson1.Err)
-		return errors.New("cant get info")
-	}
-
-	go h.WsReceive(FuncMap)
-	go h.WsSend(FuncMap)
+	go h.WsReceiveRedis()
+	go h.WsReceiveClient()
 	return nil
 }
-func (h *HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
+func (h *HandlerWS) WsReceiveRedis() {
 	rps := redisClient.Subscribe(context.Background(), "chat")
 	flowjson := &db.FlowJSON{}
 
@@ -115,21 +102,27 @@ func (h *HandlerWS) WsReceive(funcMap map[string]func(*db.FlowJSON)) {
 		}
 	}
 }
-func (h *HandlerWS) WsSend(funcMap map[string]func(*db.FlowJSON)) {
+func (h *HandlerWS) WsReceiveClient() {
 	for {
 		flowjson := &db.FlowJSON{}
 		err := h.Conn.ReadJSON(flowjson)
 		if err != nil {
 			return
 		}
-		h.DBc.TxManage(flowjson, funcMap[flowjson.Mode])
-
-		payload, err := json.Marshal(flowjson)
+		h.DBc.TxManage(flowjson)
+	}
+}
+func (h *HandlerWS) WsWrite() {
+	for {
+		message := <-h.WriteCh
+		err := h.Conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
-			log.Fatalln(err, "marshalling error")
+			return
 		}
-		if err := redisClient.Publish(context.Background(), fmt.Sprintf("%d", flowjson.Rooms[0]), payload).Err(); err != nil {
-			log.Println(err)
-		}
+	}
+}
+func (h *HandlerWS) ReadDB() {
+	for {
+		h.DBc.ReadFlowjson()
 	}
 }

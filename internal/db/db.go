@@ -23,7 +23,6 @@ type FlowJSON struct {
 	Offset     string   `json:"Offset"`
 	Status     string   `json:"Status"`
 	SenderOnly bool
-	Rows       pgx.Rows
 	Tx         pgx.Tx
 	Err        error
 }
@@ -43,6 +42,8 @@ type PostgresClient struct {
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
+	funcmap          map[string]func(*FlowJSON)
+	Chan             chan FlowJSON
 }
 
 func ConnectToDB(connString string) (*pgxpool.Pool, error) {
@@ -65,21 +66,36 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PostgresClient{
+	pc := &PostgresClient{
 		Sub:    sub,
 		Conn:   conn,
 		UserID: userid,
 		Name:   name,
-	}, nil
+		Chan:   make(chan FlowJSON, 10),
+	}
+	pc.funcmap = map[string]func(*FlowJSON){
+		"SendMessage":              pc.SendMessage,
+		"GetAllRooms":              pc.GetAllRooms,
+		"CreateDuoRoom":            pc.CreateDuoRoom,
+		"CreateGroupRoom":          pc.CreateRoom,
+		"GetMessagesFromNextRooms": pc.GetMessagesFromNextRooms,
+	}
+	return pc, nil
 }
-func (c *PostgresClient) TxManage(flowjson *FlowJSON, fn func(*FlowJSON)) {
+func (c *PostgresClient) TxManage(flowjson *FlowJSON) error {
+	fn, ok := c.funcmap[flowjson.Mode]
+	if !ok {
+		return errors.New("function not found")
+	}
 	if flowjson.SenderOnly {
 		fn(flowjson)
-		return
+		return nil
 	}
 	c.txBegin(flowjson)
 	fn(flowjson)
 	c.txCommit(flowjson)
+	c.Chan <- *flowjson
+	return nil
 }
 func (c *PostgresClient) txBegin(flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = flowjson.Tx.Begin(context.Background())
@@ -217,15 +233,13 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 		log.Println("Error updating user count in room:", flowjson.Err)
 		return
 	}
-	query := `
-			INSERT INTO room_users_info (user_id, room_id)
+	query := `INSERT INTO room_users_info (user_id, room_id)
 			SELECT users_to_add.user_id, $1
 			FROM (SELECT unnest($2) AS user_id) AS users_to_add
 			JOIN users u ON u.user_id = users_to_add.user_id AND %s
 			JOIN rooms r ON r.room_id = $1 AND r.isgroup = $3
 			LEFT JOIN blocked_users bu ON bu.blocked_by_user_id = $4 AND bu.blocked_user_id = users_to_add.user_id
-			WHERE bu.blocked_by_user_id IS NULL;
-	`
+			WHERE bu.blocked_by_user_id IS NULL;`
 	var condition string
 	var isgroup bool
 	if flowjson.Mode != "createDuoRoom" {
@@ -242,22 +256,25 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 }
 func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	if flowjson.Mode == "DeleteUsersFromRoom" {
-		if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
-			flowjson.Err = errors.New("you have no permission to delete users from this room")
-			return
+		if len(flowjson.Users) != 1 || flowjson.Users[0] != c.UserID {
+			if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
+				flowjson.Err = errors.New("you have no permission to delete users from this room")
+				return
+			}
 		}
+
 	}
 	query := `DELETE FROM room_users_info
-	WHERE room_id IN (
+	WHERE user_id = ANY($3);
+	AND room_id IN (
 		SELECT room_id
 		FROM rooms 
 		WHERE room_id = $1 %s AND isgroup = $2
-	) 
-	AND user_id = ANY($3);`
+	);`
 	var condition string
 	var isgroup bool
 	ownerstr := fmt.Sprintf("AND owner = %s", fmt.Sprint(flowjson.Rooms[0]))
-	if flowjson.Mode != "createDuoRoom" {
+	if flowjson.Mode != "BlockUser" {
 		condition = ownerstr
 		isgroup = true
 	} else {
@@ -268,7 +285,8 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 }
 
 func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	var Rows pgx.Rows
+	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 AND is_visible = true 
@@ -279,9 +297,10 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 		log.Println("Error getting all rooms:", flowjson.Err)
 		return
 	}
-	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&flowjson.Rooms[0])
+	for Rows.Next() {
+		Rows.Scan(&flowjson.Rooms[0])
 		c.RoomsPagination = append(c.RoomsPagination, flowjson.Rooms[0])
+		c.Chan <- *flowjson
 	}
 }
 
@@ -289,14 +308,15 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 	var payload string
 	var user_id int
-	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+	var Rows pgx.Rows
+	Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
 		ORDER BY message_id DESC`, flowjson.Rooms[0], flowjson.Offset)
-	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&user_id, &payload)
-		// send in channel here
+	for Rows.Next() {
+		Rows.Scan(&user_id, &payload)
+		c.Chan <- *flowjson
 	}
 }
 
@@ -305,9 +325,9 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	var message_id int
 	var payload string
 	var user_id int
-
+	var Rows pgx.Rows
 	c.PaginationOffset += 30
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id,m.message_id, m.payload, m.user_id
 		FROM unnest($1) AS r(room_id)
 		LEFT JOIN LATERAL (
@@ -318,32 +338,40 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			LIMIT 30
 		) AS m ON true
 		ORDER BY r.room_id`, flowjson.Rooms)
-	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&user_id, &message_id, &payload, &room_id)
-		// send in channel here
+	for Rows.Next() {
+		Rows.Scan(&user_id, &message_id, &payload, &room_id)
+		c.Chan <- *flowjson
 	}
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 	var user_id int
 	var name string
-	flowjson.Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	var Rows pgx.Rows
+	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
 		WHERE ru.room_id = $1`, c.UserID)
-	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&user_id, &name)
-		// send in channel here
+	for Rows.Next() {
+		Rows.Scan(&user_id, &name)
+		c.Chan <- *flowjson
 	}
 }
 
 func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
 	var user_id int
 	var name string
-	flowjson.Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+	var Rows pgx.Rows
+	Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
 		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
-	for flowjson.Rows.Next() {
-		flowjson.Rows.Scan(&user_id, &name)
+	for Rows.Next() {
+		Rows.Scan(&user_id, &name)
 		// send in channel here
+	}
+}
+func (c *PostgresClient) ReadFlowjson() FlowJSON {
+	for {
+		flowjson := <-c.Chan
+		return flowjson
 	}
 }
