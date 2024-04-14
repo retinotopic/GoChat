@@ -37,7 +37,9 @@ type PostgresClient struct {
 	Name             string
 	UserID           uint32
 	Conn             *pgxpool.Conn
-	FindUsersList    // current users
+	FindUsersList                    // current users
+	Rooms            map[uint32]bool //  room id of group chat with user ids
+	Mutex            sync.Mutex
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
@@ -94,6 +96,12 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	fn(flowjson)
 	c.txCommit(flowjson)
 	c.Chan <- *flowjson
+	switch flowjson.Mode {
+	case "CreateGroupRoom", "CreateDuoRoom":
+		c.Rooms[flowjson.Rooms[0]] = true
+	case "BlockUser":
+		delete(c.Rooms, flowjson.Rooms[0])
+	}
 }
 func (c *PostgresClient) txBegin(flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = flowjson.Tx.Begin(context.Background())
@@ -324,7 +332,14 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	var payload string
 	var user_id int
 	var Rows pgx.Rows
-	c.PaginationOffset += 30
+	//slice of uint32
+	var arrayrooms []uint32
+	for i := range flowjson.Rooms {
+		// checking if room in map room
+		if _, ok := c.Rooms[flowjson.Rooms[i]]; !ok {
+			arrayrooms = append(arrayrooms, flowjson.Rooms[i])
+		}
+	}
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id,m.message_id, m.payload, m.user_id
 		FROM unnest($1) AS r(room_id)
@@ -335,7 +350,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			ORDER BY timestamp DESC
 			LIMIT 30
 		) AS m ON true
-		ORDER BY r.room_id`, flowjson.Rooms)
+		ORDER BY r.room_id`, arrayrooms)
 	c.PaginationOffset += 30
 	for Rows.Next() {
 		err := Rows.Scan(&user_id, &message_id, &payload, &room_id)
