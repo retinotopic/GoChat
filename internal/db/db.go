@@ -38,7 +38,6 @@ type PostgresClient struct {
 	UserID           uint32
 	Conn             *pgxpool.Conn
 	FindUsersList    // current users
-	Rooms            map[uint32]bool
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
@@ -82,20 +81,19 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	}
 	return pc, nil
 }
-func (c *PostgresClient) TxManage(flowjson *FlowJSON) error {
+func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	fn, ok := c.funcmap[flowjson.Mode]
 	if !ok {
-		return errors.New("function not found")
+		return
 	}
 	if flowjson.SenderOnly {
 		fn(flowjson)
-		return nil
+		return
 	}
 	c.txBegin(flowjson)
 	fn(flowjson)
 	c.txCommit(flowjson)
 	c.Chan <- *flowjson
-	return nil
 }
 func (c *PostgresClient) txBegin(flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = flowjson.Tx.Begin(context.Background())
@@ -338,8 +336,13 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			LIMIT 30
 		) AS m ON true
 		ORDER BY r.room_id`, flowjson.Rooms)
+	c.PaginationOffset += 30
 	for Rows.Next() {
-		Rows.Scan(&user_id, &message_id, &payload, &room_id)
+		err := Rows.Scan(&user_id, &message_id, &payload, &room_id)
+		if err != nil {
+			log.Println("Error scanning rows:", err)
+			return
+		}
 		c.Chan <- *flowjson
 	}
 }
@@ -366,7 +369,7 @@ func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
 		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
 	for Rows.Next() {
 		Rows.Scan(&user_id, &name)
-		// send in channel here
+		c.Chan <- *flowjson
 	}
 }
 func (c *PostgresClient) ReadFlowjson() FlowJSON {

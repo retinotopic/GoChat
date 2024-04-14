@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,7 +17,8 @@ import (
 type HandlerWS struct {
 	DBc     *db.PostgresClient
 	Conn    *websocket.Conn
-	WriteCh chan []byte
+	WriteCh chan db.FlowJSON
+	jsonCh  chan db.FlowJSON
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -24,7 +26,8 @@ func NewHandlerWS(dbc *db.PostgresClient, conn *websocket.Conn) *HandlerWS {
 	return &HandlerWS{
 		DBc:     dbc,
 		Conn:    conn,
-		WriteCh: make(chan []byte, 256),
+		WriteCh: make(chan db.FlowJSON, 10),
+		jsonCh:  make(chan db.FlowJSON, 10),
 	}
 }
 
@@ -74,16 +77,34 @@ func (h HandlerWS) WsHandle() error {
 		h.DBc.Conn.Release()
 		h.Conn.Close()
 	}()
+	go h.ReadDB()
 	h.DBc.GetAllRooms(&db.FlowJSON{})
-
-	go h.WsReceiveRedis()
+	go h.WsReadRedis()
 	go h.WsReceiveClient()
 	return nil
 }
-func (h *HandlerWS) WsReceiveRedis() {
+func (h *HandlerWS) WsWriteRedis() {
+	for {
+		flowjson := <-h.jsonCh
+		payload, err := json.Marshal(&flowjson)
+		if err != nil {
+			log.Fatalln(err, "unmarshalling error")
+		}
+		switch flowjson.Mode {
+		case "SendMessage":
+			redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Rooms[0], "room"), payload)
+		case "CreateDuoRoom":
+			redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Users[1], "room"), payload)
+		case "CreateGroupRoom":
+			for i := range flowjson.Users {
+				redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Users[i], "user"), payload)
+			}
+		}
+	}
+}
+func (h *HandlerWS) WsReadRedis() {
 	rps := redisClient.Subscribe(context.Background(), "chat")
-	flowjson := &db.FlowJSON{}
-
+	flowjson := db.FlowJSON{}
 	for {
 		message, err := rps.ReceiveMessage(context.Background())
 		if err != nil {
@@ -92,14 +113,7 @@ func (h *HandlerWS) WsReceiveRedis() {
 		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
 			log.Fatalln(err, "unmarshalling error")
 		}
-		if err != nil {
-			log.Println(err)
-		}
-		err = h.Conn.WriteJSON(flowjson)
-		if err != nil {
-			log.Println(err)
-			break
-		}
+		h.WriteCh <- flowjson
 	}
 }
 func (h *HandlerWS) WsReceiveClient() {
@@ -109,13 +123,13 @@ func (h *HandlerWS) WsReceiveClient() {
 		if err != nil {
 			return
 		}
-		h.DBc.TxManage(flowjson)
+		go h.DBc.TxManage(flowjson)
 	}
 }
 func (h *HandlerWS) WsWrite() {
 	for {
-		message := <-h.WriteCh
-		err := h.Conn.WriteMessage(websocket.TextMessage, message)
+		flowjson := <-h.WriteCh
+		err := h.Conn.WriteJSON(&flowjson)
 		if err != nil {
 			return
 		}
@@ -123,6 +137,7 @@ func (h *HandlerWS) WsWrite() {
 }
 func (h *HandlerWS) ReadDB() {
 	for {
-		h.DBc.ReadFlowjson()
+		flowjson := h.DBc.ReadFlowjson()
+		h.jsonCh <- flowjson
 	}
 }
