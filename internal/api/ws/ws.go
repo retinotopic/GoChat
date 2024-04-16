@@ -19,6 +19,7 @@ type HandlerWS struct {
 	Conn    *websocket.Conn
 	WriteCh chan db.FlowJSON
 	jsonCh  chan db.FlowJSON
+	pubsub  *redis.PubSub
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -78,6 +79,7 @@ func (h HandlerWS) WsHandle() error {
 		h.Conn.Close()
 	}()
 	go h.ReadDB()
+	h.pubsub = redisClient.Subscribe(context.Background(), fmt.Sprintf("%d%s", h.DBc.UserID, "user"))
 	h.DBc.GetAllRooms(&db.FlowJSON{})
 	go h.WsReadRedis()
 	go h.WsReceiveClient()
@@ -92,26 +94,32 @@ func (h *HandlerWS) WsWriteRedis() {
 		}
 		switch flowjson.Mode {
 		case "SendMessage":
-			redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Rooms[0], "room"), payload)
-		case "CreateDuoRoom":
-			redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Users[1], "room"), payload)
-		case "CreateGroupRoom":
-			for i := range flowjson.Users {
-				redisClient.Publish(context.Background(), fmt.Sprintf("%d %s", flowjson.Users[i], "user"), payload)
+			redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"), payload)
+		default:
+			i := 1
+			for i = range flowjson.Users {
+				redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
 			}
 		}
 	}
 }
 func (h *HandlerWS) WsReadRedis() {
-	rps := redisClient.Subscribe(context.Background(), "chat")
 	flowjson := db.FlowJSON{}
 	for {
-		message, err := rps.ReceiveMessage(context.Background())
+		message, err := h.pubsub.ReceiveMessage(context.Background())
 		if err != nil {
 			log.Println(err)
 		}
 		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
 			log.Fatalln(err, "unmarshalling error")
+		}
+		switch flowjson.Mode {
+		case "SendMessage":
+			h.WriteCh <- flowjson
+		case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
+			h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
+		case "DeleteUsersFromRoom", "BlockUser":
+			h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
 		}
 		h.WriteCh <- flowjson
 	}
@@ -126,6 +134,8 @@ func (h *HandlerWS) WsReceiveClient() {
 		go h.DBc.TxManage(flowjson)
 	}
 }
+
+// write json stream to websocket connection
 func (h *HandlerWS) WsWrite() {
 	for {
 		flowjson := <-h.WriteCh

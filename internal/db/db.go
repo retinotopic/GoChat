@@ -80,6 +80,10 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		"CreateDuoRoom":            pc.CreateDuoRoom,
 		"CreateGroupRoom":          pc.CreateRoom,
 		"GetMessagesFromNextRooms": pc.GetMessagesFromNextRooms,
+		"AddUsersToRoom":           pc.AddUsersToRoom,
+		"DeleteUsersFromRoom":      pc.DeleteUsersFromRoom,
+		"BlockUser":                pc.BlockUser,
+		"UnblockUser":              pc.UnblockUser,
 	}
 	return pc, nil
 }
@@ -350,6 +354,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			ORDER BY timestamp DESC
 			LIMIT 30
 		) AS m ON true
+		WHERE r.room_id NOT IN ($2)
 		ORDER BY r.room_id`, arrayrooms)
 	c.PaginationOffset += 30
 	for Rows.Next() {
