@@ -37,8 +37,7 @@ type PostgresClient struct {
 	Name             string
 	UserID           uint32
 	Conn             *pgxpool.Conn
-	FindUsersList                    // current users
-	Rooms            map[uint32]bool //  room id of group chat with user ids
+	FindUsersList    // current users
 	Mutex            sync.Mutex
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
@@ -335,12 +334,10 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	var Rows pgx.Rows
 	//slice of uint32
 	var arrayrooms []uint32
-	for i := range flowjson.Rooms {
-		// checking if room in map room
-		if _, ok := c.Rooms[flowjson.Rooms[i]]; !ok {
-			arrayrooms = append(arrayrooms, flowjson.Rooms[i])
-		}
+	for _, room := range c.RoomsPagination {
+		arrayrooms = append(arrayrooms, room)
 	}
+
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id, m.message_id, m.payload, m.user_id
 		FROM unnest($1) AS r(room_id)
@@ -352,7 +349,10 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 			LIMIT 30
 		) AS m ON true
 		WHERE r.room_id NOT IN ($2)
-		ORDER BY r.room_id`, arrayrooms)
+		ORDER BY r.room_id`, arrayrooms, flowjson.Rooms)
+	if flowjson.Err != nil {
+		return
+	}
 	c.PaginationOffset += 30
 	for Rows.Next() {
 		err := Rows.Scan(&room_id, &message_id, &payload, &user_id)

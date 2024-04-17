@@ -107,23 +107,22 @@ func (h HandlerWS) WsHandle() {
 }
 func (h *HandlerWS) WsReadRedis() {
 	flowjson := db.FlowJSON{}
-	for {
-		message, err := h.pubsub.ReceiveMessage(context.Background())
-		if err != nil {
-			continue
-		}
-		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
-			log.Fatalln(err, "unmarshalling error")
-		}
-		switch flowjson.Mode {
-		case "SendMessage":
+	chps := h.pubsub.Channel()
+	for message := range chps {
+		go func(message *redis.Message) {
+			if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
+				log.Fatalln(err, "unmarshalling error")
+			}
+			switch flowjson.Mode {
+			case "SendMessage":
+				h.WriteCh <- flowjson
+			case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
+				h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
+			case "DeleteUsersFromRoom", "BlockUser":
+				h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
+			}
 			h.WriteCh <- flowjson
-		case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
-			h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
-		case "DeleteUsersFromRoom", "BlockUser":
-			h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
-		}
-		h.WriteCh <- flowjson
+		}(message)
 	}
 }
 
