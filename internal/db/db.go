@@ -99,13 +99,10 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	c.txBegin(flowjson)
 	fn(flowjson)
 	c.txCommit(flowjson)
-	c.Chan <- *flowjson
-	switch flowjson.Mode {
-	case "CreateGroupRoom", "CreateDuoRoom":
-		c.Rooms[flowjson.Rooms[0]] = true
-	case "BlockUser":
-		delete(c.Rooms, flowjson.Rooms[0])
+	if flowjson.Err != nil {
+		flowjson.Status = flowjson.Err.Error()
 	}
+	c.Chan <- *flowjson
 }
 func (c *PostgresClient) txBegin(flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = flowjson.Tx.Begin(context.Background())
@@ -114,17 +111,17 @@ func (c *PostgresClient) txCommit(flowjson *FlowJSON) {
 	if flowjson.Err == nil {
 		flowjson.Err = flowjson.Tx.Commit(context.Background())
 		if flowjson.Err != nil {
-			flowjson.Status = "bad"
+			flowjson.Status = "internal database error"
 			flowjson.Err = flowjson.Tx.Rollback(context.Background())
 			if flowjson.Err != nil {
 				log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
 			}
 		}
 	} else {
-		flowjson.Status = "bad"
 		flowjson.Err = flowjson.Tx.Rollback(context.Background())
 		if flowjson.Err != nil {
 			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
+			flowjson.Status = "internal database error"
 		}
 	}
 }
@@ -325,7 +322,7 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 		WHERE room_id = $1 AND message_id < $2
 		ORDER BY message_id DESC`, flowjson.Rooms[0], flowjson.Offset)
 	for Rows.Next() {
-		Rows.Scan(&user_id, &payload)
+		Rows.Scan(&payload, &user_id)
 		c.Chan <- *flowjson
 	}
 }
@@ -345,7 +342,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 		}
 	}
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT r.room_id,m.message_id, m.payload, m.user_id
+		`SELECT r.room_id, m.message_id, m.payload, m.user_id
 		FROM unnest($1) AS r(room_id)
 		LEFT JOIN LATERAL (
 			SELECT message_id, payload, user_id, timestamp
@@ -358,7 +355,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 		ORDER BY r.room_id`, arrayrooms)
 	c.PaginationOffset += 30
 	for Rows.Next() {
-		err := Rows.Scan(&user_id, &message_id, &payload, &room_id)
+		err := Rows.Scan(&room_id, &message_id, &payload, &user_id)
 		if err != nil {
 			log.Println("Error scanning rows:", err)
 			return

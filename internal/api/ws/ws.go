@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
@@ -66,41 +67,42 @@ func WsConnect(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		wsc := NewHandlerWS(dbc, conn)
-		err = wsc.WsHandle()
-		if err != nil {
-			//write error to plain http
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		wsc.WsHandle()
 	})
 }
-func (h HandlerWS) WsHandle() error {
+func (h HandlerWS) WsHandle() {
 	defer func() {
 		h.DBc.Conn.Release()
 		h.Conn.Close()
 	}()
 	go h.ReadDB()
+	errs := make(chan error, 1)
+	h.Conn.SetPongHandler(func(string) error {
+		h.Conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+		return nil
+	})
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			err := h.Conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(9*time.Second))
+			if err != nil {
+				log.Println("server ping error:", err)
+				errs <- err
+			}
+		}
+	}()
 	h.pubsub = redisClient.Subscribe(context.Background(), fmt.Sprintf("%d%s", h.DBc.UserID, "user"))
 	h.DBc.GetAllRooms(&db.FlowJSON{})
 	go h.WsReadRedis()
-	go h.WsReceiveClient()
-	return nil
-}
-func (h *HandlerWS) WsWriteRedis() {
 	for {
-		flowjson := <-h.jsonCh
-		payload, err := json.Marshal(&flowjson)
+		flowjson := &db.FlowJSON{}
+		err := h.Conn.ReadJSON(flowjson)
 		if err != nil {
-			log.Fatalln(err, "unmarshalling error")
+			return
 		}
-		switch flowjson.Mode {
-		case "SendMessage":
-			redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"), payload)
-		default:
-			i := 1
-			for i = range flowjson.Users {
-				redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
-			}
-		}
+		go h.DBc.TxManage(flowjson)
 	}
 }
 func (h *HandlerWS) WsReadRedis() {
@@ -108,7 +110,7 @@ func (h *HandlerWS) WsReadRedis() {
 	for {
 		message, err := h.pubsub.ReceiveMessage(context.Background())
 		if err != nil {
-			log.Println(err)
+			continue
 		}
 		if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
 			log.Fatalln(err, "unmarshalling error")
@@ -124,21 +126,10 @@ func (h *HandlerWS) WsReadRedis() {
 		h.WriteCh <- flowjson
 	}
 }
-func (h *HandlerWS) WsReceiveClient() {
-	for {
-		flowjson := &db.FlowJSON{}
-		err := h.Conn.ReadJSON(flowjson)
-		if err != nil {
-			return
-		}
-		go h.DBc.TxManage(flowjson)
-	}
-}
 
-// write json stream to websocket connection
+// stream for writing json to ws connection
 func (h *HandlerWS) WsWrite() {
-	for {
-		flowjson := <-h.WriteCh
+	for flowjson := range h.WriteCh {
 		err := h.Conn.WriteJSON(&flowjson)
 		if err != nil {
 			return
@@ -148,6 +139,22 @@ func (h *HandlerWS) WsWrite() {
 func (h *HandlerWS) ReadDB() {
 	for {
 		flowjson := h.DBc.ReadFlowjson()
-		h.jsonCh <- flowjson
+		h.WriteCh <- flowjson
+		if flowjson.Err != nil {
+			continue
+		}
+		payload, err := json.Marshal(&flowjson)
+		if err != nil {
+			log.Fatalln(err, "unmarshalling error")
+		}
+		switch flowjson.Mode {
+		case "SendMessage":
+			redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"), payload)
+		default:
+			i := 1
+			for i = range flowjson.Users {
+				redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
+			}
+		}
 	}
 }
