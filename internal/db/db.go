@@ -20,7 +20,7 @@ type FlowJSON struct {
 	Users      []uint32 `json:"Users"`
 	Rooms      []uint32 `json:"Room"`
 	Name       string   `json:"Name"`
-	Offset     string   `json:"Offset"`
+	Message_id string   `json:"Offset"`
 	Status     string   `json:"Status"`
 	SenderOnly bool
 	Tx         pgx.Tx
@@ -248,11 +248,11 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 			WHERE bu.blocked_by_user_id IS NULL;`
 	var condition string
 	var isgroup bool
-	if flowjson.Mode != "createDuoRoom" {
+	if flowjson.Mode == "createDuoRoom" {
+		condition = "u.allow_direct_messages = true"
+	} else {
 		condition = "u.allow_group_invites = true"
 		isgroup = true
-	} else {
-		condition = "u.allow_direct_messages = true"
 	}
 
 	query = fmt.Sprintf(query, condition)
@@ -280,11 +280,11 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 	var condition string
 	var isgroup bool
 	ownerstr := fmt.Sprintf("AND owner = %s", fmt.Sprint(flowjson.Rooms[0]))
-	if flowjson.Mode != "BlockUser" {
+	if flowjson.Mode == "BlockUser" {
+		condition = ""
+	} else {
 		condition = ownerstr
 		isgroup = true
-	} else {
-		condition = ""
 	}
 	query = fmt.Sprintf(query, condition)
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Rooms[0], isgroup, flowjson.Users)
@@ -301,6 +301,7 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 
 	if flowjson.Err != nil {
 		log.Println("Error getting all rooms:", flowjson.Err)
+		flowjson.Err = fmt.Errorf("error getting all rooms")
 		return
 	}
 	for Rows.Next() {
@@ -319,7 +320,12 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
-		ORDER BY message_id DESC`, flowjson.Rooms[0], flowjson.Offset)
+		ORDER BY message_id DESC`, flowjson.Rooms[0], flowjson.Message_id)
+	if flowjson.Err != nil {
+		log.Println("Error getting messages from this rooms:", flowjson.Err)
+		flowjson.Err = fmt.Errorf("error getting messages from this rooms")
+		return
+	}
 	for Rows.Next() {
 		Rows.Scan(&payload, &user_id)
 		c.Chan <- *flowjson
@@ -334,8 +340,8 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	var Rows pgx.Rows
 	//slice of uint32
 	var arrayrooms []uint32
-	for _, room := range c.RoomsPagination {
-		arrayrooms = append(arrayrooms, room)
+	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
+		arrayrooms = append(arrayrooms, c.RoomsPagination[i])
 	}
 
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
@@ -351,13 +357,15 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 		WHERE r.room_id NOT IN ($2)
 		ORDER BY r.room_id`, arrayrooms, flowjson.Rooms)
 	if flowjson.Err != nil {
+		log.Println("Error getting messages from this rooms:", flowjson.Err)
+		flowjson.Err = fmt.Errorf("error getting messages from next rooms")
 		return
 	}
 	c.PaginationOffset += 30
 	for Rows.Next() {
 		err := Rows.Scan(&room_id, &message_id, &payload, &user_id)
 		if err != nil {
-			log.Println("Error scanning rows:", err)
+			log.Fatalln("Error scanning rows:", err)
 			return
 		}
 		c.Chan <- *flowjson
