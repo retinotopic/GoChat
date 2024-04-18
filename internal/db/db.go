@@ -87,6 +87,7 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	return pc, nil
 }
 func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
+	flowjson.Status = "OK"
 	fn, ok := c.funcmap[flowjson.Mode]
 	if !ok {
 		return
@@ -143,21 +144,6 @@ func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
 
 // blocking user and delete user from duo room
 func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
-	var placeholder int
-	flowjson.Err = c.Conn.QueryRow(context.Background(), `SELECT 1 FROM blocked_users 
-	WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1]).Scan(&placeholder)
-	if flowjson.Err == nil {
-		flowjson.Err = errors.New("user already blocked")
-		return
-	}
-	var row = c.Conn.QueryRow(context.Background(), `SELECT room_id
-		FROM duo_rooms_info
-		WHERE user_id1 = $1 AND user_id2 = $2;`, c.UserID, flowjson.Users[1])
-	flowjson.Err = row.Scan(&flowjson.Rooms[0])
-	if flowjson.Err == nil {
-		c.DeleteUsersFromRoom(flowjson)
-	}
-
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
 		VALUES ($1, $2)`, flowjson.Users[0], flowjson.Users[1])
 	if flowjson.Err != nil {
@@ -166,14 +152,6 @@ func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
 	}
 }
 func (c *PostgresClient) UnblockUser(flowjson *FlowJSON) {
-	var placeholder int
-	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), `
-		SELECT 1 FROM blocked_users 
-		WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1]).Scan(&placeholder)
-	if flowjson.Err != nil {
-		flowjson.Err = errors.New("this user is not blocked")
-		return
-	}
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `DELETE FROM blocked_users 
 			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1])
 	if flowjson.Err != nil {
@@ -187,12 +165,13 @@ func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
 	flowjson.Name = "private"
 	if _, ok := c.FindUsersList.m[flowjson.Users[1]]; ok {
 		var row = flowjson.Tx.QueryRow(context.Background(), `SELECT room_id
-			FROM duo_rooms_info
+			FROM duo_rooms
 			WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
 		flowjson.Err = row.Scan(&flowjson.Rooms[0])
 		if flowjson.Err != nil {
 			c.CreateRoom(flowjson)
 			_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO duo_rooms (user_id1, user_id2,room_id)`, flowjson.Users[0], flowjson.Users[1], flowjson.Rooms[0])
+			c.AddUsersToRoom(flowjson)
 		} else {
 			c.AddUsersToRoom(flowjson)
 			return
@@ -271,11 +250,11 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 
 	}
 	query := `DELETE FROM room_users_info
-	WHERE user_id = ANY($3);
+	WHERE user_id = ANY($1);
 	AND room_id IN (
 		SELECT room_id
 		FROM rooms 
-		WHERE room_id = $1 %s AND isgroup = $2
+		WHERE room_id = $2 %s AND isgroup = $3
 	);`
 	var condition string
 	var isgroup bool
@@ -287,7 +266,7 @@ func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
 		isgroup = true
 	}
 	query = fmt.Sprintf(query, condition)
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Rooms[0], isgroup, flowjson.Users)
+	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Users, flowjson.Rooms[0], isgroup)
 }
 
 func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
