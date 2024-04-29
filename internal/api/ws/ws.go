@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/db"
-	"github.com/retinotopic/GoChat/pkg/safectx"
+	safectx "github.com/retinotopic/TinyAuth/pkg"
 )
 
 type HandlerWS struct {
@@ -28,8 +28,8 @@ func NewHandlerWS(dbc *db.PostgresClient, conn *websocket.Conn) *HandlerWS {
 	return &HandlerWS{
 		DBc:     dbc,
 		Conn:    conn,
-		WriteCh: make(chan db.FlowJSON, 10),
-		jsonCh:  make(chan db.FlowJSON, 10),
+		WriteCh: make(chan db.FlowJSON, 100),
+		jsonCh:  make(chan db.FlowJSON, 100),
 	}
 }
 
@@ -109,7 +109,7 @@ func (h *HandlerWS) WsReadRedis() {
 	flowjson := db.FlowJSON{}
 	chps := h.pubsub.Channel()
 	for message := range chps {
-		go func(message *redis.Message) {
+		go func(message redis.Message) {
 			if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
 				log.Fatalln(err, "unmarshalling error")
 			}
@@ -122,7 +122,7 @@ func (h *HandlerWS) WsReadRedis() {
 				h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
 			}
 			h.WriteCh <- flowjson
-		}(message)
+		}(*message)
 	}
 }
 
