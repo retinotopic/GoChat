@@ -2,12 +2,6 @@ package router
 
 import (
 	"net/http"
-	"os"
-
-	"github.com/retinotopic/GoChat/internal/api/ws"
-	"github.com/retinotopic/TinyAuth/providers/gfirebase"
-	"github.com/retinotopic/TinyAuth/providers/google"
-	"github.com/retinotopic/TinyAuth/session"
 )
 
 type Router struct {
@@ -18,16 +12,16 @@ func NewRouter(addr string) *Router {
 	return &Router{addr: addr}
 }
 func (r *Router) Run() error {
-	CurrentProviders := session.Session{
+	mux := http.NewServeMux()
+	/*CurrentProviders := session.Session{
 		"google":    google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
 		"gfirebase": gfirebase.New(os.Getenv("WEB_API_KEY"), os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), "http://localhost:8080/gfirebase/CompleteAuth"),
 	}
 	FetchUser := http.HandlerFunc(CurrentProviders.FetchUser)
-	mux := http.NewServeMux()
 	mux.HandleFunc("/{provider}/BeginLoginCreate", CurrentProviders.BeginLoginCreate)
 	mux.HandleFunc("/{provider}/CompleteLoginCreate", CurrentProviders.CompleteLoginCreate)
 	mux.HandleFunc("/refresh/{provider}", CurrentProviders.Refresh)
 	mux.HandleFunc("/refresh/revoke/{provider}", CurrentProviders.RevokeRefresh)
-	mux.Handle("/chat", ws.WsConnect(FetchUser))
+	mux.Handle("/chat", ws.WsConnect(FetchUser))*/
 	return http.ListenAndServe(r.addr, mux)
 }

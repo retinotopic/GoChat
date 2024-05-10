@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/db"
-	safectx "github.com/retinotopic/TinyAuth/pkg"
 )
 
 type HandlerWS struct {
@@ -45,11 +44,7 @@ var redisClient = redis.NewClient(&redis.Options{
 func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		sub, ok := safectx.GetContextString(r.Context(), "sub")
-		if !ok {
-			log.Println("no sub")
-			return
-		}
+		sub := "21"
 		dbconn, err := db.ConnectToDB(os.Getenv("DATABASE_URL"))
 		if err != nil {
 			log.Println("wrong sub", err)
@@ -136,8 +131,8 @@ func (h *HandlerWS) WsWrite() {
 	}
 }
 func (h *HandlerWS) ReadDB() {
-	for {
-		flowjson := h.DBc.ReadFlowjson()
+	ch := h.DBc.Channel()
+	for flowjson := range ch {
 		h.WriteCh <- flowjson
 		if flowjson.Err != nil {
 			continue
