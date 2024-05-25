@@ -34,7 +34,7 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 	var payload string
 	var user_id int
 	var Rows pgx.Rows
-	Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
@@ -108,7 +108,7 @@ func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
 	var user_id int
 	var name string
 	var Rows pgx.Rows
-	Rows, flowjson.Err = flowjson.Tx.Query(context.Background(),
+	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
 	for Rows.Next() {
 		Rows.Scan(&user_id, &name)

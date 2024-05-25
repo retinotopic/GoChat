@@ -45,7 +45,7 @@ func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 		sub := "21"
-		dbconn, err := db.ConnectToDB(os.Getenv("DATABASE_URL"))
+		dbconn, err := db.ConnectToDB(context.Background(), os.Getenv("DATABASE_URL"))
 		if err != nil {
 			log.Println("wrong sub", err)
 			return

@@ -8,7 +8,7 @@ import (
 func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	flowjson.Status = "OK"
 	fn, ok := c.funcmap[flowjson.Mode]
-	if !ok {
+	if !ok { // if there is no such mode just ignore it
 		return
 	}
 	if flowjson.SenderOnly {
