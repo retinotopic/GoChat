@@ -45,7 +45,9 @@ func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 		sub := "21"
-		dbconn, err := db.ConnectToDB(context.Background(), os.Getenv("DATABASE_URL"))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+		defer cancel()
+		dbconn, err := db.ConnectToDB(ctx, os.Getenv("DATABASE_URL"))
 		if err != nil {
 			log.Println("wrong sub", err)
 			return
@@ -56,7 +58,7 @@ func WsConnect(next http.Handler) http.Handler {
 			return
 		}
 
-		dbc, err := db.NewClient(sub, dbconn)
+		dbc, err := db.NewClient(ctx, sub, dbconn)
 		if err != nil {
 			//write error to plain http
 			w.WriteHeader(http.StatusInternalServerError)
@@ -89,7 +91,9 @@ func (h HandlerWS) WsHandle() {
 		}
 	}()
 	h.pubsub = redisClient.Subscribe(context.Background(), fmt.Sprintf("%d%s", h.DBc.UserID, "user"))
-	h.DBc.GetAllRooms(&db.FlowJSON{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	defer cancel()
+	h.DBc.GetAllRooms(ctx, &db.FlowJSON{})
 	go h.WsReadRedis()
 	for {
 		flowjson := &db.FlowJSON{}

@@ -21,7 +21,7 @@ func TestDb(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	err = db.NewUser("34hb534ihg5", "test1", pool)
+	err = db.NewUser(ctx, "34hb534ihg5", "test1", pool)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

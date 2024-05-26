@@ -8,25 +8,25 @@ import (
 )
 
 // method for safely creating unique duo room
-func (c *PostgresClient) CreateDuoRoom(flowjson *FlowJSON) {
-	c.IsDuoRoomExist(flowjson)
+func (c *PostgresClient) CreateDuoRoom(ctx context.Context, flowjson *FlowJSON) {
+	c.IsDuoRoomExist(ctx, flowjson)
 	if flowjson.Err != nil {
-		c.CreateRoom(flowjson)
+		c.CreateRoom(ctx, flowjson)
 		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO duo_rooms (user_id1, user_id2,room_id)`, flowjson.Users[0], flowjson.Users[1], flowjson.Rooms[0])
-		c.AddUsersToRoom(flowjson)
+		c.AddUsersToRoom(ctx, flowjson)
 	} else {
-		c.AddUsersToRoom(flowjson)
+		c.AddUsersToRoom(ctx, flowjson)
 		return
 	}
 
 }
-func (c *PostgresClient) IsDuoRoomExist(flowjson *FlowJSON) {
+func (c *PostgresClient) IsDuoRoomExist(ctx context.Context, flowjson *FlowJSON) {
 	var row = flowjson.Tx.QueryRow(context.Background(), `SELECT room_id
 		FROM duo_rooms
 		WHERE user_id1 = $1 AND user_id2 = $2;`, flowjson.Users[0], flowjson.Users[1])
 	flowjson.Err = row.Scan(&flowjson.Rooms[0])
 }
-func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) CreateRoom(ctx context.Context, flowjson *FlowJSON) {
 	var roomID uint32
 	var is_group bool
 	if flowjson.Mode != "createDuoRoom" {
@@ -39,9 +39,9 @@ func (c *PostgresClient) CreateRoom(flowjson *FlowJSON) {
 		return
 	}
 	flowjson.Rooms[0] = roomID
-	c.AddUsersToRoom(flowjson)
+	c.AddUsersToRoom(ctx, flowjson)
 }
-func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) AddUsersToRoom(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Mode == "AddUsersToRoom" {
 		if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
 			flowjson.Err = errors.New("you have no permission to add users to this room")
@@ -69,7 +69,7 @@ func (c *PostgresClient) AddUsersToRoom(flowjson *FlowJSON) {
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Rooms[0], flowjson.Users, is_group, c.UserID)
 
 }
-func (c *PostgresClient) DeleteUsersFromRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) DeleteUsersFromRoom(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Mode == "DeleteUsersFromRoom" {
 		if len(flowjson.Users) != 1 && flowjson.Users[0] != c.UserID {
 			if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {

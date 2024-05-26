@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
+func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id
@@ -34,7 +34,7 @@ func (c *PostgresClient) GetAllRooms(flowjson *FlowJSON) {
 }
 
 // load messages from a room
-func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
+func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT payload,user_id,
@@ -48,7 +48,7 @@ func (c *PostgresClient) GetMessagesFromRoom(flowjson *FlowJSON) {
 	c.toChannel(flowjson, Rows, flowjson.Message, flowjson.Users[0])
 }
 
-func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
+func (c *PostgresClient) GetMessagesFromNextRooms(ctx context.Context, flowjson *FlowJSON) {
 	var arrayrooms []uint32
 	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
 		arrayrooms = append(arrayrooms, c.RoomsPagination[i])
@@ -76,7 +76,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(flowjson *FlowJSON) {
 	}
 }
 
-func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
+func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
 	var user_id int
 	var name string
 	var Rows pgx.Rows
@@ -91,7 +91,7 @@ func (c *PostgresClient) GetRoomUsersInfo(flowjson *FlowJSON) {
 	c.toChannel(flowjson, Rows, &user_id, &name)
 }
 
-func (c *PostgresClient) FindUsers(flowjson *FlowJSON) {
+func (c *PostgresClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
 	var user_id int
 	var name string
 	var Rows pgx.Rows
