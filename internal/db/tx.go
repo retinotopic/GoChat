@@ -13,11 +13,16 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	}
 	if flowjson.SenderOnly {
 		fn(flowjson)
+		if flowjson.Err != nil {
+			flowjson.Status = flowjson.Err.Error()
+		}
+		c.Chan <- *flowjson
 		return
 	}
 	c.txBegin(flowjson)
 	fn(flowjson)
 	c.txCommit(flowjson)
+
 	if flowjson.Err != nil {
 		flowjson.Status = flowjson.Err.Error()
 	}

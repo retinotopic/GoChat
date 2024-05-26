@@ -47,7 +47,10 @@ func NewUser(sub, username string, pool *pgxpool.Pool) error {
 
 func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) {
 	db, err := pgxpool.New(ctx, connString)
-	return db, err
+	if err != nil {
+		return nil, err
+	}
+	return db, ctx.Err()
 }
 func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	// check if user exists
@@ -70,7 +73,7 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 		Conn:   conn,
 		UserID: userid,
 		Name:   name,
-		Chan:   make(chan FlowJSON, 10),
+		Chan:   make(chan FlowJSON, 100),
 	}
 	pc.funcmap = map[string]func(*FlowJSON){
 		"SendMessage":              pc.SendMessage,
@@ -86,16 +89,28 @@ func NewClient(sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	return pc, nil
 }
 
-// transaction insert messages plus increment unread messages in room_users table
+// transaction insert messages
 func (c *PostgresClient) SendMessage(flowjson *FlowJSON) {
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Rooms[0])
+	_, flowjson.Err = c.Conn.Exec(context.Background(), `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Rooms[0])
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
 	}
 }
+func (c *PostgresClient) ChangeUsername(flowjson *FlowJSON) {
+	if strings.ContainsAny(flowjson.Name, " \t\n") {
+		flowjson.Err = errors.New("contains spaces")
+		return
+	}
+	_, flowjson.Err = c.Conn.Exec(context.Background(), "UPDATE users SET username = $1 WHERE user_id = $2", flowjson.Name, c.UserID)
+	if flowjson.Err != nil {
+		log.Println("Error blocking user", flowjson.Err)
+		return
+	}
 
-// blocking user and delete user from duo room
+}
+
+// Blocking user and delete user from duo room
 func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
 
 	c.IsDuoRoomExist(flowjson)
@@ -111,6 +126,7 @@ func (c *PostgresClient) BlockUser(flowjson *FlowJSON) {
 	}
 }
 
+// Unblocking user
 func (c *PostgresClient) UnblockUser(flowjson *FlowJSON) {
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `DELETE FROM blocked_users 
 			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1])
