@@ -19,7 +19,6 @@ type FlowJSON struct {
 	Name       string   `json:"Name"`
 	Message_id string   `json:"Offset"`
 	Status     string   `json:"Status"`
-	SenderOnly bool
 	Tx         pgx.Tx
 	Err        error
 }
@@ -33,8 +32,12 @@ type PostgresClient struct {
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
-	funcmap          map[string]func(context.Context, *FlowJSON)
+	funcmap          map[string]fnAPI
 	Chan             chan FlowJSON
+}
+type fnAPI struct {
+	Fn         func(context.Context, *FlowJSON)
+	ClientOnly bool
 }
 
 func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) error {
@@ -75,16 +78,16 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 		Name:   name,
 		Chan:   make(chan FlowJSON, 100),
 	}
-	pc.funcmap = map[string]func(context.Context, *FlowJSON){
-		"SendMessage":              pc.SendMessage,
-		"GetAllRooms":              pc.GetAllRooms,
-		"CreateDuoRoom":            pc.CreateDuoRoom,
-		"CreateGroupRoom":          pc.CreateRoom,
-		"GetMessagesFromNextRooms": pc.GetMessagesFromNextRooms,
-		"AddUsersToRoom":           pc.AddUsersToRoom,
-		"DeleteUsersFromRoom":      pc.DeleteUsersFromRoom,
-		"BlockUser":                pc.BlockUser,
-		"UnblockUser":              pc.UnblockUser,
+	pc.funcmap = map[string]fnAPI{
+		"SendMessage":              {pc.SendMessage, false},
+		"GetAllRooms":              {pc.GetAllRooms, true},
+		"GetMessagesFromNextRooms": {pc.GetMessagesFromNextRooms, true},
+		"CreateDuoRoom":            {pc.CreateDuoRoom, false},
+		"CreateGroupRoom":          {pc.CreateRoom, true},
+		"AddUsersToRoom":           {pc.AddUsersToRoom, false},
+		"DeleteUsersFromRoom":      {pc.DeleteUsersFromRoom, false},
+		"BlockUser":                {pc.BlockUser, false},
+		"UnblockUser":              {pc.UnblockUser, false},
 	}
 	return pc, nil
 }

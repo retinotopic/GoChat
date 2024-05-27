@@ -45,7 +45,7 @@ func WsConnect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 		sub := "21"
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 		dbconn, err := db.ConnectToDB(ctx, os.Getenv("DATABASE_URL"))
 		if err != nil {
@@ -91,7 +91,7 @@ func (h HandlerWS) WsHandle() {
 		}
 	}()
 	h.pubsub = redisClient.Subscribe(context.Background(), fmt.Sprintf("%d%s", h.DBc.UserID, "user"))
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	h.DBc.GetAllRooms(ctx, &db.FlowJSON{})
 	go h.WsReadRedis()
@@ -113,8 +113,6 @@ func (h *HandlerWS) WsReadRedis() {
 				log.Fatalln(err, "unmarshalling error")
 			}
 			switch flowjson.Mode {
-			case "SendMessage":
-				h.WriteCh <- flowjson
 			case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
 				h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
 			case "DeleteUsersFromRoom", "BlockUser":

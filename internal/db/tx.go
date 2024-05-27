@@ -14,8 +14,8 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	if !ok { // if there is no such mode just ignore it
 		return
 	}
-	if flowjson.SenderOnly {
-		fn(ctx, flowjson)
+	if fn.ClientOnly {
+		fn.Fn(ctx, flowjson)
 		if flowjson.Err != nil {
 			flowjson.Status = flowjson.Err.Error()
 		}
@@ -23,7 +23,7 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 		return
 	}
 	c.txBegin(ctx, flowjson)
-	fn(ctx, flowjson)
+	fn.Fn(ctx, flowjson)
 	c.txCommit(ctx, flowjson)
 
 	if flowjson.Err != nil {
