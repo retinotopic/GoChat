@@ -2,12 +2,13 @@ package ws
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"

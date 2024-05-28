@@ -3,8 +3,11 @@ package db
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 )
+
+var once sync.Once
 
 func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
@@ -14,8 +17,13 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	if !ok { // if there is no such mode just ignore it
 		return
 	}
+
 	if fn.ClientOnly {
-		fn.Fn(ctx, flowjson)
+		if flowjson.Mode == "GetAllRooms" {
+			once.Do(func() { fn.Fn(ctx, flowjson) })
+		} else {
+			fn.Fn(ctx, flowjson)
+		}
 		if flowjson.Err != nil {
 			flowjson.Status = flowjson.Err.Error()
 		}

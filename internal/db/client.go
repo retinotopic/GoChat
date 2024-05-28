@@ -8,11 +8,12 @@ import (
 )
 
 func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
+	defer c.Mutex.Unlock()
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
-		WHERE ru.user_id = $1 AND is_visible = true 
+		WHERE ru.user_id = $1 
 		ORDER BY r.last_activity DESC;
 		`, c.UserID)
 	err := Rows.Err()
@@ -21,6 +22,7 @@ func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 		flowjson.Err = err
 		return
 	}
+	c.Mutex.Lock()
 	for Rows.Next() {
 		err := Rows.Scan(&flowjson.Rooms[0])
 		if err != nil {
@@ -49,6 +51,7 @@ func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *Flow
 }
 
 func (c *PostgresClient) GetMessagesFromNextRooms(ctx context.Context, flowjson *FlowJSON) {
+	defer c.Mutex.Unlock()
 	var arrayrooms []uint32
 	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
 		arrayrooms = append(arrayrooms, c.RoomsPagination[i])
@@ -72,6 +75,7 @@ func (c *PostgresClient) GetMessagesFromNextRooms(ctx context.Context, flowjson 
 	}
 	c.toChannel(flowjson, Rows, flowjson.Message_id, flowjson.Message, flowjson.Users[0])
 	if flowjson.Err == nil {
+		c.Mutex.Lock()
 		c.PaginationOffset += 30
 	}
 }

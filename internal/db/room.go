@@ -43,7 +43,7 @@ func (c *PostgresClient) CreateRoom(ctx context.Context, flowjson *FlowJSON) {
 }
 func (c *PostgresClient) AddUsersToRoom(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Mode == "AddUsersToRoom" {
-		if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
+		if err := flowjson.Tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
 			flowjson.Err = errors.New("you have no permission to add users to this room")
 			return
 		}
@@ -65,14 +65,13 @@ func (c *PostgresClient) AddUsersToRoom(ctx context.Context, flowjson *FlowJSON)
 	}
 
 	query = fmt.Sprintf(query, condition)
-
 	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Rooms[0], flowjson.Users, is_group, c.UserID)
 
 }
 func (c *PostgresClient) DeleteUsersFromRoom(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Mode == "DeleteUsersFromRoom" {
 		if len(flowjson.Users) != 1 && flowjson.Users[0] != c.UserID {
-			if err := c.Conn.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
+			if err := flowjson.Tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Rooms[0], flowjson.Users[0]).Scan(new(int)); err != nil {
 				flowjson.Err = errors.New("you have no permission to delete users from this room")
 				return
 			}

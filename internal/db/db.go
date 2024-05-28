@@ -79,11 +79,12 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 		Chan:   make(chan FlowJSON, 100),
 	}
 	pc.funcmap = map[string]fnAPI{
-		"SendMessage":              {pc.SendMessage, false},
 		"GetAllRooms":              {pc.GetAllRooms, true},
+		"GetMessagesFromRoom":      {pc.GetMessagesFromRoom, true},
 		"GetMessagesFromNextRooms": {pc.GetMessagesFromNextRooms, true},
+		"SendMessage":              {pc.SendMessage, false},
 		"CreateDuoRoom":            {pc.CreateDuoRoom, false},
-		"CreateGroupRoom":          {pc.CreateRoom, true},
+		"CreateGroupRoom":          {pc.CreateRoom, false},
 		"AddUsersToRoom":           {pc.AddUsersToRoom, false},
 		"DeleteUsersFromRoom":      {pc.DeleteUsersFromRoom, false},
 		"BlockUser":                {pc.BlockUser, false},
