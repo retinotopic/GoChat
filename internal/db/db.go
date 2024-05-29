@@ -20,6 +20,7 @@ type FlowJSON struct {
 	Name       string   `json:"Name"`
 	Message_id string   `json:"Offset"`
 	Status     string   `json:"Status"`
+	Bool       bool     `json:"Bool"`
 	Tx         pgx.Tx
 	Err        error
 }
@@ -107,7 +108,21 @@ func (c *PostgresClient) ChangeUsername(ctx context.Context, flowjson *FlowJSON)
 	username := str.NormalizeString(flowjson.Name)
 	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, c.UserID)
 	if flowjson.Err != nil {
-		log.Println("Error blocking user", flowjson.Err)
+		log.Println("Error changing username", flowjson.Err)
+		return
+	}
+}
+func (c *PostgresClient) ChangePrivacyDirect(ctx context.Context, flowjson *FlowJSON) {
+	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
+	if flowjson.Err != nil {
+		log.Println("Error changing username", flowjson.Err)
+		return
+	}
+}
+func (c *PostgresClient) ChangePrivacyGroup(ctx context.Context, flowjson *FlowJSON) {
+	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
+	if flowjson.Err != nil {
+		log.Println("Error changing username", flowjson.Err)
 		return
 	}
 }
