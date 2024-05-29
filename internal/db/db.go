@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/retinotopic/GoChat/pkg/str"
 )
 
 type FlowJSON struct {
@@ -79,16 +80,17 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 		Chan:   make(chan FlowJSON, 100),
 	}
 	pc.funcmap = map[string]fnAPI{
-		"GetAllRooms":              {pc.GetAllRooms, true},
-		"GetMessagesFromRoom":      {pc.GetMessagesFromRoom, true},
-		"GetMessagesFromNextRooms": {pc.GetMessagesFromNextRooms, true},
-		"SendMessage":              {pc.SendMessage, false},
-		"CreateDuoRoom":            {pc.CreateDuoRoom, false},
-		"CreateGroupRoom":          {pc.CreateRoom, false},
-		"AddUsersToRoom":           {pc.AddUsersToRoom, false},
-		"DeleteUsersFromRoom":      {pc.DeleteUsersFromRoom, false},
-		"BlockUser":                {pc.BlockUser, false},
-		"UnblockUser":              {pc.UnblockUser, false},
+		"GetAllRooms":         {pc.GetAllRooms, true},
+		"GetMessagesFromRoom": {pc.GetMessagesFromRoom, true},
+		"GetNextRooms":        {pc.GetNextRooms, true},
+		"SendMessage":         {pc.SendMessage, false},
+		"CreateDuoRoom":       {pc.CreateDuoRoom, false},
+		"CreateGroupRoom":     {pc.CreateRoom, false},
+		"AddUsersToRoom":      {pc.AddUsersToRoom, false},
+		"DeleteUsersFromRoom": {pc.DeleteUsersFromRoom, false},
+		"BlockUser":           {pc.BlockUser, false},
+		"UnblockUser":         {pc.UnblockUser, false},
+		"ChangeUsername":      {pc.ChangeUsername, false},
 	}
 	return pc, nil
 }
@@ -102,16 +104,12 @@ func (c *PostgresClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
 	}
 }
 func (c *PostgresClient) ChangeUsername(ctx context.Context, flowjson *FlowJSON) {
-	if strings.ContainsAny(flowjson.Name, " \t\n") {
-		flowjson.Err = errors.New("contains spaces")
-		return
-	}
-	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", flowjson.Name, c.UserID)
+	username := str.NormalizeString(flowjson.Name)
+	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, c.UserID)
 	if flowjson.Err != nil {
 		log.Println("Error blocking user", flowjson.Err)
 		return
 	}
-
 }
 
 // Blocking user and delete user from duo room

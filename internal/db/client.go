@@ -50,7 +50,8 @@ func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *Flow
 	c.toChannel(flowjson, Rows, flowjson.Message, flowjson.Users[0])
 }
 
-func (c *PostgresClient) GetMessagesFromNextRooms(ctx context.Context, flowjson *FlowJSON) {
+func (c *PostgresClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
+	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	var arrayrooms []uint32
 	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
@@ -58,24 +59,13 @@ func (c *PostgresClient) GetMessagesFromNextRooms(ctx context.Context, flowjson 
 	}
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT r.room_id, m.message_id, m.payload, m.user_id
-		FROM unnest($1) AS r(room_id)
-		LEFT JOIN LATERAL (
-			SELECT message_id, payload, user_id, timestamp
-			FROM messages
-			WHERE messages.room_id = r.room_id
-			ORDER BY timestamp DESC
-			LIMIT 30
-		) AS m ON true
-		WHERE r.room_id NOT IN ($2)
-		ORDER BY r.room_id`, arrayrooms, flowjson.Rooms)
+		`SELECT room_id,name FROM rooms WHERE room_id IN ($1)`, arrayrooms)
 	if flowjson.Err != nil {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, flowjson.Message_id, flowjson.Message, flowjson.Users[0])
+	c.toChannel(flowjson, Rows, flowjson.Rooms[0])
 	if flowjson.Err == nil {
-		c.Mutex.Lock()
 		c.PaginationOffset += 30
 	}
 }
