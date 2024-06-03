@@ -24,14 +24,14 @@ func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 	}
 	c.Mutex.Lock()
 	for Rows.Next() {
-		err := Rows.Scan(&flowjson.Rooms[0])
+		err := Rows.Scan(&flowjson.Room)
 		if err != nil {
 			log.Println("Error scanning rows:", err)
 			flowjson.Err = err
 			return
 		}
 		c.Chan <- *flowjson
-		c.RoomsPagination = append(c.RoomsPagination, flowjson.Rooms[0])
+		c.RoomsPagination = append(c.RoomsPagination, flowjson.Room)
 	}
 }
 
@@ -42,7 +42,7 @@ func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *Flow
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
-		ORDER BY message_id DESC`, flowjson.Rooms[0], flowjson.Message_id)
+		ORDER BY message_id DESC`, flowjson.Room, flowjson.Message_id)
 	if flowjson.Err != nil {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
@@ -64,15 +64,13 @@ func (c *PostgresClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, flowjson.Rooms[0])
+	c.toChannel(flowjson, Rows, flowjson.Room, flowjson.Name)
 	if flowjson.Err == nil {
 		c.PaginationOffset += 30
 	}
 }
 
 func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
-	var user_id int
-	var name string
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
 		`SELECT u.user_id,u.name
@@ -82,16 +80,14 @@ func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSO
 		log.Println("Error getting room info", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, &user_id, &name)
+	c.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
 }
 
 func (c *PostgresClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
-	var user_id int
-	var name string
 	var Rows pgx.Rows
 	Rows, flowjson.Err = c.Conn.Query(context.Background(),
-		`SELECT user_id,name FROM users WHERE name ILIKE $1 LIMIT 20`, flowjson.Name+"%")
-	c.toChannel(flowjson, Rows, &user_id, &name)
+		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")
+	c.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
 }
 func (c *PostgresClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...any) {
 	err := rows.Err() // checking for query timeout
@@ -100,7 +96,7 @@ func (c *PostgresClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...an
 		return
 	}
 	for rows.Next() {
-		err := rows.Scan(dest)
+		err := rows.Scan(dest...)
 		if err != nil {
 			log.Println("Error scanning rows:", err)
 			flowjson.Err = err

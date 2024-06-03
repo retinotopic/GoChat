@@ -115,9 +115,9 @@ func (h *HandlerWS) WsReadRedis() {
 			}
 			switch flowjson.Mode {
 			case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
-				h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
+				h.pubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"))
 			case "DeleteUsersFromRoom", "BlockUser":
-				h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"))
+				h.pubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"))
 			}
 			h.WriteCh <- flowjson
 		}(*message)
@@ -146,7 +146,7 @@ func (h *HandlerWS) ReadDB() {
 		}
 		switch flowjson.Mode {
 		case "SendMessage":
-			redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Rooms[0], "room"), payload)
+			redisClient.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
 		default:
 			i := 1
 			for i = range flowjson.Users {

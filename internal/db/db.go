@@ -16,7 +16,7 @@ type FlowJSON struct {
 	Mode       string   `json:"Mode"`
 	Message    string   `json:"Message"`
 	Users      []uint32 `json:"Users"`
-	Rooms      []uint32 `json:"Room"`
+	Room       uint32   `json:"Room"`
 	Name       string   `json:"Name"`
 	Message_id string   `json:"Offset"`
 	Status     string   `json:"Status"`
@@ -59,13 +59,10 @@ func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 }
 func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	// check if user exists
-	row, err := pool.Query(ctx, "SELECT * FROM users WHERE subject=$1", sub)
-	if err != nil {
-		return nil, err
-	}
+	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
 	var userid uint32
-	err = row.Scan(&name, &userid)
+	err := row.Scan(&userid, &name)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +75,13 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 		Conn:   conn,
 		UserID: userid,
 		Name:   name,
-		Chan:   make(chan FlowJSON, 100),
+		Chan:   make(chan FlowJSON, 1000),
 	}
 	pc.funcmap = map[string]fnAPI{
 		"GetAllRooms":         {pc.GetAllRooms, true},
 		"GetMessagesFromRoom": {pc.GetMessagesFromRoom, true},
 		"GetNextRooms":        {pc.GetNextRooms, true},
+		"FindUsers":           {pc.FindUsers, true},
 		"SendMessage":         {pc.SendMessage, false},
 		"CreateDuoRoom":       {pc.CreateDuoRoom, false},
 		"CreateGroupRoom":     {pc.CreateRoom, false},
@@ -92,13 +90,15 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 		"BlockUser":           {pc.BlockUser, false},
 		"UnblockUser":         {pc.UnblockUser, false},
 		"ChangeUsername":      {pc.ChangeUsername, false},
+		"ChangePrivacyDirect": {pc.ChangePrivacyDirect, false},
+		"ChangePrivacyGroup":  {pc.ChangePrivacyGroup, false},
 	}
 	return pc, nil
 }
 
 // transaction insert messages
 func (c *PostgresClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Rooms[0])
+	_, flowjson.Err = c.Conn.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Room)
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
@@ -131,8 +131,16 @@ func (c *PostgresClient) ChangePrivacyGroup(ctx context.Context, flowjson *FlowJ
 func (c *PostgresClient) BlockUser(ctx context.Context, flowjson *FlowJSON) {
 
 	c.IsDuoRoomExist(ctx, flowjson)
-	if flowjson.Err == nil {
+	if flowjson.Err != nil {
+		log.Println(flowjson.Err, "isroomexist err")
+		return
+	}
+	if flowjson.Room != 0 {
 		c.DeleteUsersFromRoom(ctx, flowjson)
+		if flowjson.Err != nil {
+			log.Println(flowjson.Err, "DeleteUsersFromRoom err")
+			return
+		}
 	}
 
 	_, flowjson.Err = flowjson.Tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
@@ -155,4 +163,9 @@ func (c *PostgresClient) UnblockUser(ctx context.Context, flowjson *FlowJSON) {
 
 func (c *PostgresClient) Channel() <-chan FlowJSON {
 	return c.Chan
+}
+func (c *PostgresClient) ClearChannel() {
+	for len(c.Chan) > 0 {
+		<-c.Chan
+	}
 }

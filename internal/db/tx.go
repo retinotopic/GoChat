@@ -28,8 +28,8 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 		}
 		if flowjson.Err != nil {
 			flowjson.Status = flowjson.Err.Error()
+			c.Chan <- *flowjson
 		}
-		c.Chan <- *flowjson
 		return
 	}
 	c.txBegin(ctx, flowjson)
@@ -38,6 +38,7 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 
 	if flowjson.Err != nil {
 		flowjson.Status = flowjson.Err.Error()
+		log.Println(flowjson.Err)
 	}
 	c.Chan <- *flowjson
 }
@@ -49,14 +50,14 @@ func (c *PostgresClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
 		flowjson.Err = flowjson.Tx.Commit(ctx)
 		if flowjson.Err != nil {
 			flowjson.Status = "internal database error"
-			flowjson.Err = flowjson.Tx.Rollback(ctx)
-			if flowjson.Err != nil {
+			err := flowjson.Tx.Rollback(ctx)
+			if err != nil {
 				log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
 			}
 		}
 	} else {
-		flowjson.Err = flowjson.Tx.Rollback(ctx)
-		if flowjson.Err != nil {
+		err := flowjson.Tx.Rollback(ctx)
+		if err != nil {
 			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
 			flowjson.Status = "internal database error"
 		}
