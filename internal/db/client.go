@@ -10,7 +10,7 @@ import (
 func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 	defer c.Mutex.Unlock()
 	var Rows pgx.Rows
-	Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = pool.Query(context.Background(),
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 
@@ -38,7 +38,7 @@ func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 // load messages from a room
 func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = pool.Query(context.Background(),
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
@@ -58,7 +58,7 @@ func (c *PostgresClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
 		arrayrooms = append(arrayrooms, c.RoomsPagination[i])
 	}
 	var Rows pgx.Rows
-	Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = pool.Query(context.Background(),
 		`SELECT room_id,name FROM rooms WHERE room_id IN ($1)`, arrayrooms)
 	if flowjson.Err != nil {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
@@ -72,7 +72,7 @@ func (c *PostgresClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
 
 func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = pool.Query(context.Background(),
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
 		WHERE ru.room_id = $1`, c.UserID)
@@ -85,7 +85,7 @@ func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSO
 
 func (c *PostgresClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = c.Conn.Query(context.Background(),
+	Rows, flowjson.Err = pool.Query(context.Background(),
 		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")
 	c.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
 }

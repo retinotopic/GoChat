@@ -70,7 +70,6 @@ func WsConnect(next http.Handler) http.Handler {
 }
 func (h HandlerWS) WsHandle() {
 	defer func() {
-		h.DBc.Conn.Release()
 		h.Conn.Close()
 	}()
 	go h.ReadDB()

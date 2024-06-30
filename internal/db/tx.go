@@ -43,7 +43,7 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 	c.Chan <- *flowjson
 }
 func (c *PostgresClient) txBegin(ctx context.Context, flowjson *FlowJSON) {
-	flowjson.Tx, flowjson.Err = c.Conn.BeginTx(ctx, pgx.TxOptions{})
+	flowjson.Tx, flowjson.Err = pool.BeginTx(ctx, pgx.TxOptions{})
 }
 func (c *PostgresClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Err == nil {

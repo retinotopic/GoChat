@@ -12,6 +12,8 @@ import (
 	"github.com/retinotopic/GoChat/pkg/str"
 )
 
+var pool *pgxpool.Pool
+
 type FlowJSON struct {
 	Mode       string   `json:"Mode"`
 	Message    string   `json:"Message"`
@@ -29,7 +31,6 @@ type PostgresClient struct {
 	Sub              string
 	Name             string
 	UserID           uint32
-	Conn             *pgxpool.Conn
 	Mutex            sync.Mutex
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
@@ -66,13 +67,8 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 	if err != nil {
 		return nil, err
 	}
-	conn, err := pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
 	pc := &PostgresClient{
 		Sub:    sub,
-		Conn:   conn,
 		UserID: userid,
 		Name:   name,
 		Chan:   make(chan FlowJSON, 1000),
@@ -98,7 +94,7 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 
 // transaction insert messages
 func (c *PostgresClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Room)
+	_, flowjson.Err = pool.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, c.UserID, flowjson.Room)
 	if flowjson.Err != nil {
 		log.Println("Error inserting message:", flowjson.Err)
 		return
@@ -106,21 +102,21 @@ func (c *PostgresClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
 }
 func (c *PostgresClient) ChangeUsername(ctx context.Context, flowjson *FlowJSON) {
 	username := str.NormalizeString(flowjson.Name)
-	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, c.UserID)
+	_, flowjson.Err = pool.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, c.UserID)
 	if flowjson.Err != nil {
 		log.Println("Error changing username", flowjson.Err)
 		return
 	}
 }
 func (c *PostgresClient) ChangePrivacyDirect(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
+	_, flowjson.Err = pool.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
 	if flowjson.Err != nil {
 		log.Println("Error changing username", flowjson.Err)
 		return
 	}
 }
 func (c *PostgresClient) ChangePrivacyGroup(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = c.Conn.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
+	_, flowjson.Err = pool.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, c.UserID)
 	if flowjson.Err != nil {
 		log.Println("Error changing username", flowjson.Err)
 		return
