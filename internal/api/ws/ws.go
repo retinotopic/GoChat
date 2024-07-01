@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -48,18 +47,13 @@ func WsConnect(next http.Handler) http.Handler {
 		sub := "21"
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
-		dbconn, err := db.ConnectToDB(ctx, os.Getenv("DATABASE_URL"))
-		if err != nil {
-			log.Println("wrong sub", err)
-			return
-		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		dbc, err := db.NewClient(ctx, sub, dbconn)
+		dbc, err := db.NewClient(ctx, sub)
 		if err != nil {
 			//write error to plain http
 			w.WriteHeader(http.StatusInternalServerError)

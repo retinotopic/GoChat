@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"strings"
 	"sync"
 
@@ -11,8 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/pkg/str"
 )
-
-var pool *pgxpool.Pool
 
 type FlowJSON struct {
 	Mode       string   `json:"Mode"`
@@ -25,6 +24,16 @@ type FlowJSON struct {
 	Bool       bool     `json:"Bool"`
 	Tx         pgx.Tx
 	Err        error
+}
+
+var pool *pgxpool.Pool
+
+func init() {
+	var err error
+	pool, err = pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 }
 
 type PostgresClient struct {
@@ -43,7 +52,7 @@ type fnAPI struct {
 	ClientOnly bool
 }
 
-func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) error {
+func NewUser(ctx context.Context, sub, username string) error {
 	if strings.ContainsAny(username, " \t\n") {
 		return errors.New("contains spaces")
 	}
@@ -58,7 +67,7 @@ func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 	}
 	return db, ctx.Err()
 }
-func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
+func NewClient(ctx context.Context, sub string) (*PostgresClient, error) {
 	// check if user exists
 	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
