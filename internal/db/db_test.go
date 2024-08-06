@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -11,30 +12,36 @@ import (
 func TestDb(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	// creating user 1
-	err := db.NewUser(ctx, "user1sub", "user1")
+
+	dbc, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	client1, err := db.NewClient(ctx, "user1sub")
+
+	// creating user 1
+	err = dbc.NewUser(ctx, "user1sub", "user1")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	client1, err := dbc.NewClient(ctx, "user1sub")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 	// creating user 2
-	err = db.NewUser(ctx, "user2sub", "user2")
+	err = dbc.NewUser(ctx, "user2sub", "user2")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	client2, err := db.NewClient(ctx, "user2sub")
+	client2, err := dbc.NewClient(ctx, "user2sub")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 	// creating user 3
-	err = db.NewUser(ctx, "user3sub", "user3")
+	err = dbc.NewUser(ctx, "user3sub", "user3")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	client3, err := db.NewClient(ctx, "user3sub")
+	client3, err := dbc.NewClient(ctx, "user3sub")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

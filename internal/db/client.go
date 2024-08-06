@@ -7,22 +7,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
-	defer c.Mutex.Unlock()
+func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
+	defer p.Mutex.Unlock()
 	var Rows pgx.Rows
-	Rows, flowjson.Err = pool.Query(context.Background(),
+	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT r.room_id
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 
 		ORDER BY r.last_activity DESC;
-		`, c.UserID)
+		`, p.UserID)
 	err := Rows.Err()
 	if err != nil {
 		log.Println("query timeout", flowjson.Err)
 		flowjson.Err = err
 		return
 	}
-	c.Mutex.Lock()
+	p.Mutex.Lock()
 	for Rows.Next() {
 		err := Rows.Scan(&flowjson.Room)
 		if err != nil {
@@ -30,15 +30,15 @@ func (c *PostgresClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 			flowjson.Err = err
 			return
 		}
-		c.Chan <- *flowjson
-		c.RoomsPagination = append(c.RoomsPagination, flowjson.Room)
+		p.Chan <- *flowjson
+		p.RoomsPagination = append(p.RoomsPagination, flowjson.Room)
 	}
 }
 
 // load messages from a room
-func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = pool.Query(context.Background(),
+	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT payload,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
@@ -47,49 +47,49 @@ func (c *PostgresClient) GetMessagesFromRoom(ctx context.Context, flowjson *Flow
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, flowjson.Message, flowjson.Users[0])
+	p.toChannel(flowjson, Rows, flowjson.Message, flowjson.Users[0])
 }
 
-func (c *PostgresClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
 	var arrayrooms []uint32
-	for i := c.PaginationOffset; i < c.PaginationOffset+30; i++ {
-		arrayrooms = append(arrayrooms, c.RoomsPagination[i])
+	for i := p.PaginationOffset; i < p.PaginationOffset+30; i++ {
+		arrayrooms = append(arrayrooms, p.RoomsPagination[i])
 	}
 	var Rows pgx.Rows
-	Rows, flowjson.Err = pool.Query(context.Background(),
+	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT room_id,name FROM rooms WHERE room_id IN ($1)`, arrayrooms)
 	if flowjson.Err != nil {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, flowjson.Room, flowjson.Name)
+	p.toChannel(flowjson, Rows, flowjson.Room, flowjson.Name)
 	if flowjson.Err == nil {
-		c.PaginationOffset += 30
+		p.PaginationOffset += 30
 	}
 }
 
-func (c *PostgresClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = pool.Query(context.Background(),
+	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
-		WHERE ru.room_id = $1`, c.UserID)
+		WHERE ru.room_id = $1`, p.UserID)
 	if flowjson.Err != nil {
 		log.Println("Error getting room info", flowjson.Err)
 		return
 	}
-	c.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
+	p.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
 }
 
-func (c *PostgresClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
-	Rows, flowjson.Err = pool.Query(context.Background(),
+	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")
-	c.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
+	p.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
 }
-func (c *PostgresClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...any) {
+func (c *PgClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...any) {
 	err := rows.Err() // checking for query timeout
 	if err != nil {
 		flowjson.Err = err

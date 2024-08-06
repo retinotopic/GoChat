@@ -1,27 +1,44 @@
 package router
 
 import (
+	"context"
 	"net/http"
+	"os"
+
+	"github.com/retinotopic/GoChat/internal/auth"
+	"github.com/retinotopic/GoChat/internal/db"
+	"github.com/retinotopic/GoChat/internal/middleware"
+	"github.com/retinotopic/GoChat/internal/pubsub"
 )
 
 type Router struct {
-	addr string
+	Addr       string
+	Auth       auth.ProviderMap
+	PubSubAddr string
 }
 
-func NewRouter(addr string) *Router {
-	return &Router{addr: addr}
+func NewRouter(addr string, mp auth.ProviderMap, addrpb string) *Router {
+	return &Router{Addr: addr, Auth: mp, PubSubAddr: addrpb}
 }
 func (r *Router) Run() error {
-	mux := http.NewServeMux()
-	/*CurrentProviders := session.Session{
-		"google":    google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), "http://localhost:8080/google/CompleteAuth"),
-		"gfirebase": gfirebase.New(os.Getenv("WEB_API_KEY"), os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), "http://localhost:8080/gfirebase/CompleteAuth"),
+	db, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		return err
 	}
-	FetchUser := http.HandlerFunc(CurrentProviders.FetchUser)
-	mux.HandleFunc("/{provider}/BeginLoginCreate", CurrentProviders.BeginLoginCreate)
-	mux.HandleFunc("/{provider}/CompleteLoginCreate", CurrentProviders.CompleteLoginCreate)
-	mux.HandleFunc("/refresh/{provider}", CurrentProviders.Refresh)
-	mux.HandleFunc("/refresh/revoke/{provider}", CurrentProviders.RevokeRefresh)
-	mux.Handle("/chat", ws.WsConnect(FetchUser))*/
-	return http.ListenAndServe(r.addr, mux)
+
+	middleware := middleware.UserMiddleware{GetProvider: r.Auth.GetProvider}
+
+	mux := http.NewServeMux()
+	pb := pubsub.NewPubsub(db, r.PubSubAddr)
+	connect := http.HandlerFunc(pb.Connect)
+
+	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
+	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
+	mux.Handle("/connect", middleware.FetchUser(connect))
+
+	err = http.ListenAndServe(r.Addr, mux)
+	if err != nil {
+		return err
+	}
+	return nil
 }

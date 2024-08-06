@@ -11,11 +11,11 @@ import (
 
 var once sync.Once
 
-func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
+func (p *PgClient) TxManage(flowjson *FlowJSON) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	flowjson.Status = "OK"
-	fn, ok := c.funcmap[flowjson.Mode]
+	fn, ok := p.funcmap[flowjson.Mode]
 	if !ok { // if there is no such mode just ignore it
 		return
 	}
@@ -28,24 +28,24 @@ func (c *PostgresClient) TxManage(flowjson *FlowJSON) {
 		}
 		if flowjson.Err != nil {
 			flowjson.Status = flowjson.Err.Error()
-			c.Chan <- *flowjson
+			p.Chan <- *flowjson
 		}
 		return
 	}
-	c.txBegin(ctx, flowjson)
+	p.txBegin(ctx, flowjson)
 	fn.Fn(ctx, flowjson)
-	c.txCommit(ctx, flowjson)
+	p.txCommit(ctx, flowjson)
 
 	if flowjson.Err != nil {
 		flowjson.Status = flowjson.Err.Error()
 		log.Println(flowjson.Err)
 	}
-	c.Chan <- *flowjson
+	p.Chan <- *flowjson
 }
-func (c *PostgresClient) txBegin(ctx context.Context, flowjson *FlowJSON) {
-	flowjson.Tx, flowjson.Err = pool.BeginTx(ctx, pgx.TxOptions{})
+func (p *PgClient) txBegin(ctx context.Context, flowjson *FlowJSON) {
+	flowjson.Tx, flowjson.Err = p.BeginTx(ctx, pgx.TxOptions{})
 }
-func (c *PostgresClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Err == nil {
 		flowjson.Err = flowjson.Tx.Commit(ctx)
 		if flowjson.Err != nil {
