@@ -17,7 +17,7 @@ type FlowJSON struct {
 	Room       uint32   `json:"Room"`
 	Name       string   `json:"Name"`
 	Message_id string   `json:"Offset"`
-	Status     string   `json:"Status"`
+	ErrorMsg   string   `json:"ErrorMsg"`
 	Bool       bool     `json:"Bool"`
 	Tx         pgx.Tx
 	Err        error
@@ -32,7 +32,7 @@ type PgClient struct {
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
 	funcmap          map[string]fnAPI
-	Chan             chan FlowJSON
+	Chan             chan *FlowJSON
 	*pgxpool.Pool
 }
 type fnAPI struct {
@@ -104,7 +104,7 @@ func (c *PgClient) UnblockUser(ctx context.Context, flowjson *FlowJSON) {
 	}
 }
 
-func (c *PgClient) Channel() <-chan FlowJSON {
+func (c *PgClient) Channel() <-chan *FlowJSON {
 	return c.Chan
 }
 func (c *PgClient) ClearChannel() {

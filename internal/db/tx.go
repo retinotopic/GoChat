@@ -14,7 +14,6 @@ var once sync.Once
 func (p *PgClient) TxManage(flowjson *FlowJSON) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	flowjson.Status = "OK"
 	fn, ok := p.funcmap[flowjson.Mode]
 	if !ok { // if there is no such mode just ignore it
 		return
@@ -27,8 +26,8 @@ func (p *PgClient) TxManage(flowjson *FlowJSON) {
 			fn.Fn(ctx, flowjson)
 		}
 		if flowjson.Err != nil {
-			flowjson.Status = flowjson.Err.Error()
-			p.Chan <- *flowjson
+			flowjson.ErrorMsg = flowjson.Err.Error()
+			p.Chan <- flowjson
 		}
 		return
 	}
@@ -37,10 +36,10 @@ func (p *PgClient) TxManage(flowjson *FlowJSON) {
 	p.txCommit(ctx, flowjson)
 
 	if flowjson.Err != nil {
-		flowjson.Status = flowjson.Err.Error()
+		flowjson.ErrorMsg = flowjson.Err.Error()
 		log.Println(flowjson.Err)
 	}
-	p.Chan <- *flowjson
+	p.Chan <- flowjson
 }
 func (p *PgClient) txBegin(ctx context.Context, flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = p.BeginTx(ctx, pgx.TxOptions{})
@@ -49,7 +48,7 @@ func (p *PgClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
 	if flowjson.Err == nil {
 		flowjson.Err = flowjson.Tx.Commit(ctx)
 		if flowjson.Err != nil {
-			flowjson.Status = "internal database error"
+			flowjson.ErrorMsg = "internal database error"
 			err := flowjson.Tx.Rollback(ctx)
 			if err != nil {
 				log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
@@ -59,7 +58,7 @@ func (p *PgClient) txCommit(ctx context.Context, flowjson *FlowJSON) {
 		err := flowjson.Tx.Rollback(ctx)
 		if err != nil {
 			log.Println("ATTENTION Error rolling back transaction:", flowjson.Err)
-			flowjson.Status = "internal database error"
+			flowjson.ErrorMsg = "internal database error"
 		}
 	}
 }

@@ -11,7 +11,7 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 	defer p.Mutex.Unlock()
 	var Rows pgx.Rows
 	Rows, flowjson.Err = p.Query(ctx,
-		`SELECT r.room_id
+		`SELECT r.room_id,r.name
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
 		WHERE ru.user_id = $1 
 		ORDER BY r.last_activity DESC;
@@ -30,7 +30,7 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 			flowjson.Err = err
 			return
 		}
-		p.Chan <- *flowjson
+		p.Chan <- flowjson
 		p.RoomsPagination = append(p.RoomsPagination, flowjson.Room)
 	}
 }
@@ -64,6 +64,7 @@ func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
 		log.Println("Error getting messages from this rooms:", flowjson.Err)
 		return
 	}
+	pgx.CollectOneRow(Rows, pgx.RowToAddrOfStructByName[FlowJSON])
 	p.toChannel(flowjson, Rows, flowjson.Room, flowjson.Name)
 	if flowjson.Err == nil {
 		p.PaginationOffset += 30
@@ -102,6 +103,6 @@ func (c *PgClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...any) {
 			flowjson.Err = err
 			return
 		}
-		c.Chan <- *flowjson
+		c.Chan <- flowjson
 	}
 }

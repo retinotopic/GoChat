@@ -7,7 +7,6 @@ import (
 )
 
 type UserMiddleware struct {
-	GetUser     func(string) (int, string, error)
 	GetProvider func(http.ResponseWriter, *http.Request) (provider.Provider, error)
 }
 

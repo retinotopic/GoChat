@@ -53,8 +53,7 @@ func TestDb(t *testing.T) {
 	}
 	go client1.TxManage(flowjson)
 	ch1 := client1.Channel()
-	for f := range ch1 {
-		*flowjson = f
+	for flowjson = range ch1 {
 		break
 	}
 	client1.ClearChannel()
@@ -153,8 +152,7 @@ func TestDb(t *testing.T) {
 	}
 	client1.ClearChannel()
 	go client1.TxManage(flowjson)
-	for f := range ch1 {
-		*flowjson = f
+	for flowjson = range ch1 {
 		break
 	}
 	got = flowjson.Users[0]
@@ -175,8 +173,7 @@ func TestDb(t *testing.T) {
 	client2.ClearChannel()
 	go client2.TxManage(flowjson)
 	ch2 := client2.Channel()
-	for f := range ch2 {
-		*flowjson = f
+	for flowjson = range ch2 {
 		break
 	}
 	got = flowjson.Users[0]
@@ -265,8 +262,7 @@ func TestDb(t *testing.T) {
 	client3.ClearChannel()
 	go client3.TxManage(flowjson)
 	ch3 := client3.Channel()
-	for f := range ch3 {
-		*flowjson = f
+	for flowjson = range ch3 {
 		break
 	}
 	got = flowjson.Users[0]

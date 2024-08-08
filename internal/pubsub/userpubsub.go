@@ -13,24 +13,24 @@ import (
 	"github.com/retinotopic/GoChat/internal/db"
 )
 
-type UserPubSub struct {
-	Db      *db.PgClient
-	Conn    *websocket.Conn
-	WriteCh chan db.FlowJSON
-	Upubsub *redis.PubSub
-	Pub     *redis.Client
+type userPubSub struct {
+	db      *db.PgClient
+	conn    *websocket.Conn
+	writeCh chan *db.FlowJSON
+	upubsub *redis.PubSub
+	pub     *redis.Client
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 
-func (u *UserPubSub) WsHandle() {
+func (u *userPubSub) WsHandle() {
 	defer func() {
-		u.Conn.Close()
+		u.conn.Close()
 	}()
 	go u.ReadDB()
 	errs := make(chan error, 1)
-	u.Conn.SetPongHandler(func(string) error {
-		u.Conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+	u.conn.SetPongHandler(func(string) error {
+		u.conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 		return nil
 	})
 	go func() {
@@ -38,7 +38,7 @@ func (u *UserPubSub) WsHandle() {
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			err := u.Conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(9*time.Second))
+			err := u.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(9*time.Second))
 			if err != nil {
 				log.Println("server ping error:", err)
 				errs <- err
@@ -48,64 +48,86 @@ func (u *UserPubSub) WsHandle() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	u.Db.GetAllRooms(ctx, &db.FlowJSON{})
+	u.db.GetAllRooms(ctx, &db.FlowJSON{})
 	go u.WsReadRedis()
 	for {
 		flowjson := &db.FlowJSON{}
-		err := u.Conn.ReadJSON(flowjson)
+		err := u.conn.ReadJSON(flowjson)
 		if err != nil {
 			return
 		}
-		go u.Db.TxManage(flowjson)
+		go u.db.TxManage(flowjson)
 	}
 }
-func (u *UserPubSub) WsReadRedis() {
-	flowjson := db.FlowJSON{}
-	chps := u.Upubsub.Channel()
+func (u *userPubSub) WsReadRedis() {
+	var err error
+	chps := u.upubsub.Channel()
 	for message := range chps {
-		go func(message redis.Message) {
-			if err := json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
-				log.Fatalln(err, "unmarshalling error")
-			}
-			switch flowjson.Mode {
-			case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
-				u.Upubsub.Subscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"))
-			case "DeleteUsersFromRoom", "BlockUser":
-				u.Upubsub.Unsubscribe(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"))
-			}
-			u.WriteCh <- flowjson
-		}(*message)
+		flowjson := db.FlowJSON{}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+		defer cancel()
+		if err = json.Unmarshal([]byte(message.Payload), &flowjson); err != nil {
+			log.Println("unmarshalling error -> ", err)
+			u.conn.Close()
+			return
+		}
+		switch flowjson.Mode {
+		case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
+			err = u.upubsub.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+		case "DeleteUsersFromRoom", "BlockUser":
+			err = u.upubsub.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+		}
+		if err != nil {
+			log.Println(err, "publish || subscribe error ->", err)
+			u.conn.Close()
+			return
+		}
+		u.writeCh <- &flowjson
 	}
 }
 
 // stream for writing json to ws connection
-func (h *UserPubSub) WsWrite() {
-	for flowjson := range h.WriteCh {
-		err := h.Conn.WriteJSON(&flowjson)
+func (u *userPubSub) WsWrite() {
+	for flowjson := range u.writeCh {
+		err := u.conn.WriteJSON(&flowjson)
 		if err != nil {
+			log.Println("unmarshalling error ->", err)
+			u.conn.Close()
 			return
 		}
 	}
 }
-func (u *UserPubSub) ReadDB() {
-	ch := u.Db.Channel()
+func (u *userPubSub) ReadDB() {
+	ch := u.db.Channel()
+	var intcmd *redis.IntCmd
 	for flowjson := range ch {
-		u.WriteCh <- flowjson
+		u.writeCh <- flowjson
 		if flowjson.Err != nil {
 			continue
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+		defer cancel()
 		payload, err := json.Marshal(&flowjson)
 		if err != nil {
-			log.Fatalln(err, "unmarshalling error")
+			log.Println("unmarshalling error -> ", err)
+			u.conn.Close()
+			return
 		}
 		switch flowjson.Mode {
 		case "SendMessage":
-			u.Pub.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
+			intcmd = u.pub.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
 		default:
 			i := 1
 			for i = range flowjson.Users {
-				u.Pub.Publish(context.Background(), fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
+				if intcmd = u.pub.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload); intcmd.Err() != nil {
+					break
+				}
 			}
+		}
+		if intcmd.Err() != nil {
+			log.Println("publish error ->", err)
+			u.conn.Close()
+			return
 		}
 	}
 }
