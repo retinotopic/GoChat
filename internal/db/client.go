@@ -8,31 +8,33 @@ import (
 )
 
 func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
-	defer p.Mutex.Unlock()
-	var Rows pgx.Rows
-	Rows, flowjson.Err = p.Query(ctx,
-		`SELECT r.room_id,r.name
-		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
-		WHERE ru.user_id = $1 
-		ORDER BY r.last_activity DESC;
-		`, p.UserID)
-	err := Rows.Err()
-	if err != nil {
-		log.Println("query timeout", flowjson.Err)
-		flowjson.Err = err
-		return
-	}
-	p.Mutex.Lock()
-	for Rows.Next() {
-		err := Rows.Scan(&flowjson.Room)
+	p.Once.Do(func() {
+		var Rows pgx.Rows
+		Rows, flowjson.Err = p.Query(ctx,
+			`SELECT r.room_id,r.name
+			FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
+			WHERE ru.user_id = $1 
+			ORDER BY r.last_activity DESC;
+			`, p.UserID)
+		err := Rows.Err()
 		if err != nil {
-			log.Println("Error scanning rows:", err)
+			log.Println("query timeout", flowjson.Err)
 			flowjson.Err = err
 			return
 		}
-		p.Chan <- flowjson
-		p.RoomsPagination = append(p.RoomsPagination, flowjson.Room)
-	}
+
+		for Rows.Next() {
+			err := Rows.Scan(&flowjson.Room)
+			if err != nil {
+				log.Println("Error scanning rows:", err)
+				flowjson.Err = err
+				return
+			}
+			p.Chan <- flowjson
+			p.RoomsPagination = append(p.RoomsPagination, flowjson.Room)
+		}
+	})
+
 }
 
 // load messages from a room
@@ -81,14 +83,14 @@ func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
 		log.Println("Error getting room info", flowjson.Err)
 		return
 	}
-	p.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
+	p.toChannel(flowjson, Rows, &flowjson.User, &flowjson.Name)
 }
 
 func (p *PgClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")
-	p.toChannel(flowjson, Rows, &flowjson.Users[0], &flowjson.Name)
+	p.toChannel(flowjson, Rows, &flowjson.User, &flowjson.Name)
 }
 func (c *PgClient) toChannel(flowjson *FlowJSON, rows pgx.Rows, dest ...any) {
 	err := rows.Err() // checking for query timeout

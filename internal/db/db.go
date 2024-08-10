@@ -12,10 +12,11 @@ import (
 
 type FlowJSON struct {
 	Mode       string   `json:"Mode"`
-	Message    string   `json:"Message"`
+	Message    string   `json:"Message" db:"payload"`
 	Users      []uint32 `json:"Users"`
-	Room       uint32   `json:"Room"`
-	Name       string   `json:"Name"`
+	User       uint32   `json:"User" db:"user_id"`
+	Room       uint32   `json:"Room" db:"room_id"`
+	Name       string   `json:"Name" db:"username"`
 	Message_id string   `json:"Offset"`
 	ErrorMsg   string   `json:"ErrorMsg"`
 	Bool       bool     `json:"Bool"`
@@ -31,15 +32,22 @@ type PgClient struct {
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
-	funcmap          map[string]fnAPI
+	funcmap          map[string]funcapi
 	Chan             chan *FlowJSON
+	Once             sync.Once
 	*pgxpool.Pool
 }
-type fnAPI struct {
-	Fn         func(context.Context, *FlowJSON)
-	ClientOnly bool
-}
+type funcapi = func(context.Context, *FlowJSON)
 
+func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj *FlowJSON) {
+
+	defer cancelFunction()
+	fn, ok := p.funcmap[fj.Mode]
+	if ok {
+		fn(ctx, fj)
+	}
+
+}
 func (p *PgClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
 	_, flowjson.Err = p.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.Room)
 	if flowjson.Err != nil {

@@ -3,43 +3,16 @@ package db
 import (
 	"context"
 	"log"
-	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-var once sync.Once
-
-func (p *PgClient) TxManage(flowjson *FlowJSON) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	fn, ok := p.funcmap[flowjson.Mode]
-	if !ok { // if there is no such mode just ignore it
-		return
+func (p *PgClient) TxManage(next funcapi) funcapi {
+	return func(ctx context.Context, fj *FlowJSON) {
+		p.txBegin(ctx, fj)
+		next(ctx, fj)
+		p.txCommit(ctx, fj)
 	}
-
-	if fn.ClientOnly {
-		if flowjson.Mode == "GetAllRooms" {
-			once.Do(func() { fn.Fn(ctx, flowjson) })
-		} else {
-			fn.Fn(ctx, flowjson)
-		}
-		if flowjson.Err != nil {
-			flowjson.ErrorMsg = flowjson.Err.Error()
-			p.Chan <- flowjson
-		}
-		return
-	}
-	p.txBegin(ctx, flowjson)
-	fn.Fn(ctx, flowjson)
-	p.txCommit(ctx, flowjson)
-
-	if flowjson.Err != nil {
-		flowjson.ErrorMsg = flowjson.Err.Error()
-		log.Println(flowjson.Err)
-	}
-	p.Chan <- flowjson
 }
 func (p *PgClient) txBegin(ctx context.Context, flowjson *FlowJSON) {
 	flowjson.Tx, flowjson.Err = p.BeginTx(ctx, pgx.TxOptions{})

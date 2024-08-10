@@ -43,21 +43,21 @@ func (p *Pool) NewClient(ctx context.Context, sub string) (*PgClient, error) {
 		Name:   name,
 		Chan:   make(chan *FlowJSON, 1000),
 	}
-	pc.funcmap = map[string]fnAPI{
-		"GetAllRooms":         {pc.GetAllRooms, true},
-		"GetMessagesFromRoom": {pc.GetMessagesFromRoom, true},
-		"GetNextRooms":        {pc.GetNextRooms, true},
-		"FindUsers":           {pc.FindUsers, true},
-		"SendMessage":         {pc.SendMessage, false},
-		"CreateDuoRoom":       {pc.CreateDuoRoom, false},
-		"CreateGroupRoom":     {pc.CreateRoom, false},
-		"AddUsersToRoom":      {pc.AddUsersToRoom, false},
-		"DeleteUsersFromRoom": {pc.DeleteUsersFromRoom, false},
-		"BlockUser":           {pc.BlockUser, false},
-		"UnblockUser":         {pc.UnblockUser, false},
-		"ChangeUsername":      {pc.ChangeUsername, false},
-		"ChangePrivacyDirect": {pc.ChangePrivacyDirect, false},
-		"ChangePrivacyGroup":  {pc.ChangePrivacyGroup, false},
+	pc.funcmap = map[string]funcapi{
+		"GetAllRooms":         pc.GetAllRooms,
+		"GetMessagesFromRoom": pc.GetMessagesFromRoom,
+		"GetNextRooms":        pc.GetNextRooms,
+		"FindUsers":           pc.FindUsers,
+		"SendMessage":         pc.SendMessage,
+		"ChangeUsername":      pc.ChangeUsername,
+		"ChangePrivacyDirect": pc.ChangePrivacyDirect,
+		"ChangePrivacyGroup":  pc.ChangePrivacyGroup,
+		"CreateDuoRoom":       pc.TxManage(pc.CreateDuoRoom),
+		"CreateGroupRoom":     pc.TxManage(pc.CreateDuoRoom),
+		"AddUsersToRoom":      pc.TxManage(pc.CreateDuoRoom),
+		"DeleteUsersFromRoom": pc.TxManage(pc.CreateDuoRoom),
+		"BlockUser":           pc.TxManage(pc.CreateDuoRoom),
+		"UnblockUser":         pc.TxManage(pc.CreateDuoRoom),
 	}
 	return pc, nil
 }

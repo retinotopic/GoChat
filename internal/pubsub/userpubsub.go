@@ -45,18 +45,19 @@ func (u *userPubSub) WsHandle() {
 			}
 		}
 	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	u.db.GetAllRooms(ctx, &db.FlowJSON{})
 	go u.WsReadRedis()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	u.db.FuncApi(ctx, cancel, &db.FlowJSON{Mode: "GetAllRooms"})
+
 	for {
 		flowjson := &db.FlowJSON{}
 		err := u.conn.ReadJSON(flowjson)
 		if err != nil {
 			return
 		}
-		go u.db.TxManage(flowjson)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+		go u.db.FuncApi(ctx, cancel, flowjson)
 	}
 }
 func (u *userPubSub) WsReadRedis() {
