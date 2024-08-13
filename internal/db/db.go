@@ -9,28 +9,29 @@ import (
 )
 
 type FlowJSON struct {
-	Mode       string   `json:"Mode"`
-	Message    string   `json:"Message" db:"payload"`
-	Users      []uint32 `json:"Users"`
-	User       uint32   `json:"User" db:"user_id"`
-	Room       uint32   `json:"Room" db:"room_id"`
-	Name       string   `json:"Name" db:"username"`
-	Message_id string   `json:"Offset"`
-	ErrorMsg   string   `json:"ErrorMsg"`
-	Bool       bool     `json:"Bool"`
+	Mode      string   `json:"Mode"`
+	Message   string   `json:"Message" db:"payload"`
+	Users     []uint32 `json:"Users"`
+	User      uint32   `json:"User" db:"user_id"`
+	Room      uint32   `json:"Room" db:"room_id"`
+	Name      string   `json:"Name" db:"name"`
+	MessageId string   `json:"Offset" db:"message_id"`
+	ErrorMsg  string   `json:"ErrorMsg"`
+	Bool      bool     `json:"Bool"`
 }
 
 type PgClient struct {
 	Sub              string
 	Name             string
 	UserID           uint32
-	Mutex            sync.Mutex
+	NRMutex          sync.Mutex
+	GRMutex          sync.Mutex
 	RoomsPagination  []uint32
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
 	funcmap          map[string]funcapi
 	Chan             chan FlowJSON
-	Once             sync.Once
+	ReOnce           bool
 	*pgxpool.Pool
 }
 type funcapi = func(context.Context, *FlowJSON) error
