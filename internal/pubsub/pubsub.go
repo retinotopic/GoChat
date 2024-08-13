@@ -33,7 +33,7 @@ func (p *pubsub) newUserPubSub(ctx context.Context, dbc *db.PgClient, conn *webs
 	u := &userPubSub{
 		db:      dbc,
 		conn:    conn,
-		writeCh: make(chan *db.FlowJSON, 100),
+		writeCh: make(chan db.FlowJSON, 100),
 		upubsub: p.Subscribe(ctx, fmt.Sprintf("%d%s", dbc.UserID, "user")),
 		pub:     p.Client,
 	}

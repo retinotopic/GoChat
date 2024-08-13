@@ -16,7 +16,7 @@ import (
 type userPubSub struct {
 	db      *db.PgClient
 	conn    *websocket.Conn
-	writeCh chan *db.FlowJSON
+	writeCh chan db.FlowJSON
 	upubsub *redis.PubSub
 	pub     *redis.Client
 }
@@ -83,7 +83,7 @@ func (u *userPubSub) WsReadRedis() {
 			u.conn.Close()
 			return
 		}
-		u.writeCh <- &flowjson
+		u.writeCh <- flowjson
 	}
 }
 
@@ -103,7 +103,7 @@ func (u *userPubSub) ReadDB() {
 	var intcmd *redis.IntCmd
 	for flowjson := range ch {
 		u.writeCh <- flowjson
-		if flowjson.Err != nil {
+		if len(flowjson.ErrorMsg) != 0 {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)

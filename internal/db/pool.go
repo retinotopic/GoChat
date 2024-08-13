@@ -41,7 +41,7 @@ func (p *Pool) NewClient(ctx context.Context, sub string) (*PgClient, error) {
 		Sub:    sub,
 		UserID: userid,
 		Name:   name,
-		Chan:   make(chan *FlowJSON, 1000),
+		Chan:   make(chan FlowJSON, 1000),
 	}
 	pc.funcmap = map[string]funcapi{
 		"GetAllRooms":         pc.GetAllRooms,

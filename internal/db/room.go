@@ -4,62 +4,68 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // method for safely creating unique duo room
-func (p *PgClient) CreateDuoRoom(ctx context.Context, flowjson *FlowJSON) {
-	p.IsDuoRoomExist(ctx, flowjson)
-	if flowjson.Err != nil {
-		log.Println("IsDuoRoomExist error")
-		return
+func (p *PgClient) CreateDuoRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+	err := p.IsDuoRoomExist(ctx, tx, fj)
+	if err != nil {
+		return err
 	}
-	if flowjson.Room == 0 {
-		p.CreateRoom(ctx, flowjson)
-		if flowjson.Err != nil {
-			log.Println("CreateRoom error")
-			return
+	if fj.Room == 0 {
+		err = p.CreateRoom(ctx, tx, fj)
+		if err != nil {
+			return err
 		}
-		_, flowjson.Err = flowjson.Tx.Exec(context.Background(), `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, flowjson.Users[0], flowjson.Users[1], flowjson.Room)
+		_, err = tx.Exec(context.Background(), `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, fj.Users[0], fj.Users[1], fj.Room)
 	} else {
-		p.AddUsersToRoom(ctx, flowjson)
+		p.AddUsersToRoom(ctx, tx, fj)
 	}
+	return err
 }
-func (p *PgClient) IsDuoRoomExist(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
 	var rows pgx.Rows
-	rows, flowjson.Err = flowjson.Tx.Query(context.Background(), `SELECT room_id
+	rows, err := tx.Query(context.Background(), `SELECT room_id
 		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, flowjson.Users[0], flowjson.Users[1])
-	if flowjson.Err != nil {
-		return
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, fj.Users[0], fj.Users[1])
+	if err != nil {
+		return err
 	}
 	if rows.Next() {
-		flowjson.Err = rows.Scan(&flowjson.Room)
-		rows.Close()
+		err = rows.Scan(&fj.Room)
+		defer rows.Close()
+		if err != nil {
+			return err
+		}
 	}
+	return err
 }
-func (p *PgClient) CreateRoom(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
 	var is_group bool
-	if flowjson.Mode != "CreateDuoRoom" {
+	if fj.Mode != "CreateDuoRoom" {
 		is_group = true
 	}
 	// create new room and return room id
-	flowjson.Err = flowjson.Tx.QueryRow(context.Background(), "INSERT INTO rooms (name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id", flowjson.Name, is_group, p.UserID).Scan(&flowjson.Room)
-	if flowjson.Err != nil {
-		log.Println("Error inserting room:", flowjson.Err)
-		return
+	err := tx.QueryRow(context.Background(), "INSERT INTO rooms (name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id", fj.Name, is_group, p.UserID).Scan(&fj.Room)
+	if err != nil {
+		return err
 	}
-	p.AddUsersToRoom(ctx, flowjson)
+	err = p.AddUsersToRoom(ctx, tx, fj)
+	if err != nil {
+		return err
+	}
+	return err
 }
-func (p *PgClient) AddUsersToRoom(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
 	var rows pgx.Rows
-	if flowjson.Mode == "AddUsersToRoom" {
-		if err := flowjson.Tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Room, p.UserID).Scan(new(int)); err != nil {
-			flowjson.Err = errors.New("you have no permission to add users to this room")
-			log.Println("you have no permission to add users to this room")
-			return
+	if fj.Mode == "AddUsersToRoom" {
+		if err := tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
+			err = errors.New("you have no permission to add users to this room")
+			if err != nil {
+				return err
+			}
 		}
 	}
 	query := `INSERT INTO room_users_info (room_id,user_id)
@@ -72,28 +78,34 @@ func (p *PgClient) AddUsersToRoom(ctx context.Context, flowjson *FlowJSON) {
 			WHERE bu.blocked_by_user_id IS NULL RETURNING user_id;`
 	var condition string
 	var is_group bool
-	if flowjson.Mode == "CreateDuoRoom" {
+	if fj.Mode == "CreateDuoRoom" {
 		condition = "u.allow_direct_messages = true"
 	} else {
 		condition = "u.allow_group_invites = true"
 		is_group = true
 	}
 	query = fmt.Sprintf(query, condition)
-	rows, flowjson.Err = flowjson.Tx.Query(context.Background(), query, flowjson.Room, flowjson.Users, is_group, p.UserID)
+	rows, err := tx.Query(context.Background(), query, fj.Room, fj.Users, is_group, p.UserID)
+	if err != nil {
+		return err
+	}
 	counter := 0
 	for rows.Next() {
 		counter++
 	}
-	if len(flowjson.Users) != counter {
-		flowjson.Err = errors.New("at least one user cannot be added to the room")
+	if len(fj.Users) != counter {
+		err = errors.New("at least one user cannot be added to the room")
 	}
+	return err
 }
-func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, flowjson *FlowJSON) {
-	if flowjson.Mode == "DeleteUsersFromRoom" {
-		if len(flowjson.Users) != 1 || flowjson.Users[0] != p.UserID {
-			if err := flowjson.Tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, flowjson.Room, p.UserID).Scan(new(int)); err != nil {
-				flowjson.Err = errors.New("you have no permission to delete users from this room")
-				return
+func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+	if fj.Mode == "DeleteUsersFromRoom" {
+		if len(fj.Users) != 1 || fj.Users[0] != p.UserID {
+			if err := tx.QueryRow(context.Background(), `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
+				err = errors.New("you have no permission to delete users from this room")
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -106,8 +118,45 @@ func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, flowjson *FlowJSON) 
 	);`
 	var is_group bool
 
-	if flowjson.Mode != "BlockUser" {
+	if fj.Mode != "BlockUser" {
 		is_group = true
 	}
-	_, flowjson.Err = flowjson.Tx.Exec(context.Background(), query, flowjson.Users, flowjson.Room, is_group)
+	_, err := tx.Exec(context.Background(), query, fj.Users, fj.Room, is_group)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+// Blocking user and delete user from duo room
+func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+
+	err := p.IsDuoRoomExist(ctx, tx, fj)
+
+	if err != nil {
+		return err
+	}
+	if fj.Room != 0 {
+		err := p.DeleteUsersFromRoom(ctx, tx, fj)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
+		VALUES ($1, $2)`, fj.Users[0], fj.Users[1])
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+// Unblocking user
+func (c *PgClient) UnblockUser(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+	_, err := tx.Exec(ctx, `DELETE FROM blocked_users 
+			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, fj.Users[1])
+	if err != nil {
+		return err
+	}
+	return err
 }

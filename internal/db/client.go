@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) error {
 	p.Once.Do(func() {
 		var Rows pgx.Rows
 		Rows, flowjson.Err = p.Query(ctx,
@@ -38,7 +38,7 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *FlowJSON) {
 }
 
 // load messages from a room
-func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) error {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT payload,user_id,
@@ -52,7 +52,7 @@ func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) 
 	p.toChannel(flowjson, Rows, flowjson.Message, flowjson.Users[0])
 }
 
-func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) error {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 	var arrayrooms []uint32
@@ -73,7 +73,7 @@ func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) {
 	}
 }
 
-func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) error {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT u.user_id,u.name
@@ -86,7 +86,7 @@ func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) {
 	p.toChannel(flowjson, Rows, &flowjson.User, &flowjson.Name)
 }
 
-func (p *PgClient) FindUsers(ctx context.Context, flowjson *FlowJSON) {
+func (p *PgClient) FindUsers(ctx context.Context, flowjson *FlowJSON) error {
 	var Rows pgx.Rows
 	Rows, flowjson.Err = p.Query(ctx,
 		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")

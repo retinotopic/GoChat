@@ -2,10 +2,8 @@ package db
 
 import (
 	"context"
-	"log"
 	"sync"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/pkg/str"
 )
@@ -20,8 +18,6 @@ type FlowJSON struct {
 	Message_id string   `json:"Offset"`
 	ErrorMsg   string   `json:"ErrorMsg"`
 	Bool       bool     `json:"Bool"`
-	Tx         pgx.Tx
-	Err        error
 }
 
 type PgClient struct {
@@ -33,86 +29,54 @@ type PgClient struct {
 	RoomsCount       uint8 // no more than 250
 	PaginationOffset uint8
 	funcmap          map[string]funcapi
-	Chan             chan *FlowJSON
+	Chan             chan FlowJSON
 	Once             sync.Once
 	*pgxpool.Pool
 }
-type funcapi = func(context.Context, *FlowJSON)
+type funcapi = func(context.Context, *FlowJSON) error
 
 func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj *FlowJSON) {
-
 	defer cancelFunction()
 	fn, ok := p.funcmap[fj.Mode]
 	if ok {
-		fn(ctx, fj)
-	}
-
-}
-func (p *PgClient) SendMessage(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = p.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.Room)
-	if flowjson.Err != nil {
-		log.Println("Error inserting message:", flowjson.Err)
-		return
-	}
-}
-func (p *PgClient) ChangeUsername(ctx context.Context, flowjson *FlowJSON) {
-	username := str.NormalizeString(flowjson.Name)
-	_, flowjson.Err = p.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, p.UserID)
-	if flowjson.Err != nil {
-		log.Println("Error changing username", flowjson.Err)
-		return
-	}
-}
-func (p *PgClient) ChangePrivacyDirect(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = p.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
-	if flowjson.Err != nil {
-		log.Println("Error changing username", flowjson.Err)
-		return
-	}
-}
-func (p *PgClient) ChangePrivacyGroup(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = p.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
-	if flowjson.Err != nil {
-		log.Println("Error changing username", flowjson.Err)
-		return
-	}
-}
-
-// Blocking user and delete user from duo room
-func (p *PgClient) BlockUser(ctx context.Context, flowjson *FlowJSON) {
-
-	p.IsDuoRoomExist(ctx, flowjson)
-	if flowjson.Err != nil {
-		log.Println(flowjson.Err, "isroomexist err")
-		return
-	}
-	if flowjson.Room != 0 {
-		p.DeleteUsersFromRoom(ctx, flowjson)
-		if flowjson.Err != nil {
-			log.Println(flowjson.Err, "DeleteUsersFromRoom err")
-			return
+		err := fn(ctx, fj)
+		if err != nil {
+			fj.ErrorMsg = err.Error()
+			p.Chan <- *fj
 		}
 	}
-
-	_, flowjson.Err = flowjson.Tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
-		VALUES ($1, $2)`, flowjson.Users[0], flowjson.Users[1])
-	if flowjson.Err != nil {
-		log.Println("Error blocking user", flowjson.Err)
-		return
+}
+func (p *PgClient) SendMessage(ctx context.Context, flowjson *FlowJSON) error {
+	_, err := p.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.Room)
+	if err != nil {
+		return err
 	}
+	return err
+}
+func (p *PgClient) ChangeUsername(ctx context.Context, flowjson *FlowJSON) error {
+	username := str.NormalizeString(flowjson.Name)
+	_, err := p.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, p.UserID)
+	if err != nil {
+		return err
+	}
+	return err
+}
+func (p *PgClient) ChangePrivacyDirect(ctx context.Context, flowjson *FlowJSON) error {
+	_, err := p.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
+	if err != nil {
+		return err
+	}
+	return err
+}
+func (p *PgClient) ChangePrivacyGroup(ctx context.Context, flowjson *FlowJSON) error {
+	_, err := p.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
+	if err != nil {
+		return err
+	}
+	return err
 }
 
-// Unblocking user
-func (c *PgClient) UnblockUser(ctx context.Context, flowjson *FlowJSON) {
-	_, flowjson.Err = flowjson.Tx.Exec(ctx, `DELETE FROM blocked_users 
-			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, flowjson.Users[1])
-	if flowjson.Err != nil {
-		log.Println("Error unblocking user", flowjson.Err)
-		return
-	}
-}
-
-func (c *PgClient) Channel() <-chan *FlowJSON {
+func (c *PgClient) Channel() <-chan FlowJSON {
 	return c.Chan
 }
 func (c *PgClient) ClearChannel() {
