@@ -16,9 +16,10 @@ import (
 
 func main() {
 	addr := flag.String("addr", "localhost:8080", "address to listen on")
-	addrpb := flag.String("addrQueue", "localhost:6379", "redis pubsub address")
+	addrpb := flag.String("addrpb", "localhost:6379", "redis pubsub address")
+	addrdb := flag.String("addrdb", "localhost:5432", "postgres address")
 	mp := make(map[string]provider.Provider)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	google, err := google.New(ctx, os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "/refresh")
 	if err != nil {
@@ -36,9 +37,10 @@ func main() {
 
 	flag.Parse()
 	fmt.Println(*addr)
-	srv := router.NewRouter(*addr, mp, *addrpb)
-	err = srv.Run()
+	srv := router.NewRouter(*addr, mp, *addrpb, *addrdb)
+
+	err = srv.Run(ctx)
 	if err != nil {
-		log.Println(err)
+		log.Fatalln(err)
 	}
 }
