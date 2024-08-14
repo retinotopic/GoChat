@@ -46,7 +46,10 @@ func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *FlowJSON) 
 	if err != nil {
 		return err
 	}
-	p.toChannel(rows)
+	err = p.toChannel(rows)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -63,7 +66,10 @@ func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *FlowJSON) error {
 	if err != nil {
 		return err
 	}
-	p.toChannel(rows)
+	err = p.toChannel(rows)
+	if err != nil {
+		return err
+	}
 
 	p.PaginationOffset += 30
 	return err
@@ -77,7 +83,10 @@ func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *FlowJSON) err
 	if err != nil {
 		return err
 	}
-	p.toChannel(rows)
+	err = p.toChannel(rows)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -87,15 +96,19 @@ func (p *PgClient) FindUsers(ctx context.Context, flowjson *FlowJSON) error {
 	if err != nil {
 		return err
 	}
-	p.toChannel(rows)
+	err = p.toChannel(rows)
+	if err != nil {
+		return err
+	}
 	return err
 }
-func (p *PgClient) toChannel(rows pgx.Rows) {
+func (p *PgClient) toChannel(rows pgx.Rows) error {
 	fjarr, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[FlowJSON])
 	if err != nil {
-		return
+		return err
 	}
 	for _, v := range fjarr {
 		p.Chan <- v
 	}
+	return err
 }
