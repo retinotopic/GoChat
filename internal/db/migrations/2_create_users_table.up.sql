@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.users (
     user_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     subject character varying(50) NOT NULL,
@@ -10,3 +11,6 @@ CREATE TABLE public.users (
 );
 
 CREATE INDEX trgm_idx_users_username ON public.users USING gin (username public.gin_trgm_ops);
+
+-- +goose Down
+DROP TABLE IF EXISTS public.users;

@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.blocked_users (
     blocked_users_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     blocked_by_user_id integer NOT NULL,
@@ -8,3 +9,6 @@ CREATE TABLE public.blocked_users (
 );
 
 CREATE UNIQUE INDEX blocked_users_index ON public.blocked_users USING btree (blocked_by_user_id, blocked_user_id) WITH (deduplicate_items='true');
+
+-- +goose Down
+DROP TABLE IF EXISTS public.blocked_users;

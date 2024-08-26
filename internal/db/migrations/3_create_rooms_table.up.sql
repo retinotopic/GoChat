@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.rooms (
     room_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     name character varying(50),
@@ -10,3 +11,6 @@ CREATE TABLE public.rooms (
 );
 
 CREATE INDEX room_index ON public.rooms USING btree (room_id) WITH (deduplicate_items='true');
+
+-- +goose Down
+DROP TABLE IF EXISTS public.rooms;

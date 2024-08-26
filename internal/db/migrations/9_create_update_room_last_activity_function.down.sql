@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS public.update_room_last_activity();

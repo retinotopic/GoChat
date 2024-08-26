@@ -76,6 +76,7 @@ func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) 
 			LEFT JOIN blocked_users bu ON (bu.blocked_by_user_id = users_to_add.user_id AND bu.blocked_user_id = $4) 
 			OR (bu.blocked_by_user_id = $4 AND bu.blocked_user_id = users_to_add.user_id )
 			WHERE bu.blocked_by_user_id IS NULL RETURNING user_id;`
+
 	var condition string
 	var is_group bool
 	if fj.Mode == "CreateDuoRoom" {

@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS public.check_room_limit();

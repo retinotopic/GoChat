@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.room_users_info (
     room_user_info_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     room_id integer NOT NULL,
@@ -9,3 +10,6 @@ CREATE TABLE public.room_users_info (
 
 CREATE UNIQUE INDEX user_room_unique_index ON public.room_users_info USING btree (user_id, room_id) WITH (deduplicate_items='true');
 CREATE INDEX rui_room_index ON public.room_users_info USING btree (room_id) WITH (deduplicate_items='true');
+
+-- +goose Down
+DROP TABLE IF EXISTS public.room_users_info;

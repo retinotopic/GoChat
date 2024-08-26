@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.duo_rooms (
     duo_room_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     user_id1 integer NOT NULL,
@@ -10,3 +11,6 @@ CREATE TABLE public.duo_rooms (
 );
 
 CREATE UNIQUE INDEX user1_user2_unique_index ON public.duo_rooms USING btree (user_id1, user_id2) WITH (deduplicate_items='true');
+
+-- +goose Down
+DROP TABLE IF EXISTS public.duo_rooms;

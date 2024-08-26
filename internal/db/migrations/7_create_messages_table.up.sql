@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE public.messages (
     message_id bigint NOT NULL GENERATED ALWAYS AS IDENTITY,
     payload text NOT NULL,
@@ -9,3 +10,6 @@ CREATE TABLE public.messages (
 );
 
 CREATE INDEX message_room_index ON public.messages USING btree (room_id) WITH (deduplicate_items='true');
+
+-- +goose Down
+DROP TABLE IF EXISTS public.messages;

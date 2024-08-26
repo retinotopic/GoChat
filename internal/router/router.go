@@ -37,7 +37,7 @@ func (r *router) Run(ctx context.Context) error {
 	if err := db.Close(); err != nil {
 		return err
 	}
-	middleware := middleware.UserMiddleware{GetProvider: r.Auth.GetProvider}
+	middleware := middleware.UserMiddleware{GetProvider: r.Auth.FetchUser}
 
 	mux := http.NewServeMux()
 	pb := pubsub.NewPubsub(pool, r.PubSubAddr)
