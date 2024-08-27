@@ -6,10 +6,11 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/retinotopic/GoChat/internal/models"
 )
 
 // method for safely creating unique duo room
-func (p *PgClient) CreateDuoRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) CreateDuoRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	err := p.IsDuoRoomExist(ctx, tx, fj)
 	if err != nil {
 		return err
@@ -25,7 +26,7 @@ func (p *PgClient) CreateDuoRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) e
 	}
 	return err
 }
-func (p *PgClient) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	var rows pgx.Rows
 	rows, err := tx.Query(ctx, `SELECT room_id
 		FROM duo_rooms
@@ -42,7 +43,7 @@ func (p *PgClient) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, fj *FlowJSON) 
 	}
 	return err
 }
-func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	var is_group bool
 	if fj.Mode != "CreateDuoRoom" {
 		is_group = true
@@ -58,7 +59,7 @@ func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) erro
 	}
 	return err
 }
-func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	var rows pgx.Rows
 	if fj.Mode == "AddUsersToRoom" {
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
@@ -99,7 +100,7 @@ func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) 
 	}
 	return err
 }
-func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	if fj.Mode == "DeleteUsersFromRoom" {
 		if len(fj.Users) != 1 || fj.Users[0] != p.UserID {
 			if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
@@ -130,7 +131,7 @@ func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *FlowJ
 }
 
 // Blocking user and delete user from duo room
-func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 
 	err := p.IsDuoRoomExist(ctx, tx, fj)
 
@@ -153,7 +154,7 @@ func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error
 }
 
 // Unblocking user
-func (c *PgClient) UnblockUser(ctx context.Context, tx pgx.Tx, fj *FlowJSON) error {
+func (c *PgClient) UnblockUser(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	_, err := tx.Exec(ctx, `DELETE FROM blocked_users 
 			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, c.UserID, fj.Users[1])
 	if err != nil {

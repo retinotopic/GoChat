@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/retinotopic/GoChat/internal/models"
 )
 
 type Pool struct {
@@ -28,7 +29,7 @@ func (p *Pool) NewUser(ctx context.Context, sub, username string) error {
 	_, err := p.Pl.Exec(ctx, "INSERT INTO users (subject,username,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, username)
 	return err
 }
-func (p *Pool) NewClient(ctx context.Context, sub string) (*PgClient, error) {
+func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
 	// check if user exists
 	row := p.Pl.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
@@ -41,7 +42,7 @@ func (p *Pool) NewClient(ctx context.Context, sub string) (*PgClient, error) {
 		Sub:    sub,
 		UserID: userid,
 		Name:   name,
-		Chan:   make(chan FlowJSON, 1000),
+		Chan:   make(chan models.Flowjson, 1000),
 	}
 	pc.funcmap = map[string]funcapi{
 		"GetAllRooms":         pc.GetAllRooms,
