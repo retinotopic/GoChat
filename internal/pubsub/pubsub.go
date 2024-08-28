@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/goccy/go-json"
 
 	"github.com/gorilla/websocket"
+	"github.com/retinotopic/GoChat/internal/middleware"
 	"github.com/retinotopic/GoChat/internal/models"
 )
 
@@ -17,10 +19,29 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
+
+	sub := middleware.GetUser(r.Context())
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	err = p.Db.GetClient(r.Context(), sub)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	p.conn = conn
+	p.WsHandle()
+
+}
+
 type Databaser interface {
 	FuncApi(context.Context, context.CancelFunc, *models.Flowjson)
 	PubSubActions(int) []string
 	Channel() <-chan models.Flowjson
+	GetClient(context.Context, string) error
 }
 type PubSuber interface {
 	Unsubscribe(context.Context, ...string) error
@@ -31,8 +52,8 @@ type PubSuber interface {
 type PubSub struct {
 	conn    *websocket.Conn
 	writeCh chan models.Flowjson
-	pb      PubSuber
-	db      Databaser
+	Pb      PubSuber
+	Db      Databaser
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -41,7 +62,7 @@ func (p *PubSub) WsHandle() {
 	defer func() {
 		p.conn.Close()
 	}()
-	go p.ReadDB()
+	go p.ReadDb()
 	errs := make(chan error, 1)
 	p.conn.SetPongHandler(func(string) error {
 		p.conn.SetReadDeadline(time.Now().Add(15 * time.Second))
@@ -62,7 +83,7 @@ func (p *PubSub) WsHandle() {
 	go p.WsReadRedis()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	p.db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})
+	p.Db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})
 
 	for {
 		flowjson := &models.Flowjson{}
@@ -71,12 +92,12 @@ func (p *PubSub) WsHandle() {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-		go p.db.FuncApi(ctx, cancel, flowjson)
+		go p.Db.FuncApi(ctx, cancel, flowjson)
 	}
 }
 func (p *PubSub) WsReadRedis() {
 	var err error
-	chps := p.db.Channel()
+	chps := p.Db.Channel()
 	for action := range chps {
 		flowjson := models.Flowjson{}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
@@ -87,10 +108,10 @@ func (p *PubSub) WsReadRedis() {
 			return
 		}
 		switch {
-		case contains(p.db.PubSubActions(0), flowjson.Mode):
-			err = p.pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
-		case contains(p.db.PubSubActions(1), flowjson.Mode):
-			err = p.pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+		case contains(p.Db.PubSubActions(0), flowjson.Mode):
+			err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+		case contains(p.Db.PubSubActions(1), flowjson.Mode):
+			err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
 		}
 		if err != nil {
 			log.Println(err, "publish || subscribe error ->", err)
@@ -112,8 +133,8 @@ func (p *PubSub) WsWrite() {
 		}
 	}
 }
-func (p *PubSub) ReadDB() {
-	ch := p.db.Channel()
+func (p *PubSub) ReadDb() {
+	ch := p.Db.Channel()
 
 	for flowjson := range ch {
 		p.writeCh <- flowjson
@@ -129,12 +150,12 @@ func (p *PubSub) ReadDB() {
 			return
 		}
 		switch {
-		case contains(p.db.PubSubActions(2), flowjson.Mode):
-			err = p.pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
+		case contains(p.Db.PubSubActions(2), flowjson.Mode):
+			err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
 		default:
 			i := 1
 			for i = range flowjson.Users {
-				err = p.pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
+				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
 				if err != nil {
 					break
 				}

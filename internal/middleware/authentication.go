@@ -2,21 +2,16 @@ package middleware
 
 import (
 	"net/http"
-
-	"github.com/retinotopic/tinyauth/provider"
 )
 
 type UserMiddleware struct {
-	GetProvider func(http.ResponseWriter, *http.Request) (provider.Provider, error)
+	FetchUser func(http.ResponseWriter, *http.Request) (string, error)
 }
 
-func (um *UserMiddleware) FetchUser(next http.Handler) http.Handler {
+func (um *UserMiddleware) GetUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		prvdr, err := um.GetProvider(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-		sub, err := prvdr.FetchUser(w, r)
+		sub, err := um.FetchUser(w, r)
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 

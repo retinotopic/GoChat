@@ -53,10 +53,10 @@ func (pm *ProviderMap) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	prvdr.CompleteAuth(w, r)
 }
-func (pm *ProviderMap) FetchUser(w http.ResponseWriter, r *http.Request) {
+func (pm *ProviderMap) FetchUser(w http.ResponseWriter, r *http.Request) (string, error) {
 	prvdr, err := pm.getProvider(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-	prvdr.FetchUser(w, r)
+	return prvdr.FetchUser(w, r)
 }
