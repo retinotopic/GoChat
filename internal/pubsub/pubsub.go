@@ -19,7 +19,7 @@ var upgrader = websocket.Upgrader{
 
 type Databaser interface {
 	FuncApi(context.Context, context.CancelFunc, *models.Flowjson)
-	PubSubActions(int) [][]string
+	PubSubActions(int) []string
 	Channel() <-chan models.Flowjson
 }
 type PubSuber interface {
@@ -86,10 +86,10 @@ func (p *PubSub) WsReadRedis() {
 			p.conn.Close()
 			return
 		}
-		switch flowjson.Mode {
-		case "CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom":
+		switch {
+		case contains(p.db.PubSubActions(0), flowjson.Mode):
 			err = p.pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
-		case "DeleteUsersFromRoom", "BlockUser":
+		case contains(p.db.PubSubActions(1), flowjson.Mode):
 			err = p.pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
 		}
 		if err != nil {
@@ -128,8 +128,8 @@ func (p *PubSub) ReadDB() {
 			p.conn.Close()
 			return
 		}
-		switch flowjson.Mode {
-		case "SendMessage":
+		switch {
+		case contains(p.db.PubSubActions(2), flowjson.Mode):
 			err = p.pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
 		default:
 			i := 1
@@ -146,4 +146,12 @@ func (p *PubSub) ReadDB() {
 			return
 		}
 	}
+}
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
