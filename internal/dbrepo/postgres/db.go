@@ -21,6 +21,7 @@ type PgClient struct {
 	funcmap          map[string]funcapi
 	Chan             chan models.Flowjson
 	ReOnce           bool
+	actions          [][]string
 	*pgxpool.Pool
 }
 type funcapi = func(context.Context, *models.Flowjson) error
@@ -73,4 +74,11 @@ func (c *PgClient) ClearChannel() {
 	for len(c.Chan) > 0 {
 		<-c.Chan
 	}
+}
+
+func (c *PgClient) PubSubActions(id int) []string {
+	if id >= len(c.actions) {
+		return []string{}
+	}
+	return c.actions[id]
 }

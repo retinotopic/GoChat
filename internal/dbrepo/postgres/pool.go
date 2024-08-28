@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/internal/models"
 )
@@ -30,19 +32,24 @@ func (p *Pool) NewUser(ctx context.Context, sub, username string) error {
 	return err
 }
 func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
-	// check if user exists
 	row := p.Pl.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
 	var userid uint32
 	err := row.Scan(&userid, &name)
-	if err != nil {
-		return nil, err
+	if err == pgx.ErrNoRows {
+		err = p.Pl.QueryRow(ctx, "INSERT INTO users (subject, username) VALUES ($1, $2) RETURNING user_id, username", sub, "New User").Scan(&userid, &name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new user: %v", err)
+		}
+	} else {
+		return nil, fmt.Errorf("failed to query user: %v", err)
 	}
 	pc := &PgClient{
-		Sub:    sub,
-		UserID: userid,
-		Name:   name,
-		Chan:   make(chan models.Flowjson, 1000),
+		Sub:     sub,
+		UserID:  userid,
+		Name:    name,
+		Chan:    make(chan models.Flowjson, 1000),
+		actions: [][]string{{"CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom"}, {"DeleteUsersFromRoom", "BlockUser"}, {"SendMessage"}},
 	}
 	pc.funcmap = map[string]funcapi{
 		"GetAllRooms":         pc.GetAllRooms,
