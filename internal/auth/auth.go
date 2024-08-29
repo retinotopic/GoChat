@@ -11,7 +11,7 @@ import (
 
 type ProviderMap map[string]provider.Provider
 
-func (pm ProviderMap) getProvider(w http.ResponseWriter, r *http.Request) (provider.Provider, error) {
+func (pm ProviderMap) getProvider(r *http.Request) (provider.Provider, error) {
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		return nil, err
@@ -39,22 +39,22 @@ func (pm ProviderMap) getProvider(w http.ResponseWriter, r *http.Request) (provi
 	}
 	return nil, errors.New("no such provider")
 }
-func (pm *ProviderMap) BeginAuth(w http.ResponseWriter, r *http.Request) {
-	prvdr, err := pm.getProvider(w, r)
+func (pm ProviderMap) BeginAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := pm.getProvider(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	prvdr.BeginAuth(w, r)
 }
-func (pm *ProviderMap) CompleteAuth(w http.ResponseWriter, r *http.Request) {
-	prvdr, err := pm.getProvider(w, r)
+func (pm ProviderMap) CompleteAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := pm.getProvider(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	prvdr.CompleteAuth(w, r)
 }
-func (pm *ProviderMap) FetchUser(w http.ResponseWriter, r *http.Request) (string, error) {
-	prvdr, err := pm.getProvider(w, r)
+func (pm ProviderMap) FetchUser(w http.ResponseWriter, r *http.Request) (string, error) {
+	prvdr, err := pm.getProvider(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}

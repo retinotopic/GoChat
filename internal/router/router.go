@@ -37,14 +37,14 @@ func (r *router) Run(ctx context.Context) error {
 	if err := dbs.Close(); err != nil {
 		return err
 	}
-	middleware := middleware.UserMiddleware{FetchUser: r.Auth.FetchUser}
+	middleware := middleware.UserMiddleware{Fetcher: r.Auth}
 	pb := pubsub.PubSub{Db: &db.PgClient{}}
 	mux := http.NewServeMux()
 	connect := http.HandlerFunc(pb.Connect)
 
 	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
 	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
-	mux.Handle("/connect", middleware.GetUser(connect))
+	mux.Handle("/connect", middleware.GetUserMW(connect))
 
 	err = http.ListenAndServe(r.Addr, mux)
 	if err != nil {

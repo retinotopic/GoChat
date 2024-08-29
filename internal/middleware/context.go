@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"log"
 )
 
 type userCtxKeyType string
@@ -16,7 +15,6 @@ func WithUser(ctx context.Context, subject string) context.Context {
 func GetUser(ctx context.Context) string {
 	subject, ok := ctx.Value(userCtxKey).(string)
 	if !ok {
-		log.Println()
 		return ""
 	}
 	return subject

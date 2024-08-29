@@ -3,13 +3,13 @@ package pubsub
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/goccy/go-json"
 
 	"github.com/gorilla/websocket"
+	"github.com/retinotopic/GoChat/internal/logger"
 	"github.com/retinotopic/GoChat/internal/middleware"
 	"github.com/retinotopic/GoChat/internal/models"
 )
@@ -24,7 +24,7 @@ func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 	sub := middleware.GetUser(r.Context())
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
+		p.Log.Error("upgrade to websocket err", err)
 		return
 	}
 
@@ -49,11 +49,13 @@ type PubSuber interface {
 	Publish(context.Context, string, interface{}) error
 }
 
+// Publish||Subscribe Service
 type PubSub struct {
 	conn    *websocket.Conn
 	writeCh chan models.Flowjson
 	Pb      PubSuber
 	Db      Databaser
+	Log     logger.Logger
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -75,7 +77,7 @@ func (p *PubSub) WsHandle() {
 			<-ticker.C
 			err := p.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(9*time.Second))
 			if err != nil {
-				log.Println("server ping error:", err)
+				p.Log.Error("server ping error", err)
 				errs <- err
 			}
 		}
@@ -103,7 +105,7 @@ func (p *PubSub) WsReadRedis() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 		if err = json.Unmarshal([]byte(action.Message), &flowjson); err != nil {
-			log.Println("unmarshalling error -> ", err)
+			p.Log.Error("unmarshalling error", err)
 			p.conn.Close()
 			return
 		}
@@ -114,7 +116,7 @@ func (p *PubSub) WsReadRedis() {
 			err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
 		}
 		if err != nil {
-			log.Println(err, "publish || subscribe error ->", err)
+			p.Log.Error("publish || subscribe error", err)
 			p.conn.Close()
 			return
 		}
@@ -127,7 +129,7 @@ func (p *PubSub) WsWrite() {
 	for flowjson := range p.writeCh {
 		err := p.conn.WriteJSON(&flowjson)
 		if err != nil {
-			log.Println("unmarshalling error ->", err)
+			p.Log.Error("unmarshalling error", err)
 			p.conn.Close()
 			return
 		}
@@ -145,7 +147,7 @@ func (p *PubSub) ReadDb() {
 		defer cancel()
 		payload, err := json.Marshal(&flowjson)
 		if err != nil {
-			log.Println("unmarshalling error -> ", err)
+			p.Log.Error("unmarshalling error", err)
 			p.conn.Close()
 			return
 		}
@@ -162,7 +164,7 @@ func (p *PubSub) ReadDb() {
 			}
 		}
 		if err != nil {
-			log.Println("publish error ->", err)
+			p.Log.Error("publish error", err)
 			p.conn.Close()
 			return
 		}
