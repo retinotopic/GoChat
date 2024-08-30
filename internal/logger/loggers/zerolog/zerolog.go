@@ -22,3 +22,7 @@ func NewZerologLogger(writer io.Writer) *ZerologLogger {
 func (l *ZerologLogger) Error(msg string, err error) {
 	l.logger.Error().Err(err).Msg(msg)
 }
+
+func (l *ZerologLogger) Fatal(msg string, err error) {
+	l.logger.Fatal().Err(err).Msg(msg)
+}

@@ -4,41 +4,27 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 	"github.com/retinotopic/GoChat/internal/auth"
-	db "github.com/retinotopic/GoChat/internal/dbrepo/postgres"
+	"github.com/retinotopic/GoChat/internal/logger"
 	"github.com/retinotopic/GoChat/internal/middleware"
 	"github.com/retinotopic/GoChat/internal/pubsub"
 )
 
 type router struct {
-	Addr       string
-	Auth       auth.ProviderMap
-	PubSubAddr string
-	DbAddr     string
+	Addr string
+	Auth auth.ProviderMap
+	db   pubsub.Databaser
+	pb   pubsub.PubSuber
+	log  logger.Logger
 }
 
-func NewRouter(addr string, mp auth.ProviderMap, addrpb string, dbaddr string) *router {
-	return &router{Addr: addr, Auth: mp, PubSubAddr: addrpb, DbAddr: dbaddr}
+func NewRouter(addr string, mp auth.ProviderMap, db pubsub.Databaser, pb pubsub.PubSuber, lg logger.Logger) *router {
+	return &router{Addr: addr, Auth: mp, db: db, pb: pb, log: lg}
 }
 func (r *router) Run(ctx context.Context) error {
-	pool, err := db.NewPool(ctx, r.DbAddr)
-	if err != nil {
-		return err
-	}
-	dbs := stdlib.OpenDBFromPool(pool.Pl)
-	if err := goose.SetDialect("postgres"); err != nil {
-		return err
-	}
-	if err := goose.Up(dbs, "migrations"); err != nil {
-		return err
-	}
-	if err := dbs.Close(); err != nil {
-		return err
-	}
+
 	middleware := middleware.UserMiddleware{Fetcher: r.Auth}
-	pb := pubsub.PubSub{Db: &db.PgClient{}}
+	pb := pubsub.PubSub{Db: r.db, Pb: r.pb}
 	mux := http.NewServeMux()
 	connect := http.HandlerFunc(pb.Connect)
 
@@ -46,7 +32,7 @@ func (r *router) Run(ctx context.Context) error {
 	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
 	mux.Handle("/connect", middleware.GetUserMW(connect))
 
-	err = http.ListenAndServe(r.Addr, mux)
+	err := http.ListenAndServe(r.Addr, mux)
 	if err != nil {
 		return err
 	}
