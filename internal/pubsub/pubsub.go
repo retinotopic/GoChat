@@ -19,19 +19,30 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
+type Connector struct {
+	GetDB func(context.Context, string) (Databaser, error)
+	GetPS func(context.Context) (PubSuber, error)
+	Log   logger.Logger
+}
+
+func (c *Connector) Connect(w http.ResponseWriter, r *http.Request) {
 
 	sub := middleware.GetUser(r.Context())
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		p.Log.Error("upgrade to websocket err", err)
+		c.Log.Error("upgrade to websocket err", err)
 		return
 	}
 
-	err = p.Db.GetClient(r.Context(), sub)
+	db, err := c.GetDB(r.Context(), sub)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
+	pb, err := c.GetPS(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	p := pubsub{conn: conn, Pb: pb, Db: db, Log: c.Log}
 	p.conn = conn
 	p.WsHandle()
 
@@ -41,7 +52,6 @@ type Databaser interface {
 	FuncApi(context.Context, context.CancelFunc, *models.Flowjson)
 	PubSubActions(int) []string
 	Channel() <-chan models.Flowjson
-	GetClient(context.Context, string) error
 }
 type PubSuber interface {
 	Unsubscribe(context.Context, ...string) error
@@ -50,7 +60,7 @@ type PubSuber interface {
 }
 
 // Publish||Subscribe Service
-type PubSub struct {
+type pubsub struct {
 	conn    *websocket.Conn
 	writeCh chan models.Flowjson
 	Pb      PubSuber
@@ -60,7 +70,7 @@ type PubSub struct {
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 
-func (p *PubSub) WsHandle() {
+func (p *pubsub) WsHandle() {
 	defer func() {
 		p.conn.Close()
 	}()
@@ -97,7 +107,7 @@ func (p *PubSub) WsHandle() {
 		go p.Db.FuncApi(ctx, cancel, flowjson)
 	}
 }
-func (p *PubSub) WsReadRedis() {
+func (p *pubsub) WsReadRedis() {
 	var err error
 	chps := p.Db.Channel()
 	for action := range chps {
@@ -125,7 +135,7 @@ func (p *PubSub) WsReadRedis() {
 }
 
 // stream for writing json to ws connection
-func (p *PubSub) WsWrite() {
+func (p *pubsub) WsWrite() {
 	for flowjson := range p.writeCh {
 		err := p.conn.WriteJSON(&flowjson)
 		if err != nil {
@@ -135,7 +145,7 @@ func (p *PubSub) WsWrite() {
 		}
 	}
 }
-func (p *PubSub) ReadDb() {
+func (p *pubsub) ReadDb() {
 	ch := p.Db.Channel()
 
 	for flowjson := range ch {

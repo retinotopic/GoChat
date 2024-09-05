@@ -2,11 +2,8 @@ package db
 
 import (
 	"context"
-	"fmt"
-	"hash/maphash"
 	"sync"
 
-	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/internal/models"
 	"github.com/retinotopic/GoChat/pkg/str"
@@ -26,45 +23,6 @@ type PgClient struct {
 	ReOnce           bool
 	actions          [][]string
 	*pgxpool.Pool
-}
-
-func (p *PgClient) GetClient(ctx context.Context, sub string) error {
-	row := p.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
-	var name string
-	var userid uint32
-	err := row.Scan(&userid, &name)
-
-	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject, username) VALUES ($1, $2) RETURNING user_id, username", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid, &name)
-		if err != nil {
-			return fmt.Errorf("failed to create new user: %v", err)
-		}
-	} else {
-		return fmt.Errorf("failed to query user: %v", err)
-	}
-	p.Sub = sub
-	p.UserID = userid
-	p.Name = name
-	p.Chan = make(chan models.Flowjson, 1000)
-	p.actions = [][]string{{"CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom"}, {"DeleteUsersFromRoom", "BlockUser"}, {"SendMessage"}}
-
-	p.funcmap = map[string]funcapi{
-		"GetAllRooms":         p.GetAllRooms,
-		"GetMessagesFromRoom": p.GetMessagesFromRoom,
-		"GetNextRooms":        p.GetNextRooms,
-		"FindUsers":           p.FindUsers,
-		"SendMessage":         p.SendMessage,
-		"ChangeUsername":      p.ChangeUsername,
-		"ChangePrivacyDirect": p.ChangePrivacyDirect,
-		"ChangePrivacyGroup":  p.ChangePrivacyGroup,
-		"CreateDuoRoom":       p.TxManage(p.CreateDuoRoom),
-		"CreateGroupRoom":     p.TxManage(p.CreateDuoRoom),
-		"AddUsersToRoom":      p.TxManage(p.CreateDuoRoom),
-		"DeleteUsersFromRoom": p.TxManage(p.CreateDuoRoom),
-		"BlockUser":           p.TxManage(p.CreateDuoRoom),
-		"UnblockUser":         p.TxManage(p.CreateDuoRoom),
-	}
-	return nil
 }
 
 type funcapi = func(context.Context, *models.Flowjson) error

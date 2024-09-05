@@ -13,20 +13,18 @@ import (
 type router struct {
 	Addr string
 	Auth auth.ProviderMap
-	db   pubsub.Databaser
-	pb   pubsub.PubSuber
+	Cn   pubsub.Connector
 	log  logger.Logger
 }
 
-func NewRouter(addr string, mp auth.ProviderMap, db pubsub.Databaser, pb pubsub.PubSuber, lg logger.Logger) *router {
-	return &router{Addr: addr, Auth: mp, db: db, pb: pb, log: lg}
+func NewRouter(addr string, mp auth.ProviderMap, cn pubsub.Connector, lg logger.Logger) *router {
+	return &router{Addr: addr, Auth: mp, Cn: cn, log: lg}
 }
 func (r *router) Run(ctx context.Context) error {
 
 	middleware := middleware.UserMiddleware{Fetcher: r.Auth}
-	pb := pubsub.PubSub{Db: r.db, Pb: r.pb}
 	mux := http.NewServeMux()
-	connect := http.HandlerFunc(pb.Connect)
+	connect := http.HandlerFunc(r.Cn.Connect)
 
 	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
 	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)

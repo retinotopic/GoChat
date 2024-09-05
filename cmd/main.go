@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	db "github.com/retinotopic/GoChat/internal/dbrepo/postgres"
 	"github.com/retinotopic/GoChat/internal/logger/loggers/zerolog"
+	"github.com/retinotopic/GoChat/internal/pubsub"
 	rd "github.com/retinotopic/GoChat/internal/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/internal/router"
 	"github.com/retinotopic/tinyauth/provider"
@@ -44,12 +45,20 @@ func main() {
 	client := redis.NewClient(&redis.Options{
 		Addr: *addrpb,
 	})
-	pb := client.Subscribe(ctx)
+
 	pool, err := db.NewPool(ctx, *addrdb)
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-	dbs := stdlib.OpenDBFromPool(pool.Pl)
+	fndb := func(ctx context.Context, sub string) (pubsub.Databaser, error) {
+		pg, err := pool.GetClient(ctx, sub)
+		return pg, err
+	}
+	fnps := func(ctx context.Context) (pubsub.PubSuber, error) {
+		ps := client.Subscribe(ctx)
+		return &rd.Redis{PubSub: ps, Client: client}, nil
+	}
+	dbs := stdlib.OpenDBFromPool(pool.Pool)
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal("goose set dialect:", err)
 	}
@@ -59,7 +68,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, &db.PgClient{Pool: pool.Pl}, &rd.Redis{PubSub: pb, Client: client}, log)
+	srv := router.NewRouter(*addr, mp, pubsub.Connector{GetDB: fndb, GetPS: fnps, Log: log}, log)
 
 	err = srv.Run(ctx)
 	if err != nil {
