@@ -43,10 +43,8 @@ func (c *Connector) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	p := pubsub{conn: conn, Pb: pb, Db: db, Log: c.Log}
-	p.conn = conn
+	p := pubsub{conn: conn, Pb: pb, Db: db, Log: c.Log, writeCh: make(chan models.Flowjson, 500)}
 	p.WsHandle()
-
 }
 
 type Databaser interface {
@@ -68,19 +66,22 @@ type pubsub struct {
 	Pb      PubSuber
 	Db      Databaser
 	Log     logger.Logger
+	errch   chan bool
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 
 func (p *pubsub) WsHandle() {
+	p.errch = make(chan bool, 10)
 	defer func() {
 		p.conn.Close()
+		p.errch <- true
 	}()
 
-	errch := make(chan error, 3)
-	go wsutils.KeepAlive(p.conn, time.Second*15, errch)
+	go wsutils.KeepAlive(p.conn, time.Second*15, p.errch)
 	go p.WsReadRedis()
 	go p.ReadDb()
+	go p.WsWrite()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	p.Db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})
@@ -95,75 +96,104 @@ func (p *pubsub) WsHandle() {
 		go p.Db.FuncApi(ctx, cancel, flowjson)
 	}
 }
+
 func (p *pubsub) WsReadRedis() {
 	var err error
 	chps := p.Pb.Channel()
-	for action := range chps {
-		flowjson := models.Flowjson{}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-		defer cancel()
-		if action.ErrorMsg == "unmarshall error" {
-			p.Log.Error("unmarshalling error", err)
-			p.conn.Close()
+	for {
+		select {
+		case action, ok := <-chps:
+			if !ok {
+				p.conn.Close()
+				continue
+			}
+			flowjson := models.Flowjson{}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+			if action.ErrorMsg == "unmarshall error" {
+				p.Log.Error("unmarshalling error", err)
+				p.conn.Close()
+				return
+			}
+			switch {
+			case contains(p.Db.PubSubActions(0), flowjson.Mode):
+				err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+			case contains(p.Db.PubSubActions(1), flowjson.Mode):
+				err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+			}
+			if err != nil {
+				p.Log.Error("publish || subscribe error", err)
+				p.conn.Close()
+				return
+			}
+			p.writeCh <- flowjson
+		case <-p.errch:
 			return
 		}
-		switch {
-		case contains(p.Db.PubSubActions(0), flowjson.Mode):
-			err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
-		case contains(p.Db.PubSubActions(1), flowjson.Mode):
-			err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
-		}
-		if err != nil {
-			p.Log.Error("publish || subscribe error", err)
-			p.conn.Close()
-			return
-		}
-		p.writeCh <- flowjson
 	}
 }
 
 // stream for writing json to ws connection
 func (p *pubsub) WsWrite() {
-	for flowjson := range p.writeCh {
-		err := p.conn.WriteJSON(&flowjson)
-		if err != nil {
-			p.Log.Error("unmarshalling error", err)
-			p.conn.Close()
+	for {
+		select {
+		case flowjson, ok := <-p.writeCh:
+			if !ok {
+				p.conn.Close()
+				return
+			}
+			err := p.conn.WriteJSON(flowjson)
+			if err != nil {
+				p.Log.Error("writejson error", err)
+				p.conn.Close()
+				return
+			}
+		case <-p.errch:
 			return
 		}
+
 	}
+
 }
 func (p *pubsub) ReadDb() {
 	ch := p.Db.Channel()
-
-	for flowjson := range ch {
-		p.writeCh <- flowjson
-		if len(flowjson.ErrorMsg) != 0 {
-			continue
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-		defer cancel()
-		payload, err := json.Marshal(&flowjson)
-		if err != nil {
-			p.Log.Error("unmarshalling error", err)
-			p.conn.Close()
-			return
-		}
-		switch {
-		case contains(p.Db.PubSubActions(2), flowjson.Mode):
-			err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), string(payload))
-		default:
-			i := 1
-			for i = range flowjson.Users {
-				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), string(payload))
-				if err != nil {
-					break
+	for {
+		select {
+		case flowjson, ok := <-ch:
+			if !ok {
+				p.conn.Close()
+				continue
+			}
+			p.writeCh <- flowjson
+			if len(flowjson.ErrorMsg) != 0 {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+			payload, err := json.Marshal(&flowjson)
+			if err != nil {
+				p.Log.Error("unmarshalling error", err)
+				p.conn.Close()
+				return
+			}
+			switch {
+			case contains(p.Db.PubSubActions(2), flowjson.Mode):
+				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), string(payload))
+			default:
+				i := 1
+				for i = range flowjson.Users {
+					err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), string(payload))
+					if err != nil {
+						break
+					}
 				}
 			}
-		}
-		if err != nil {
-			p.Log.Error("publish error", err)
-			p.conn.Close()
+			if err != nil {
+				p.Log.Error("publish error", err)
+				p.conn.Close()
+				return
+			}
+		case <-p.errch:
 			return
 		}
 	}

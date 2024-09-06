@@ -1,13 +1,12 @@
 package wsutils
 
 import (
-	"errors"
 	"time"
 
 	"github.com/fasthttp/websocket"
 )
 
-func KeepAlive(c *websocket.Conn, timeout time.Duration, ch chan<- error) {
+func KeepAlive(c *websocket.Conn, timeout time.Duration, ch chan<- bool) {
 	lastResponse := time.Now()
 	c.SetPongHandler(func(msg string) error {
 		lastResponse = time.Now()
@@ -17,12 +16,14 @@ func KeepAlive(c *websocket.Conn, timeout time.Duration, ch chan<- error) {
 	for {
 		err := c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
 		if err != nil {
-			ch <- errors.New("write message error")
+			ch <- true
+			return
 		}
 		time.Sleep(timeout / 2)
 		if time.Since(lastResponse) > timeout {
 			c.Close()
-			ch <- errors.New("connection timeout")
+			ch <- true
+			return
 		}
 	}
 

@@ -57,7 +57,6 @@ func main() {
 	}
 	fnps := func(ctx context.Context) (pubsub.PubSuber, error) {
 		ps := client.Subscribe(ctx)
-		ps.Channel()
 		return &rd.Redis{PubSub: ps, Client: client, Chan: make(chan models.Flowjson, 500)}, nil
 	}
 	dbs := stdlib.OpenDBFromPool(pool.Pool)
