@@ -29,6 +29,7 @@ type funcapi = func(context.Context, *models.Flowjson) error
 
 func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj *models.Flowjson) {
 	defer cancelFunction()
+	fj.ErrorMsg = ""
 	fn, ok := p.funcmap[fj.Mode]
 	if ok {
 		err := fn(ctx, fj)

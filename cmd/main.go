@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	db "github.com/retinotopic/GoChat/internal/dbrepo/postgres"
 	"github.com/retinotopic/GoChat/internal/logger/loggers/zerolog"
+	"github.com/retinotopic/GoChat/internal/models"
 	"github.com/retinotopic/GoChat/internal/pubsub"
 	rd "github.com/retinotopic/GoChat/internal/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/internal/router"
@@ -56,7 +57,8 @@ func main() {
 	}
 	fnps := func(ctx context.Context) (pubsub.PubSuber, error) {
 		ps := client.Subscribe(ctx)
-		return &rd.Redis{PubSub: ps, Client: client}, nil
+		ps.Channel()
+		return &rd.Redis{PubSub: ps, Client: client, Chan: make(chan models.Flowjson, 500)}, nil
 	}
 	dbs := stdlib.OpenDBFromPool(pool.Pool)
 	if err := goose.SetDialect("postgres"); err != nil {

@@ -8,10 +8,11 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/gorilla/websocket"
+	"github.com/fasthttp/websocket"
 	"github.com/retinotopic/GoChat/internal/logger"
 	"github.com/retinotopic/GoChat/internal/middleware"
 	"github.com/retinotopic/GoChat/internal/models"
+	"github.com/retinotopic/GoChat/pkg/wsutils"
 )
 
 var upgrader = websocket.Upgrader{
@@ -57,6 +58,7 @@ type PubSuber interface {
 	Unsubscribe(context.Context, ...string) error
 	Subscribe(context.Context, ...string) error
 	Publish(context.Context, string, interface{}) error
+	Channel() chan models.Flowjson
 }
 
 // Publish||Subscribe Service
@@ -74,25 +76,11 @@ func (p *pubsub) WsHandle() {
 	defer func() {
 		p.conn.Close()
 	}()
-	go p.ReadDb()
-	errs := make(chan error, 1)
-	p.conn.SetPongHandler(func(string) error {
-		p.conn.SetReadDeadline(time.Now().Add(15 * time.Second))
-		return nil
-	})
-	go func() {
-		ticker := time.NewTicker(time.Second * 10)
-		defer ticker.Stop()
-		for {
-			<-ticker.C
-			err := p.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(9*time.Second))
-			if err != nil {
-				p.Log.Error("server ping error", err)
-				errs <- err
-			}
-		}
-	}()
+
+	errch := make(chan error, 3)
+	go wsutils.KeepAlive(p.conn, time.Second*15, errch)
 	go p.WsReadRedis()
+	go p.ReadDb()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	p.Db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})
@@ -109,12 +97,12 @@ func (p *pubsub) WsHandle() {
 }
 func (p *pubsub) WsReadRedis() {
 	var err error
-	chps := p.Db.Channel()
+	chps := p.Pb.Channel()
 	for action := range chps {
 		flowjson := models.Flowjson{}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
-		if err = json.Unmarshal([]byte(action.Message), &flowjson); err != nil {
+		if action.ErrorMsg == "unmarshall error" {
 			p.Log.Error("unmarshalling error", err)
 			p.conn.Close()
 			return
@@ -163,11 +151,11 @@ func (p *pubsub) ReadDb() {
 		}
 		switch {
 		case contains(p.Db.PubSubActions(2), flowjson.Mode):
-			err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), payload)
+			err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), string(payload))
 		default:
 			i := 1
 			for i = range flowjson.Users {
-				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), payload)
+				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), string(payload))
 				if err != nil {
 					break
 				}
