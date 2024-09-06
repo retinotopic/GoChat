@@ -117,9 +117,9 @@ func (p *pubsub) WsReadRedis() {
 			}
 			switch {
 			case contains(p.Db.PubSubActions(0), flowjson.Mode):
-				err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+				err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"))
 			case contains(p.Db.PubSubActions(1), flowjson.Mode):
-				err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"))
+				err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"))
 			}
 			if err != nil {
 				p.Log.Error("publish || subscribe error", err)
@@ -151,9 +151,7 @@ func (p *pubsub) WsWrite() {
 		case <-p.errch:
 			return
 		}
-
 	}
-
 }
 func (p *pubsub) ReadDb() {
 	ch := p.Db.Channel()
@@ -178,7 +176,7 @@ func (p *pubsub) ReadDb() {
 			}
 			switch {
 			case contains(p.Db.PubSubActions(2), flowjson.Mode):
-				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Room, "room"), string(payload))
+				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"), string(payload))
 			default:
 				i := 1
 				for i = range flowjson.Users {

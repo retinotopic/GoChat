@@ -25,13 +25,13 @@ func NewPool(ctx context.Context, addr string) (*Pool, error) {
 	return &Pool{Pool: pl}, nil
 }
 func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
-	row := p.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
+	row := p.QueryRow(ctx, "SELECT user_id,name FROM users WHERE subject=$1", sub)
 	var name string
 	var userid uint32
 	err := row.Scan(&userid, &name)
 
 	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject, username) VALUES ($1, $2) RETURNING user_id, username", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid, &name)
+		err = p.QueryRow(ctx, "INSERT INTO users (subject, name) VALUES ($1, $2) RETURNING user_id, name", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid, &name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new user: %v", err)
 		}
@@ -51,7 +51,7 @@ func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
 		"GetNextRooms":        pg.GetNextRooms,
 		"FindUsers":           pg.FindUsers,
 		"SendMessage":         pg.SendMessage,
-		"ChangeUsername":      pg.ChangeUsername,
+		"Changename":          pg.ChangeUsername,
 		"ChangePrivacyDirect": pg.ChangePrivacyDirect,
 		"ChangePrivacyGroup":  pg.ChangePrivacyGroup,
 		"CreateDuoRoom":       pg.TxManage(pg.CreateDuoRoom),
@@ -63,10 +63,10 @@ func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
 	}
 	return pg, nil
 }
-func (p *Pool) NewUser(ctx context.Context, sub, username string) error {
-	if strings.ContainsAny(username, " \t\n") {
+func (p *Pool) NewUser(ctx context.Context, sub, name string) error {
+	if strings.ContainsAny(name, " \t\n") {
 		return errors.New("contains spaces")
 	}
-	_, err := p.Exec(ctx, "INSERT INTO users (subject,username,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, username)
+	_, err := p.Exec(ctx, "INSERT INTO users (subject,name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
 	return err
 }

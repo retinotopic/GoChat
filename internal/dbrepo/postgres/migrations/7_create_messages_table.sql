@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE public.messages (
     message_id bigint NOT NULL GENERATED ALWAYS AS IDENTITY,
-    payload text NOT NULL,
+    message text NOT NULL,
     "timestamp" timestamp without time zone DEFAULT now() NOT NULL,
     user_id integer NOT NULL,
     room_id integer,

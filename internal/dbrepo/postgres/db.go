@@ -40,7 +40,7 @@ func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFun
 	}
 }
 func (p *PgClient) SendMessage(ctx context.Context, flowjson *models.Flowjson) error {
-	_, err := p.Exec(ctx, `INSERT INTO messages (payload,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.Room)
+	_, err := p.Exec(ctx, `INSERT INTO messages (message,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.RoomId)
 	if err != nil {
 		return err
 	}

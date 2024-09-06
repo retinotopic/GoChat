@@ -15,12 +15,12 @@ func (p *PgClient) CreateDuoRoom(ctx context.Context, tx pgx.Tx, fj *models.Flow
 	if err != nil {
 		return err
 	}
-	if fj.Room == 0 {
+	if fj.RoomId == 0 {
 		err = p.CreateRoom(ctx, tx, fj)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, fj.Users[0], fj.Users[1], fj.Room)
+		_, err = tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, fj.Users[0], fj.Users[1], fj.RoomId)
 	} else {
 		p.AddUsersToRoom(ctx, tx, fj)
 	}
@@ -35,7 +35,7 @@ func (p *PgClient) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, fj *models.Flo
 		return err
 	}
 	if rows.Next() {
-		err = rows.Scan(&fj.Room)
+		err = rows.Scan(&fj.RoomId)
 		defer rows.Close()
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjso
 		is_group = true
 	}
 	// create new room and return room id
-	err := tx.QueryRow(ctx, "INSERT INTO rooms (name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id", fj.Name, is_group, p.UserID).Scan(&fj.Room)
+	err := tx.QueryRow(ctx, "INSERT INTO rooms (name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id", fj.Name, is_group, p.UserID).Scan(&fj.RoomId)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (p *PgClient) CreateRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjso
 func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	var rows pgx.Rows
 	if fj.Mode == "AddUsersToRoom" {
-		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.RoomId, p.UserID).Scan(new(int)); err != nil {
 			err = errors.New("you have no permission to add users to this room")
 			if err != nil {
 				return err
@@ -87,7 +87,7 @@ func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *models.Flo
 		is_group = true
 	}
 	query = fmt.Sprintf(query, condition)
-	rows, err := tx.Query(ctx, query, fj.Room, fj.Users, is_group, p.UserID)
+	rows, err := tx.Query(ctx, query, fj.RoomId, fj.Users, is_group, p.UserID)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (p *PgClient) AddUsersToRoom(ctx context.Context, tx pgx.Tx, fj *models.Flo
 func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *models.Flowjson) error {
 	if fj.Mode == "DeleteUsersFromRoom" {
 		if len(fj.Users) != 1 || fj.Users[0] != p.UserID {
-			if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.Room, p.UserID).Scan(new(int)); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, fj.RoomId, p.UserID).Scan(new(int)); err != nil {
 				err = errors.New("you have no permission to delete users from this room")
 				if err != nil {
 					return err
@@ -123,7 +123,7 @@ func (p *PgClient) DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, fj *model
 	if fj.Mode != "BlockUser" {
 		is_group = true
 	}
-	_, err := tx.Exec(ctx, query, fj.Users, fj.Room, is_group)
+	_, err := tx.Exec(ctx, query, fj.Users, fj.RoomId, is_group)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, fj *models.Flowjson
 	if err != nil {
 		return err
 	}
-	if fj.Room != 0 {
+	if fj.RoomId != 0 {
 		err := p.DeleteUsersFromRoom(ctx, tx, fj)
 		if err != nil {
 			return err

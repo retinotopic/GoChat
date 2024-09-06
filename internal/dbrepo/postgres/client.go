@@ -31,7 +31,7 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *models.Flowjson) (
 	}
 	for _, v := range fjarr {
 		p.Chan <- v
-		p.RoomsPagination = append(p.RoomsPagination, flowjson.Room)
+		p.RoomsPagination = append(p.RoomsPagination, flowjson.RoomId)
 	}
 
 	return err
@@ -40,10 +40,10 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *models.Flowjson) (
 // load messages from a room
 func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *models.Flowjson) error {
 	rows, err := p.Query(ctx,
-		`SELECT payload,user_id,
+		`SELECT message,user_id,
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
-		ORDER BY message_id DESC`, flowjson.Room, flowjson.MessageId)
+		ORDER BY message_id DESC`, flowjson.RoomId, flowjson.MessageId)
 	if err != nil {
 		return err
 	}
