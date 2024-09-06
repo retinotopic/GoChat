@@ -7,7 +7,7 @@ import (
 	"github.com/retinotopic/GoChat/internal/models"
 )
 
-func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *models.Flowjson) (err error) {
+func (p *PgClient) GetAllRooms(ctx context.Context, flowjson models.Flowjson) (err error) {
 	p.GRMutex.Lock()
 	defer func() {
 		if err != nil {
@@ -38,7 +38,7 @@ func (p *PgClient) GetAllRooms(ctx context.Context, flowjson *models.Flowjson) (
 }
 
 // load messages from a room
-func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson models.Flowjson) error {
 	rows, err := p.Query(ctx,
 		`SELECT message,user_id,
 		FROM messages 
@@ -54,7 +54,7 @@ func (p *PgClient) GetMessagesFromRoom(ctx context.Context, flowjson *models.Flo
 	return err
 }
 
-func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) GetNextRooms(ctx context.Context, flowjson models.Flowjson) error {
 	p.NRMutex.Lock()
 	defer p.NRMutex.Unlock()
 	var arrayrooms []uint32
@@ -76,7 +76,7 @@ func (p *PgClient) GetNextRooms(ctx context.Context, flowjson *models.Flowjson) 
 	return err
 }
 
-func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson models.Flowjson) error {
 	rows, err := p.Query(ctx,
 		`SELECT u.user_id,u.name
 		FROM users u JOIN room_users_info ru ON ru.user_id = u.user_id
@@ -91,7 +91,7 @@ func (p *PgClient) GetRoomUsersInfo(ctx context.Context, flowjson *models.Flowjs
 	return err
 }
 
-func (p *PgClient) FindUsers(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) FindUsers(ctx context.Context, flowjson models.Flowjson) error {
 	rows, err := p.Query(ctx,
 		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, flowjson.Name+"%")
 	if err != nil {

@@ -55,10 +55,10 @@ func (p *Pool) GetClient(ctx context.Context, sub string) (*PgClient, error) {
 		"ChangePrivacyDirect": pg.ChangePrivacyDirect,
 		"ChangePrivacyGroup":  pg.ChangePrivacyGroup,
 		"CreateDuoRoom":       pg.TxManage(pg.CreateDuoRoom),
-		"CreateGroupRoom":     pg.TxManage(pg.CreateDuoRoom),
-		"AddUsersToRoom":      pg.TxManage(pg.CreateDuoRoom),
-		"DeleteUsersFromRoom": pg.TxManage(pg.CreateDuoRoom),
-		"BlockUser":           pg.TxManage(pg.CreateDuoRoom),
+		"CreateGroupRoom":     pg.TxManage(pg.CreateRoom),
+		"AddUsersToRoom":      pg.TxManage(pg.AddUsersToRoom),
+		"DeleteUsersFromRoom": pg.TxManage(pg.DeleteUsersFromRoom),
+		"BlockUser":           pg.TxManage(pg.BlockUser),
 		"UnblockUser":         pg.TxManage(pg.CreateDuoRoom),
 	}
 	return pg, nil

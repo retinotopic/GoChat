@@ -25,9 +25,9 @@ type PgClient struct {
 	*pgxpool.Pool
 }
 
-type funcapi = func(context.Context, *models.Flowjson) error
+type funcapi = func(context.Context, models.Flowjson) error
 
-func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj *models.Flowjson) {
+func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj models.Flowjson) {
 	defer cancelFunction()
 	fj.ErrorMsg = ""
 	fn, ok := p.funcmap[fj.Mode]
@@ -35,18 +35,18 @@ func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFun
 		err := fn(ctx, fj)
 		if err != nil {
 			fj.ErrorMsg = err.Error()
-			p.Chan <- *fj
+			p.Chan <- fj
 		}
 	}
 }
-func (p *PgClient) SendMessage(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) SendMessage(ctx context.Context, flowjson models.Flowjson) error {
 	_, err := p.Exec(ctx, `INSERT INTO messages (message,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.RoomId)
 	if err != nil {
 		return err
 	}
 	return err
 }
-func (p *PgClient) ChangeUsername(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) ChangeUsername(ctx context.Context, flowjson models.Flowjson) error {
 	username := str.NormalizeString(flowjson.Name)
 	_, err := p.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, p.UserID)
 	if err != nil {
@@ -54,14 +54,14 @@ func (p *PgClient) ChangeUsername(ctx context.Context, flowjson *models.Flowjson
 	}
 	return err
 }
-func (p *PgClient) ChangePrivacyDirect(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) ChangePrivacyDirect(ctx context.Context, flowjson models.Flowjson) error {
 	_, err := p.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
 	if err != nil {
 		return err
 	}
 	return err
 }
-func (p *PgClient) ChangePrivacyGroup(ctx context.Context, flowjson *models.Flowjson) error {
+func (p *PgClient) ChangePrivacyGroup(ctx context.Context, flowjson models.Flowjson) error {
 	_, err := p.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
 	if err != nil {
 		return err

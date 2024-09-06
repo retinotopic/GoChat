@@ -7,7 +7,7 @@ type Flowjson struct {
 	UserId    uint32   `json:"UserId"`
 	RoomId    uint32   `json:"RoomId" `
 	Name      string   `json:"Name" `
-	MessageId string   `json:"MessageId" `
+	MessageId uint32   `json:"MessageId" `
 	ErrorMsg  string   `json:"ErrorMsg"`
 	Bool      bool     `json:"Bool"`
 }
