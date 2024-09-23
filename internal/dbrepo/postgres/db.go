@@ -2,85 +2,100 @@ package db
 
 import (
 	"context"
-	"sync"
+	"errors"
+	"fmt"
+	"hash/maphash"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/internal/models"
-	"github.com/retinotopic/GoChat/pkg/str"
 )
 
 type PgClient struct {
-	Sub              string
-	Name             string
-	UserID           uint32
-	NRMutex          sync.Mutex
-	GRMutex          sync.Mutex
-	RoomsPagination  []uint32
-	RoomsCount       uint8 // no more than 250
-	PaginationOffset uint8
-	funcmap          map[string]funcapi
-	Chan             chan models.Flowjson
-	ReOnce           bool
-	actions          [][]string
 	*pgxpool.Pool
+	UserApi map[string]funcapi
+	actions [][]string
 }
+type funcapi = func(context.Context, pgx.Tx, *models.Event) error
 
-type funcapi = func(context.Context, models.Flowjson) error
+func (p *PgClient) NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
+	var err error
+	pl, err := pgxpool.New(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	pg := &PgClient{}
+	pg.Pool = pl
+	pg.actions = [][]string{{"CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom"}, {"DeleteUsersFromRoom", "BlockUser"}, {"SendMessage"}}
 
-func (p *PgClient) FuncApi(ctx context.Context, cancelFunction context.CancelFunc, fj models.Flowjson) {
-	defer cancelFunction()
-	fj.ErrorMsg = ""
-	fn, ok := p.funcmap[fj.Mode]
+	pg.UserApi = map[string]funcapi{
+		"GetAllRooms":         GetAllRooms,
+		"GetMessagesFromRoom": GetMessagesFromRoom,
+		"GetNextRooms":        GetNextRooms,
+		"FindUsers":           FindUsers,
+		"SendMessage":         SendMessage,
+		"Changename":          ChangeUsername,
+		"ChangePrivacyDirect": ChangePrivacyDirect,
+		"ChangePrivacyGroup":  ChangePrivacyGroup,
+		"CreateDuoRoom":       CreateDuoRoom,
+		"CreateGroupRoom":     CreateRoom,
+		"AddUsersToRoom":      AddUsersToRoom,
+		"DeleteUsersFromRoom": DeleteUsersFromRoom,
+		"BlockUser":           BlockUser,
+		"UnblockUser":         CreateDuoRoom,
+	}
+	return pg, nil
+}
+func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
+	if strings.ContainsAny(name, " \t\n") {
+		return errors.New("contains spaces")
+	}
+	_, err := p.Exec(ctx, "INSERT INTO users (subject,name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
+	return err
+}
+func (p *PgClient) FuncApi(ctx context.Context, cancelFunc context.CancelFunc, event *models.Event) error {
+	defer cancelFunc()
+	fn, ok := p.UserApi[event.Mode]
 	if ok {
-		err := fn(ctx, fj)
+		tx, err := p.BeginTx(ctx, pgx.TxOptions{})
 		if err != nil {
-			fj.ErrorMsg = err.Error()
-			p.Chan <- fj
+			return err
 		}
+		defer func() {
+			tx.Rollback(ctx)
+		}()
+		err = fn(ctx, tx, event)
+		if err != nil {
+			return err
+		}
+		err = tx.Commit(ctx)
+		if err != nil {
+			return err
+		}
+
 	}
+
+	return nil
+
 }
-func (p *PgClient) SendMessage(ctx context.Context, flowjson models.Flowjson) error {
-	_, err := p.Exec(ctx, `INSERT INTO messages (message,user_id,room_id) VALUES ($1,$2,$3)`, flowjson.Message, p.UserID, flowjson.RoomId)
-	if err != nil {
-		return err
+func (p *PgClient) GetUser(ctx context.Context, sub string) (userid uint32, name string, err error) {
+	row := p.QueryRow(ctx, "SELECT user_id,name FROM users WHERE subject=$1", sub)
+	err = row.Scan(&userid, &name)
+	if err == pgx.ErrNoRows {
+		err = p.QueryRow(ctx, "INSERT INTO users (subject, name) VALUES ($1, $2) RETURNING user_id, name", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid, &name)
+		if err != nil {
+			return userid, name, fmt.Errorf("failed to create new user: %v", err)
+		}
+	} else {
+		return userid, name, fmt.Errorf("failed to query user: %v", err)
 	}
-	return err
-}
-func (p *PgClient) ChangeUsername(ctx context.Context, flowjson models.Flowjson) error {
-	username := str.NormalizeString(flowjson.Name)
-	_, err := p.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", username, p.UserID)
-	if err != nil {
-		return err
-	}
-	return err
-}
-func (p *PgClient) ChangePrivacyDirect(ctx context.Context, flowjson models.Flowjson) error {
-	_, err := p.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
-	if err != nil {
-		return err
-	}
-	return err
-}
-func (p *PgClient) ChangePrivacyGroup(ctx context.Context, flowjson models.Flowjson) error {
-	_, err := p.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", flowjson.Bool, p.UserID)
-	if err != nil {
-		return err
-	}
-	return err
+	return userid, name, err
 }
 
-func (c *PgClient) Channel() <-chan models.Flowjson {
-	return c.Chan
-}
-func (c *PgClient) ClearChannel() {
-	for len(c.Chan) > 0 {
-		<-c.Chan
-	}
-}
-
-func (c *PgClient) PubSubActions(id int) []string {
-	if id >= len(c.actions) {
+func (p *PgClient) PubSubActions(id int) []string {
+	if id >= len(p.actions) {
 		return []string{}
 	}
-	return c.actions[id]
+	return p.actions[id]
 }
