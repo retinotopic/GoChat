@@ -30,7 +30,7 @@ func (p *PgClient) NewPgClient(ctx context.Context, addr string) (*PgClient, err
 	pg.actions = [][]string{{"CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom"}, {"DeleteUsersFromRoom", "BlockUser"}, {"SendMessage"}}
 
 	pg.UserApi = map[string]funcapi{
-		"GetAllRooms":         GetAllRooms,
+		"GetAllRoomsIds":      GetAllRoomsIds,
 		"GetMessagesFromRoom": GetMessagesFromRoom,
 		"GetNextRooms":        GetNextRooms,
 		"FindUsers":           FindUsers,
@@ -56,7 +56,7 @@ func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
 }
 func (p *PgClient) FuncApi(ctx context.Context, cancelFunc context.CancelFunc, event *models.Event) error {
 	defer cancelFunc()
-	fn, ok := p.UserApi[event.Mode]
+	fn, ok := p.UserApi[event.Event]
 	if ok {
 		tx, err := p.BeginTx(ctx, pgx.TxOptions{})
 		if err != nil {
