@@ -14,9 +14,6 @@ type User struct {
 	Bool   bool   `json:"Bool" `
 	tx     pgx.Tx `json:"-"`
 }
-type Users struct {
-	Users []User `json:"Users" `
-}
 
 func (u *User) ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	name := str.NormalizeString(u.Name)

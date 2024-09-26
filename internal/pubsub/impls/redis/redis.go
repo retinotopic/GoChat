@@ -28,4 +28,5 @@ func (r *Redis) Channel() <-chan interface{} {
 }
 func (r *Redis) ReadRedis() <-chan interface{} {
 	return r.PubSub.ChannelWithSubscriptions()
+
 }
