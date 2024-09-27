@@ -59,7 +59,9 @@ func GetAllRoomsIds(ctx context.Context, tx pgx.Tx, event *models.Event) (err er
 		WHERE ru.user_id = $1 
 		ORDER BY r.last_activity DESC;
 		`, event.UserId)
-
+	if err != nil {
+		return err
+	}
 	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
 	if err != nil {
 		return err
@@ -159,7 +161,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
-func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event models.Event) error {
+func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -184,7 +186,7 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event models.Event) err
 }
 
 // Blocking user and delete user from duo room
-func (p *PgClient) BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {

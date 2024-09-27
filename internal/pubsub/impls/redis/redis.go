@@ -26,7 +26,3 @@ func (r *Redis) Publish(ctx context.Context, channel string, message interface{}
 func (r *Redis) Channel() <-chan interface{} {
 	return r.PubSub.ChannelWithSubscriptions()
 }
-func (r *Redis) ReadRedis() <-chan interface{} {
-	return r.PubSub.ChannelWithSubscriptions()
-
-}

@@ -21,52 +21,44 @@ var upgrader = websocket.Upgrader{
 }
 
 type Connector struct {
-	GetDB func(context.Context, string) (Databaser, error)
-	GetPS func(context.Context) (PubSuber, error)
+	GetPS func(context.Context, uint32) (PubSuber, error)
+	Db    Databaser
 	Log   logger.Logger
 }
 
 func (c *Connector) Connect(w http.ResponseWriter, r *http.Request) {
-
 	sub := middleware.GetUser(r.Context())
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		c.Log.Error("upgrade to websocket err", err)
 		return
 	}
-
-	db, err := c.GetDB(r.Context(), sub)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-	}
-	pb, err := c.GetPS(r.Context())
+	userid, err := c.Db.GetUser(r.Context(), sub)
+	pb, err := c.GetPS(r.Context(), userid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	p := pubsub{conn: conn, Pb: pb, Db: db, Log: c.Log, writeCh: make(chan models.Flowjson, 500)}
+	p := pubsub{conn: conn, Pb: pb, Db: c.Db, Log: c.Log, UserId: userid}
 	p.WsHandle()
 }
 
 type Databaser interface {
-	FuncApi(context.Context, context.CancelFunc, *models.Flowjson)
-	PubSubActions(int) []string
-	Channel() <-chan models.Flowjson
+	FuncApi(context.Context, context.CancelFunc, *models.Event) error
+	GetUser(ctx context.Context, sub string) (uint32, error)
 }
 type PubSuber interface {
-	Unsubscribe(context.Context, ...string) error
-	Subscribe(context.Context, ...string) error
 	Publish(context.Context, string, interface{}) error
-	Channel() chan models.Flowjson
+	Channel() <-chan interface{}
 }
 
 // Publish||Subscribe Service
 type pubsub struct {
-	conn    *websocket.Conn
-	writeCh chan models.Flowjson
-	Pb      PubSuber
-	Db      Databaser
-	Log     logger.Logger
-	errch   chan bool
+	conn   *websocket.Conn
+	UserId uint32
+	Pb     PubSuber
+	Db     Databaser
+	Log    logger.Logger
+	errch  chan bool
 }
 
 // conn, err := upgrader.Upgrade(w, r, nil)
@@ -81,7 +73,6 @@ func (p *pubsub) WsHandle() {
 	go wsutils.KeepAlive(p.conn, time.Second*15, p.errch)
 	go p.WsReadRedis()
 	go p.ReadDb()
-	go p.WsWrite()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	p.Db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})

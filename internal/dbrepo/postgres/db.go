@@ -15,11 +15,10 @@ import (
 type PgClient struct {
 	*pgxpool.Pool
 	UserApi map[string]funcapi
-	actions [][]string
 }
 type funcapi = func(context.Context, pgx.Tx, *models.Event) error
 
-func (p *PgClient) NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
+func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 	var err error
 	pl, err := pgxpool.New(ctx, addr)
 	if err != nil {
@@ -27,8 +26,6 @@ func (p *PgClient) NewPgClient(ctx context.Context, addr string) (*PgClient, err
 	}
 	pg := &PgClient{}
 	pg.Pool = pl
-	pg.actions = [][]string{{"CreateGroupRoom", "CreateDuoRoom", "AddUserToRoom"}, {"DeleteUsersFromRoom", "BlockUser"}, {"SendMessage"}}
-
 	pg.UserApi = map[string]funcapi{
 		"GetAllRoomsIds":      GetAllRoomsIds,
 		"GetMessagesFromRoom": GetMessagesFromRoom,
@@ -39,7 +36,7 @@ func (p *PgClient) NewPgClient(ctx context.Context, addr string) (*PgClient, err
 		"ChangePrivacyDirect": ChangePrivacyDirect,
 		"ChangePrivacyGroup":  ChangePrivacyGroup,
 		"CreateDuoRoom":       CreateDuoRoom,
-		"CreateGroupRoom":     CreateRoom,
+		"CreateGroupRoom":     CreateGroupRoom,
 		"AddUsersToRoom":      AddUsersToRoom,
 		"DeleteUsersFromRoom": DeleteUsersFromRoom,
 		"BlockUser":           BlockUser,
@@ -79,23 +76,16 @@ func (p *PgClient) FuncApi(ctx context.Context, cancelFunc context.CancelFunc, e
 	return nil
 
 }
-func (p *PgClient) GetUser(ctx context.Context, sub string) (userid uint32, name string, err error) {
+func (p *PgClient) GetUser(ctx context.Context, sub string) (userid uint32, err error) {
 	row := p.QueryRow(ctx, "SELECT user_id,name FROM users WHERE subject=$1", sub)
-	err = row.Scan(&userid, &name)
+	err = row.Scan(&userid)
 	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject, name) VALUES ($1, $2) RETURNING user_id, name", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid, &name)
+		err = p.QueryRow(ctx, "INSERT INTO users (subject, name) VALUES ($1, $2) RETURNING user_id, name", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid)
 		if err != nil {
-			return userid, name, fmt.Errorf("failed to create new user: %v", err)
+			return userid, fmt.Errorf("failed to create new user: %v", err)
 		}
 	} else {
-		return userid, name, fmt.Errorf("failed to query user: %v", err)
+		return userid, fmt.Errorf("failed to query user: %v", err)
 	}
-	return userid, name, err
-}
-
-func (p *PgClient) PubSubActions(id int) []string {
-	if id >= len(p.actions) {
-		return []string{}
-	}
-	return p.actions[id]
+	return userid, err
 }
