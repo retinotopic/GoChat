@@ -47,8 +47,8 @@ type Databaser interface {
 	GetUser(ctx context.Context, sub string) (uint32, error)
 }
 type PubSuber interface {
-	Publish(context.Context, string, interface{}) error
-	Channel() <-chan interface{}
+	Publish(context.Context, string, bool, string, string) error
+	Channel() <-chan []byte
 }
 
 // Publish||Subscribe Service
@@ -124,26 +124,6 @@ func (p *pubsub) WsReadRedis() {
 	}
 }
 
-// stream for writing json to ws connection
-func (p *pubsub) WsWrite() {
-	for {
-		select {
-		case flowjson, ok := <-p.writeCh:
-			if !ok {
-				p.conn.Close()
-				return
-			}
-			err := p.conn.WriteJSON(flowjson)
-			if err != nil {
-				p.Log.Error("writejson error", err)
-				p.conn.Close()
-				return
-			}
-		case <-p.errch:
-			return
-		}
-	}
-}
 func (p *pubsub) ReadDb() {
 	ch := p.Db.Channel()
 	for {

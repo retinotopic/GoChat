@@ -170,7 +170,7 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if len(r.RoomIds) == 0 || len(r.UserIds) == 0 {
 		return fmt.Errorf("malformed json")
 	}
-	if len(r.UserIds) != 1 || r.UserIds[0] != event.UserId { // first if statement, if the user wants to remove themselves from the room
+	if len(r.UserIds) != 1 || r.UserIds[0] != event.UserId { // first if statement, if the user wants to remove themselves from the room skip this check
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
 			err = errors.New("you have no permission to delete users from this room")
 			if err != nil {
