@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/goccy/go-json"
 
@@ -25,7 +26,6 @@ type RoomClient struct {
 	Username string `json:"Username" `
 }
 
-// uint32[] rooms
 func GetNextRooms(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
@@ -101,18 +101,23 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 			return err
 		}
 	} else {
-		addUsersToRoom := fmt.Sprintf(addUsersToRoom, allowDirectMessages)
-		_, err := tx.Exec(ctx, addUsersToRoom, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+		_, err := tx.Exec(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 		if err != nil {
 			return err
 		}
 	}
+	event.PubChannels = ConvertUint32ToString(r.UserIds)
+	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+	first, second := r.UserIds[0], event.UserId
+	if event.UserId > r.RoomIds[0] {
+		first, second = event.UserId, r.UserIds[0]
+	}
 	row := tx.QueryRow(ctx, `SELECT room_id
 		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, event.UserId, r.UserIds[0])
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, first, second)
 	err := row.Scan(r.RoomIds[0])
 	if err != nil && err != pgx.ErrNoRows {
 		return err
@@ -134,11 +139,12 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	if err != nil {
 		return err
 	}
-	addUsersToRoom := fmt.Sprintf(addUsersToRoom, allowGroupInvites)
-	_, err = tx.Exec(ctx, addUsersToRoom, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	_, err = tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
+	event.PubChannels = ConvertUint32ToString(r.UserIds)
+	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -154,11 +160,12 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		err = errors.New("you have no permission to add users to this room")
 		return err
 	}
-	addUsersToRoom := fmt.Sprintf(addUsersToRoom, allowGroupInvites)
-	_, err = tx.Exec(ctx, addUsersToRoom, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	_, err = tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
+	event.PubChannels = ConvertUint32ToString(r.UserIds)
+	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -182,6 +189,8 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
+	event.PubChannels = ConvertUint32ToString(r.UserIds)
+	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 
@@ -211,6 +220,8 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
+	event.PubChannels = ConvertUint32ToString(r.UserIds)
+	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 
@@ -230,4 +241,15 @@ func (c *PgClient) UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Eve
 		return err
 	}
 	return err
+}
+func ConvertUint32ToString(ids []uint32) []string {
+	if len(ids) == 0 {
+		return []string{}
+	}
+
+	strIds := make([]string, len(ids))
+	for i, id := range ids {
+		strIds[i] = strconv.FormatUint(uint64(id), 10)
+	}
+	return strIds
 }

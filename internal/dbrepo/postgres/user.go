@@ -3,11 +3,12 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/retinotopic/GoChat/internal/models"
-	"github.com/retinotopic/GoChat/pkg/str"
 )
 
 type User struct {
@@ -26,7 +27,7 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if len(u.Username) == 0 {
 		return fmt.Errorf("malformed json")
 	}
-	name := str.NormalizeString(u.Username)
+	name := NormalizeString(u.Username)
 	_, err = u.tx.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", name, event.UserId)
 	if err != nil {
 		return err
@@ -80,4 +81,16 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	return err
+}
+func NormalizeString(input string) string {
+	var builder strings.Builder
+	for _, r := range input {
+		if unicode.IsLetter(r) && unicode.IsLower(unicode.ToLower(r)) || unicode.IsDigit(r) {
+			builder.WriteRune(unicode.ToLower(r))
+		}
+		if builder.Len() == 30 {
+			break
+		}
+	}
+	return builder.String()
 }

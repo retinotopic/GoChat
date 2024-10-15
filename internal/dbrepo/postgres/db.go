@@ -51,8 +51,7 @@ func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
 	_, err := p.Exec(ctx, "INSERT INTO users (subject,name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
 	return err
 }
-func (p *PgClient) FuncApi(ctx context.Context, cancelFunc context.CancelFunc, event *models.Event) error {
-	defer cancelFunc()
+func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
 		tx, err := p.BeginTx(ctx, pgx.TxOptions{})

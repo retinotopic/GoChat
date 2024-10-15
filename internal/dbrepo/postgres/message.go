@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
@@ -29,6 +30,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
+	event.PubChannels = []string{strconv.Itoa(int(m.RoomId))}
 	return err
 }
 func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {

@@ -2,39 +2,30 @@ package pubsub
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/goccy/go-json"
-
-	"github.com/fasthttp/websocket"
+	"github.com/coder/websocket"
 	"github.com/retinotopic/GoChat/internal/logger"
 	"github.com/retinotopic/GoChat/internal/middleware"
 	"github.com/retinotopic/GoChat/internal/models"
-	"github.com/retinotopic/GoChat/pkg/wsutils"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 type Connector struct {
-	GetPS func(context.Context, uint32) (PubSuber, error)
-	Db    Databaser
-	Log   logger.Logger
+	GetPubsub func(context.Context, uint32) (PubSuber, error)
+	Db        Databaser
+	Log       logger.Logger
 }
 
 func (c *Connector) Connect(w http.ResponseWriter, r *http.Request) {
 	sub := middleware.GetUser(r.Context())
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		c.Log.Error("upgrade to websocket err", err)
 		return
 	}
 	userid, err := c.Db.GetUser(r.Context(), sub)
-	pb, err := c.GetPS(r.Context(), userid)
+	pb, err := c.GetPubsub(r.Context(), userid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -47,8 +38,9 @@ type Databaser interface {
 	GetUser(ctx context.Context, sub string) (uint32, error)
 }
 type PubSuber interface {
-	Publish(context.Context, string, bool, string, string) error
-	Channel() <-chan []byte
+	PublishWithSubscriptions(ctx context.Context, pubChannels []string, subChannel string, kind string) error
+	Publish(ctx context.Context, channel string, message string) error
+	Channel(closech <-chan bool) <-chan []byte
 }
 
 // Publish||Subscribe Service
@@ -66,112 +58,61 @@ type pubsub struct {
 func (p *pubsub) WsHandle() {
 	p.errch = make(chan bool, 10)
 	defer func() {
-		p.conn.Close()
+		p.conn.CloseNow()
 		p.errch <- true
 	}()
 
-	go wsutils.KeepAlive(p.conn, time.Second*15, p.errch)
-	go p.WsReadRedis()
-	go p.ReadDb()
-
+	go p.ReadRedis()
+	startevent := &models.Event{Event: "GetAllRooms"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	p.Db.FuncApi(ctx, cancel, &models.Flowjson{Mode: "GetAllRooms"})
-
+	err := p.Db.FuncApi(ctx, cancel, startevent)
+	startevent.ErrorMsg = err.Error()
+	WriteTimeout()
 	for {
-		flowjson := &models.Flowjson{}
-		err := p.conn.ReadJSON(flowjson)
+		_, b, err := p.conn.Read(context.TODO())
 		if err != nil {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-		go p.Db.FuncApi(ctx, cancel, flowjson)
-	}
-}
-
-func (p *pubsub) WsReadRedis() {
-	var err error
-	chps := p.Pb.Channel()
-	for {
-		select {
-		case action, ok := <-chps:
-			if !ok {
-				p.conn.Close()
-				continue
-			}
-			flowjson := models.Flowjson{}
+		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
-			if action.ErrorMsg == "unmarshall error" {
-				p.Log.Error("unmarshalling error", err)
-				p.conn.Close()
-				return
-			}
-			switch {
-			case contains(p.Db.PubSubActions(0), flowjson.Mode):
-				err = p.Pb.Subscribe(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"))
-			case contains(p.Db.PubSubActions(1), flowjson.Mode):
-				err = p.Pb.Unsubscribe(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"))
-			}
-			if err != nil {
-				p.Log.Error("publish || subscribe error", err)
-				p.conn.Close()
-				return
-			}
-			p.writeCh <- flowjson
-		case <-p.errch:
-			return
-		}
-	}
-}
-
-func (p *pubsub) ReadDb() {
-	ch := p.Db.Channel()
-	for {
-		select {
-		case flowjson, ok := <-ch:
-			if !ok {
-				p.conn.Close()
-				continue
-			}
-			p.writeCh <- flowjson
-			if len(flowjson.ErrorMsg) != 0 {
-				continue
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-			defer cancel()
-			payload, err := json.Marshal(&flowjson)
-			if err != nil {
-				p.Log.Error("unmarshalling error", err)
-				p.conn.Close()
-				return
-			}
-			switch {
-			case contains(p.Db.PubSubActions(2), flowjson.Mode):
-				err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.RoomId, "room"), string(payload))
-			default:
-				i := 1
-				for i = range flowjson.Users {
-					err = p.Pb.Publish(ctx, fmt.Sprintf("%d%s", flowjson.Users[i], "user"), string(payload))
-					if err != nil {
-						break
-					}
+			event := &models.Event{Data: b}
+			err := p.Db.FuncApi(ctx, cancel, event)
+			if len(event.SubChannel) != 0 {
+				err = p.Pb.PublishWithSubscriptions(ctx, event.PubChannels, event.SubChannel, event.Kind)
+				if err != nil {
+					p.conn.Close(websocket.StatusInternalError, "internal error")
 				}
 			}
-			if err != nil {
-				p.Log.Error("publish error", err)
-				p.conn.Close()
-				return
+			if len(event.PubChannels) != 0 {
+				p.Pb.Publish(ctx, event.PubChannels[0], string(event.Data))
+				if err != nil {
+					p.conn.Close(websocket.StatusInternalError, "internal error")
+				}
 			}
+			WriteTimeout()
+			p.conn.Write(ctx, 1, b)
+
+		}()
+	}
+}
+
+func (p *pubsub) ReadRedis() {
+	var err error
+	closech := make(chan bool, 1)
+	chps := p.Pb.Channel(closech)
+	for {
+		select {
+		case b := <-chps:
+			err := p.conn.Write(ctx, 1, b)
 		case <-p.errch:
-			return
+			closech <- true
 		}
 	}
 }
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
+func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return c.Write(ctx, websocket.MessageText, msg)
 }
