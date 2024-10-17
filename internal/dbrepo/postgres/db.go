@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/maphash"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -31,16 +30,16 @@ func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 		"GetMessagesFromRoom": GetMessagesFromRoom,
 		"GetNextRooms":        GetNextRooms,
 		"FindUsers":           FindUsers,
-		"SendMessage":         SendMessage,         // 1 second, burst 10
-		"Changename":          ChangeUsername,      // 168 hours, burst 10
-		"ChangePrivacyDirect": ChangePrivacyDirect, // 1 minute, burst 10
-		"ChangePrivacyGroup":  ChangePrivacyGroup,  // 1 minute, burst 10
-		"CreateDuoRoom":       CreateDuoRoom,       // 1 minute, burst 10
-		"CreateGroupRoom":     CreateGroupRoom,     // 1 minute, burst 10
-		"AddUsersToRoom":      AddUsersToRoom,      // 168 hours, burst 10
-		"DeleteUsersFromRoom": DeleteUsersFromRoom, // 168 hours, burst 10
-		"BlockUser":           BlockUser,           // 168 hours, burst 10
-		"UnblockUser":         UnblockUser,         // 168 hours, burst 10
+		"SendMessage":         SendMessage,         // 1 second, burst 1, rate 10/s
+		"Changename":          ChangeUsername,      // 168 hours, burst 1, rate 10/s
+		"ChangePrivacyDirect": ChangePrivacyDirect, // 1 minute, burst 10, rate 10/s
+		"ChangePrivacyGroup":  ChangePrivacyGroup,  // 1 minute, burst 10, rate 10/s
+		"CreateDuoRoom":       CreateDuoRoom,       // 1 hour, burst 10, rate 10/s
+		"CreateGroupRoom":     CreateGroupRoom,     // 1 minute, burst 10, rate 10/s
+		"AddUsersToRoom":      AddUsersToRoom,      // 168 hours, burst 10, rate 10/s
+		"DeleteUsersFromRoom": DeleteUsersFromRoom, // 168 hours, burst 10, rate 10/s
+		"BlockUser":           BlockUser,           // 168 hours, burst 10, rate 10/s
+		"UnblockUser":         UnblockUser,         // 168 hours, burst 10, rate 10/s
 	}
 	return pg, nil
 }
@@ -75,11 +74,11 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	return nil
 
 }
-func (p *PgClient) GetUser(ctx context.Context, sub string) (userid uint32, err error) {
+func (p *PgClient) GetUserId(ctx context.Context, sub string) (userid uint32, err error) {
 	row := p.QueryRow(ctx, "SELECT user_id,name FROM users WHERE subject=$1", sub)
 	err = row.Scan(&userid)
 	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject, name) VALUES ($1, $2) RETURNING user_id, name", sub, fmt.Sprintf("user%v", new(maphash.Hash).Sum64())).Scan(&userid)
+		err = p.QueryRow(ctx, "INSERT INTO users (subject) VALUES ($1) RETURNING user_id, username", sub).Scan(&userid)
 		if err != nil {
 			return userid, fmt.Errorf("failed to create new user: %v", err)
 		}

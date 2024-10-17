@@ -39,9 +39,9 @@ type Publisher interface {
 type PubSub struct {
 	UserId uint32
 	Pb     Publisher
-	conn   *websocket.Conn
 	Db     Databaser
 	Log    logger.Logger
+	conn   *websocket.Conn
 	errch  chan bool
 }
 
@@ -57,7 +57,8 @@ func (p *PubSub) WsHandle() {
 	go p.ReadRedis()
 	startevent := &models.Event{Event: "GetAllRooms"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	err := p.Db.FuncApi(ctx, cancel, startevent)
+	defer cancel()
+	err := p.Db.FuncApi(ctx, startevent)
 	if err != nil {
 		p.conn.Close(websocket.StatusInternalError, "Database error, could not retrieve the initial data")
 		return
@@ -72,7 +73,7 @@ func (p *PubSub) WsHandle() {
 			defer cancel()
 			event := &models.Event{Data: b}
 			event.GetEventName()
-			err := p.Db.FuncApi(ctx, cancel, event)
+			err := p.Db.FuncApi(ctx, event)
 			if len(event.SubChannel) != 0 {
 				err = p.Pb.PublishWithSubscriptions(ctx, event.PubChannels, event.SubChannel, event.Kind)
 				if err != nil {

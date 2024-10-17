@@ -25,15 +25,16 @@ func (r *router) Run(ctx context.Context) error {
 
 	middleware := middleware.UserMiddleware{Fetcher: r.Auth}
 	mux := http.NewServeMux()
-	connect := http.HandlerFunc(r.Cn.Connect)
+	pubsub := pubsub.PubSub{
+		Db:  r.db,
+		Pb:  r.pb,
+		Log: r.log,
+	}
+	connect := http.HandlerFunc(pubsub.Connect)
 
 	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
 	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
 	mux.Handle("/connect", middleware.GetUserMW(connect))
 
-	err := http.ListenAndServe(r.Addr, mux)
-	if err != nil {
-		return err
-	}
-	return nil
+	return http.ListenAndServe(r.Addr, mux)
 }

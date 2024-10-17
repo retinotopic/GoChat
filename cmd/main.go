@@ -20,9 +20,9 @@ import (
 
 func main() {
 	log := zerolog.NewZerologLogger(os.Stdout)
-	addr := flag.String("addr", "localhost:8080", "address to listen on")
-	addrpb := flag.String("addrpb", "localhost:6379", "redis pubsub address")
-	addrdb := flag.String("addrdb", "localhost:5432", "postgres address")
+	addr := flag.String("addr", "localhost:8080", "app address")
+	rdaddr := flag.String("rdaddr", "localhost:6379", "redis address")
+	pgaddr := flag.String("pgaddr", "localhost:5432", "postgres address")
 	mp := make(map[string]provider.Provider)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
@@ -42,14 +42,14 @@ func main() {
 
 	flag.Parse()
 	client := redis.NewClient(&redis.Options{
-		Addr: *addrpb,
+		Addr: *rdaddr,
 	})
 
-	pgclient, err := db.NewPgClient(ctx, *addrdb)
+	pgclient, err := db.NewPgClient(ctx, *pgaddr)
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-	rds := rd.Redis{
+	rds := &rd.Redis{
 		Client: client,
 		Log:    log,
 	}
@@ -63,7 +63,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, &rds, pgclient, log)
+	srv := router.NewRouter(*addr, mp, rds, pgclient, log)
 
 	err = srv.Run(ctx)
 	if err != nil {
