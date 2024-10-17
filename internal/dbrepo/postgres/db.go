@@ -31,16 +31,16 @@ func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 		"GetMessagesFromRoom": GetMessagesFromRoom,
 		"GetNextRooms":        GetNextRooms,
 		"FindUsers":           FindUsers,
-		"SendMessage":         SendMessage,
-		"Changename":          ChangeUsername,
-		"ChangePrivacyDirect": ChangePrivacyDirect,
-		"ChangePrivacyGroup":  ChangePrivacyGroup,
-		"CreateDuoRoom":       CreateDuoRoom,
-		"CreateGroupRoom":     CreateGroupRoom,
-		"AddUsersToRoom":      AddUsersToRoom,
-		"DeleteUsersFromRoom": DeleteUsersFromRoom,
-		"BlockUser":           BlockUser,
-		"UnblockUser":         CreateDuoRoom,
+		"SendMessage":         SendMessage,         // 1 second, burst 10
+		"Changename":          ChangeUsername,      // 168 hours, burst 10
+		"ChangePrivacyDirect": ChangePrivacyDirect, // 1 minute, burst 10
+		"ChangePrivacyGroup":  ChangePrivacyGroup,  // 1 minute, burst 10
+		"CreateDuoRoom":       CreateDuoRoom,       // 1 minute, burst 10
+		"CreateGroupRoom":     CreateGroupRoom,     // 1 minute, burst 10
+		"AddUsersToRoom":      AddUsersToRoom,      // 168 hours, burst 10
+		"DeleteUsersFromRoom": DeleteUsersFromRoom, // 168 hours, burst 10
+		"BlockUser":           BlockUser,           // 168 hours, burst 10
+		"UnblockUser":         UnblockUser,         // 168 hours, burst 10
 	}
 	return pg, nil
 }

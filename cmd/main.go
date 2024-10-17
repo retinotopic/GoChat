@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/stdlib"
@@ -12,7 +11,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	db "github.com/retinotopic/GoChat/internal/dbrepo/postgres"
 	"github.com/retinotopic/GoChat/internal/logger/loggers/zerolog"
-	"github.com/retinotopic/GoChat/internal/pubsub"
 	rd "github.com/retinotopic/GoChat/internal/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/internal/router"
 	"github.com/retinotopic/tinyauth/provider"
@@ -51,9 +49,9 @@ func main() {
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-	fnps := func(ctx context.Context, user uint32) (pubsub.PubSuber, error) {
-		ps := client.Subscribe(ctx, strconv.FormatUint(uint64(user), 10))
-		return &rd.Redis{PubSub: ps, Client: client}, nil
+	rds := rd.Redis{
+		Client: client,
+		Log:    log,
 	}
 	dbs := stdlib.OpenDBFromPool(pgclient.Pool)
 	if err := goose.SetDialect("postgres"); err != nil {
@@ -65,7 +63,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, pubsub.Connector{Db: pgclient, GetPS: fnps, Log: log}, log)
+	srv := router.NewRouter(*addr, mp, &rds, pgclient, log)
 
 	err = srv.Run(ctx)
 	if err != nil {

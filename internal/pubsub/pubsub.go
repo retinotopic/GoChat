@@ -11,43 +11,35 @@ import (
 	"github.com/retinotopic/GoChat/internal/models"
 )
 
-type Connector struct {
-	GetPubsub func(context.Context, uint32) (PubSuber, error)
-	Db        Databaser
-	Log       logger.Logger
-}
-
-func (c *Connector) Connect(w http.ResponseWriter, r *http.Request) {
+func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 	sub := middleware.GetUser(r.Context())
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		c.Log.Error("upgrade to websocket err", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	userid, err := c.Db.GetUser(r.Context(), sub)
-	pb, err := c.GetPubsub(r.Context(), userid)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-	p := pubsub{conn: conn, Pb: pb, Db: c.Db, Log: c.Log, UserId: userid}
+	p.conn = conn
+	userid, err := p.Db.GetUserId(r.Context(), sub)
+	p.UserId = userid
 	p.WsHandle()
 }
 
 type Databaser interface {
-	FuncApi(context.Context, context.CancelFunc, *models.Event) error
-	GetUser(ctx context.Context, sub string) (uint32, error)
+	FuncApi(ctx context.Context, event *models.Event) error
+	GetUserId(ctx context.Context, sub string) (uint32, error)
 }
-type PubSuber interface {
+
+type Publisher interface {
 	PublishWithSubscriptions(ctx context.Context, pubChannels []string, subChannel string, kind string) error
 	Publish(ctx context.Context, channel string, message string) error
-	Channel(closech <-chan bool) <-chan []byte
+	Channel(ctx context.Context, closech <-chan bool, user string) <-chan []byte
 }
 
 // Publish||Subscribe Service
-type pubsub struct {
-	conn   *websocket.Conn
+type PubSub struct {
 	UserId uint32
-	Pb     PubSuber
+	Pb     Publisher
+	conn   *websocket.Conn
 	Db     Databaser
 	Log    logger.Logger
 	errch  chan bool
@@ -55,7 +47,7 @@ type pubsub struct {
 
 // conn, err := upgrader.Upgrade(w, r, nil)
 
-func (p *pubsub) WsHandle() {
+func (p *PubSub) WsHandle() {
 	p.errch = make(chan bool, 10)
 	defer func() {
 		p.conn.CloseNow()
@@ -66,8 +58,10 @@ func (p *pubsub) WsHandle() {
 	startevent := &models.Event{Event: "GetAllRooms"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	err := p.Db.FuncApi(ctx, cancel, startevent)
-	startevent.ErrorMsg = err.Error()
-	WriteTimeout()
+	if err != nil {
+		p.conn.Close(websocket.StatusInternalError, "Database error, could not retrieve the initial data")
+		return
+	}
 	for {
 		_, b, err := p.conn.Read(context.TODO())
 		if err != nil {
@@ -77,6 +71,7 @@ func (p *pubsub) WsHandle() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 			event := &models.Event{Data: b}
+			event.GetEventName()
 			err := p.Db.FuncApi(ctx, cancel, event)
 			if len(event.SubChannel) != 0 {
 				err = p.Pb.PublishWithSubscriptions(ctx, event.PubChannels, event.SubChannel, event.Kind)
@@ -97,7 +92,7 @@ func (p *pubsub) WsHandle() {
 	}
 }
 
-func (p *pubsub) ReadRedis() {
+func (p *PubSub) ReadRedis() {
 	var err error
 	closech := make(chan bool, 1)
 	chps := p.Pb.Channel(closech)

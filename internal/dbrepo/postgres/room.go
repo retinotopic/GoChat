@@ -89,22 +89,30 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-
+	var rows pgx.Rows
 	is_group := false
 	if r.RoomIds[0] == 0 {
 		err := tx.QueryRow(ctx, CreateRoom, r.Name, is_group, event.UserId).Scan(&r.RoomIds[0])
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
+		rows, err = tx.Query(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := tx.Exec(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+		rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 		if err != nil {
 			return err
 		}
+	}
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	if err != nil {
+		return err
+	}
+	event.Data, err = json.Marshal(resp)
+	if err != nil {
+		return err
 	}
 	event.PubChannels = ConvertUint32ToString(r.UserIds)
 	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
@@ -139,7 +147,15 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	rows, err := tx.Query(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	if err != nil {
+		return err
+	}
+	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
@@ -160,7 +176,15 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		err = errors.New("you have no permission to add users to this room")
 		return err
 	}
-	_, err = tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	rows, err := tx.Query(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	if err != nil {
+		return err
+	}
+	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
@@ -185,7 +209,15 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 			}
 		}
 	}
-	_, err = tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], true) // bool param is is_group
+	rows, err := tx.Query(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], true) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	if err != nil {
+		return err
+	}
+	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
@@ -226,7 +258,7 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 }
 
 // Unblocking user
-func (c *PgClient) UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {

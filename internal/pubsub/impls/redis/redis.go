@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 
+	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/internal/logger"
 )
 
 type Redis struct {
-	PubSub *redis.PubSub
 	Client *redis.Client
 	Log    logger.Logger
-	Chan   <-chan interface{}
+	rl     *redis_rate.Limiter
+}
+type PubSuber interface {
+	Unsubscribe(ctx context.Context, channels ...string) error
+	Subscribe(ctx context.Context, channels ...string) error
 }
 
 func (r *Redis) PublishWithSubscriptions(ctx context.Context, pubChannels []string, subChannel string, kind string) (err error) {
@@ -29,11 +33,16 @@ func (r *Redis) Publish(ctx context.Context, channel string, message string) err
 	msg := redis.Message{Channel: channel, Payload: message}
 	return r.Client.Publish(ctx, channel, msg).Err()
 }
-func (r *Redis) Channel(closech <-chan bool) <-chan []byte {
-	ch := r.PubSub.ChannelWithSubscriptions()
+func (r *Redis) Channel(ctx context.Context, closech <-chan bool, user string) <-chan []byte {
+	PubSub := r.Client.Subscribe(ctx, user)
+	ch := PubSub.ChannelWithSubscriptions()
 	resultCh := make(chan []byte, 500)
 	go func() {
-		defer close(resultCh)
+		defer func() {
+			PubSub.Unsubscribe(context.TODO(), user)
+			PubSub.Close()
+			close(resultCh)
+		}()
 		select {
 		case msg, ok := <-ch:
 			if ok {
@@ -42,12 +51,12 @@ func (r *Redis) Channel(closech <-chan bool) <-chan []byte {
 					resultCh <- []byte(v.Payload)
 				case redis.Subscription:
 					if len(v.Kind) == 0 {
-						err := r.PubSub.Unsubscribe(context.TODO(), v.Channel)
+						err := PubSub.Unsubscribe(context.TODO(), v.Channel)
 						if err != nil {
 							return
 						}
 					} else {
-						err := r.PubSub.Subscribe(context.TODO(), v.Channel)
+						err := PubSub.Subscribe(context.TODO(), v.Channel)
 						if err != nil {
 							return
 						}

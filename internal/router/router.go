@@ -13,12 +13,13 @@ import (
 type router struct {
 	Addr string
 	Auth auth.ProviderMap
-	Cn   pubsub.Connector
+	pb   pubsub.Publisher
+	db   pubsub.Databaser
 	log  logger.Logger
 }
 
-func NewRouter(addr string, mp auth.ProviderMap, cn pubsub.Connector, lg logger.Logger) *router {
-	return &router{Addr: addr, Auth: mp, Cn: cn, log: lg}
+func NewRouter(addr string, mp auth.ProviderMap, pb pubsub.Publisher, db pubsub.Databaser, lg logger.Logger) *router {
+	return &router{Addr: addr, Auth: mp, pb: pb, db: db, log: lg}
 }
 func (r *router) Run(ctx context.Context) error {
 
