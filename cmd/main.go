@@ -63,7 +63,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, rds, pgclient, log)
+	srv := router.NewRouter(*addr, mp, rds, pgclient, rds, log)
 
 	err = srv.Run(ctx)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,9 +14,18 @@ import (
 
 type PgClient struct {
 	*pgxpool.Pool
-	UserApi map[string]funcapi
+	Lm      Limiter
+	UserApi map[string]FuncLimiter
 }
-type funcapi = func(context.Context, pgx.Tx, *models.Event) error
+type Limiter interface {
+	Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error)
+}
+type FuncLimiter struct {
+	fn     func(context.Context, pgx.Tx, *models.Event) error
+	rate   int
+	burst  int
+	period time.Duration
+}
 
 func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 	var err error
@@ -25,21 +35,21 @@ func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 	}
 	pg := &PgClient{}
 	pg.Pool = pl
-	pg.UserApi = map[string]funcapi{
-		"GetAllRoomsIds":      GetAllRoomsIds,
-		"GetMessagesFromRoom": GetMessagesFromRoom,
-		"GetNextRooms":        GetNextRooms,
-		"FindUsers":           FindUsers,
-		"SendMessage":         SendMessage,         // 1 second, burst 1, rate 10/s
-		"Changename":          ChangeUsername,      // 168 hours, burst 1, rate 10/s
-		"ChangePrivacyDirect": ChangePrivacyDirect, // 1 minute, burst 10, rate 10/s
-		"ChangePrivacyGroup":  ChangePrivacyGroup,  // 1 minute, burst 10, rate 10/s
-		"CreateDuoRoom":       CreateDuoRoom,       // 1 hour, burst 10, rate 10/s
-		"CreateGroupRoom":     CreateGroupRoom,     // 1 minute, burst 10, rate 10/s
-		"AddUsersToRoom":      AddUsersToRoom,      // 168 hours, burst 10, rate 10/s
-		"DeleteUsersFromRoom": DeleteUsersFromRoom, // 168 hours, burst 10, rate 10/s
-		"BlockUser":           BlockUser,           // 168 hours, burst 10, rate 10/s
-		"UnblockUser":         UnblockUser,         // 168 hours, burst 10, rate 10/s
+	pg.UserApi = map[string]FuncLimiter{
+		"GetAllRoomsIds":      {GetAllRoomsIds, 1, 1, time.Second},
+		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},
+		"GetNextRooms":        {GetNextRooms, 1, 9, time.Second},
+		"FindUsers":           {FindUsers, 1, 1, time.Second},
+		"SendMessage":         {SendMessage, 1, 1, time.Second},
+		"ChangeUsername":      {ChangeUsername, 1, 1, time.Hour * 24 * 7},
+		"ChangePrivacyDirect": {ChangePrivacyDirect, 1, 1, time.Minute},
+		"ChangePrivacyGroup":  {ChangePrivacyGroup, 1, 1, time.Minute},
+		"CreateDuoRoom":       {CreateDuoRoom, 5, 25, time.Minute * 5},
+		"CreateGroupRoom":     {CreateGroupRoom, 5, 25, time.Minute * 5},
+		"AddUsersToRoom":      {AddUsersToRoom, 5, 25, time.Minute * 5},
+		"DeleteUsersFromRoom": {DeleteUsersFromRoom, 5, 25, time.Minute * 5},
+		"BlockUser":           {BlockUser, 5, 25, time.Minute * 5},
+		"UnblockUser":         {UnblockUser, 5, 25, time.Minute * 5},
 	}
 	return pg, nil
 }
@@ -60,7 +70,7 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 		defer func() {
 			tx.Rollback(ctx)
 		}()
-		err = fn(ctx, tx, event)
+		err = fn.fn(ctx, tx, event)
 		if err != nil {
 			return err
 		}

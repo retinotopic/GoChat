@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
@@ -19,6 +20,20 @@ type PubSuber interface {
 	Subscribe(ctx context.Context, channels ...string) error
 }
 
+func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error) {
+	res, err := r.rl.Allow(context.Background(), key, redis_rate.Limit{
+		Rate:   rate,
+		Burst:  burst,
+		Period: period,
+	})
+	if err != nil {
+		return err
+	}
+	if res.Allowed > 0 {
+		return nil
+	}
+	return errors.New("limit exceeded, retry after " + res.RetryAfter.String())
+}
 func (r *Redis) PublishWithSubscriptions(ctx context.Context, pubChannels []string, subChannel string, kind string) (err error) {
 	msg := redis.Subscription{Kind: kind, Channel: subChannel}
 	for i := range pubChannels {

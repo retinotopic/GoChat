@@ -15,11 +15,12 @@ type router struct {
 	Auth auth.ProviderMap
 	pb   pubsub.Publisher
 	db   pubsub.Databaser
+	lm   pubsub.Limiter
 	log  logger.Logger
 }
 
-func NewRouter(addr string, mp auth.ProviderMap, pb pubsub.Publisher, db pubsub.Databaser, lg logger.Logger) *router {
-	return &router{Addr: addr, Auth: mp, pb: pb, db: db, log: lg}
+func NewRouter(addr string, mp auth.ProviderMap, pb pubsub.Publisher, db pubsub.Databaser, lm pubsub.Limiter, lg logger.Logger) *router {
+	return &router{Addr: addr, Auth: mp, pb: pb, db: db, lm: lm, log: lg}
 }
 func (r *router) Run(ctx context.Context) error {
 
@@ -28,6 +29,7 @@ func (r *router) Run(ctx context.Context) error {
 	pubsub := pubsub.PubSub{
 		Db:  r.db,
 		Pb:  r.pb,
+		Lm:  r.lm,
 		Log: r.log,
 	}
 	connect := http.HandlerFunc(pubsub.Connect)
