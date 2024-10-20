@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/goccy/go-json"
+	json "github.com/bytedance/sonic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/retinotopic/GoChat/internal/models"
@@ -70,7 +70,27 @@ func GetAllRoomsIds(ctx context.Context, tx pgx.Tx, event *models.Event) (err er
 	if err != nil {
 		return err
 	}
+	event.OrderCmd[0] = 2
+	event.PubForSub = []string{strconv.Itoa(int(event.UserId))} //1
+	for _, room := range resp {
+		event.SubForPub = append(event.SubForPub, "room"+strconv.Itoa(int(room.RoomId))) //2
+	}
+	event.Kind = "1"
 	return err
+}
+func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+	first, second := r.UserIds[0], event.UserId
+	if event.UserId > r.RoomIds[0] {
+		first, second = event.UserId, r.UserIds[0]
+	}
+	row := tx.QueryRow(ctx, `SELECT room_id
+		FROM duo_rooms
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, first, second)
+	err := row.Scan(r.RoomIds[0])
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	return nil
 }
 
 // method for safely creating unique duo room
@@ -114,24 +134,14 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	event.PubChannels = ConvertUint32ToString(r.UserIds)
-	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
+	event.OrderCmd[0] = 2
+	event.OrderCmd[1] = 1
+	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = "1"
 	return err
 }
-func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.Event) error {
-	first, second := r.UserIds[0], event.UserId
-	if event.UserId > r.RoomIds[0] {
-		first, second = event.UserId, r.UserIds[0]
-	}
-	row := tx.QueryRow(ctx, `SELECT room_id
-		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, first, second)
-	err := row.Scan(r.RoomIds[0])
-	if err != nil && err != pgx.ErrNoRows {
-		return err
-	}
-	return nil
-}
+
 func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
@@ -159,8 +169,11 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	if err != nil {
 		return err
 	}
-	event.PubChannels = ConvertUint32ToString(r.UserIds)
-	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
+	event.OrderCmd[0] = 2
+	event.OrderCmd[1] = 1
+	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = "1"
 	return err
 }
 func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -188,8 +201,11 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	event.PubChannels = ConvertUint32ToString(r.UserIds)
-	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
+	event.OrderCmd[0] = 2
+	event.OrderCmd[1] = 1
+	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = "1"
 	return err
 }
 func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -221,12 +237,15 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	event.PubChannels = ConvertUint32ToString(r.UserIds)
-	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
+	event.OrderCmd[0] = 1
+	event.OrderCmd[1] = 2
+	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = "0"
 	return err
 }
 
-// Blocking user and delete user from duo room
+// Blocking user and delete user from room_users_info
 func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
@@ -246,14 +265,16 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		if err != nil {
 			return err
 		}
+		event.OrderCmd[0] = 2
+		event.PubForSub = ConvertUint32ToString(r.UserIds)
+		event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+		event.Kind = "0"
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
 		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
 	if err != nil {
 		return err
 	}
-	event.PubChannels = ConvertUint32ToString(r.UserIds)
-	event.SubChannel = strconv.Itoa(int(r.RoomIds[0]))
 	return err
 }
 
@@ -279,7 +300,7 @@ func ConvertUint32ToString(ids []uint32) []string {
 		return []string{}
 	}
 
-	strIds := make([]string, len(ids))
+	strIds := make([]string, len(ids)+1)
 	for i, id := range ids {
 		strIds[i] = strconv.FormatUint(uint64(id), 10)
 	}

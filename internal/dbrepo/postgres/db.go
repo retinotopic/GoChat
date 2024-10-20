@@ -27,7 +27,7 @@ type FuncLimiter struct {
 	period time.Duration
 }
 
-func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
+func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error) {
 	var err error
 	pl, err := pgxpool.New(ctx, addr)
 	if err != nil {
@@ -35,6 +35,7 @@ func NewPgClient(ctx context.Context, addr string) (*PgClient, error) {
 	}
 	pg := &PgClient{}
 	pg.Pool = pl
+	pg.Lm = lm
 	pg.UserApi = map[string]FuncLimiter{
 		"GetAllRoomsIds":      {GetAllRoomsIds, 1, 1, time.Second},
 		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},
@@ -63,6 +64,10 @@ func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
 func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
+		err := p.Lm.Allow(ctx, event.Event, fn.rate, fn.burst, fn.period)
+		if err != nil {
+			return err
+		}
 		tx, err := p.BeginTx(ctx, pgx.TxOptions{})
 		if err != nil {
 			return err
@@ -84,16 +89,16 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	return nil
 
 }
-func (p *PgClient) GetUserId(ctx context.Context, sub string) (userid uint32, err error) {
-	row := p.QueryRow(ctx, "SELECT user_id,name FROM users WHERE subject=$1", sub)
-	err = row.Scan(&userid)
+func (p *PgClient) GetUserId(ctx context.Context, sub string) (userid uint32, username string, err error) {
+	row := p.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
+	err = row.Scan(&userid, &username)
 	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject) VALUES ($1) RETURNING user_id, username", sub).Scan(&userid)
+		err = p.QueryRow(ctx, "INSERT INTO users (subject) VALUES ($1) RETURNING user_id, username", sub).Scan(&userid, &username)
 		if err != nil {
-			return userid, fmt.Errorf("failed to create new user: %v", err)
+			return userid, username, fmt.Errorf("failed to create new user: %v", err)
 		}
 	} else {
-		return userid, fmt.Errorf("failed to query user: %v", err)
+		return userid, username, fmt.Errorf("failed to query user: %v", err)
 	}
-	return userid, err
+	return userid, username, err
 }

@@ -15,7 +15,6 @@ type User struct {
 	UserId   uint32 `json:"UserId"`
 	Username string `json:"Username" `
 	Bool     bool   `json:"Bool" `
-	tx       pgx.Tx `json:"-"`
 }
 
 func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -28,7 +27,7 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return fmt.Errorf("malformed json")
 	}
 	name := NormalizeString(u.Username)
-	_, err = u.tx.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", name, event.UserId)
+	_, err = tx.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", name, event.UserId)
 	if err != nil {
 		return err
 	}
@@ -40,7 +39,7 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	_, err = u.tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	_, err = tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.Bool, event.UserId)
 	if err != nil {
 		return err
 	}
@@ -52,7 +51,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.Event) err
 	if err != nil {
 		return err
 	}
-	_, err = u.tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	_, err = tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.Bool, event.UserId)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-redis/redis_rate/v10"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
@@ -44,15 +45,16 @@ func main() {
 	client := redis.NewClient(&redis.Options{
 		Addr: *rdaddr,
 	})
-
-	pgclient, err := db.NewPgClient(ctx, *pgaddr)
+	rds := &rd.Redis{
+		Client:  client,
+		Log:     log,
+		Limiter: redis_rate.NewLimiter(client),
+	}
+	pgclient, err := db.NewPgClient(ctx, *pgaddr, rds)
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-	rds := &rd.Redis{
-		Client: client,
-		Log:    log,
-	}
+
 	dbs := stdlib.OpenDBFromPool(pgclient.Pool)
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal("goose set dialect:", err)
@@ -63,7 +65,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, rds, pgclient, rds, log)
+	srv := router.NewRouter(*addr, mp, rds, pgclient, log)
 
 	err = srv.Run(ctx)
 	if err != nil {

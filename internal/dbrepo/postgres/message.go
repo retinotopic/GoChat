@@ -30,7 +30,8 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	event.PubChannels = []string{strconv.Itoa(int(m.RoomId))}
+	event.OrderCmd[0] = 1
+	event.SubForPub = []string{strconv.Itoa(int(m.RoomId))}
 	return err
 }
 func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
