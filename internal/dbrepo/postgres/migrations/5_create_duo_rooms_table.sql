@@ -9,7 +9,6 @@ CREATE TABLE public.duo_rooms (
     CONSTRAINT user_id1_fk FOREIGN KEY (user_id1) REFERENCES public.users(user_id),
     CONSTRAINT user_id2_fk FOREIGN KEY (user_id2) REFERENCES public.users(user_id)
 );
-
 CREATE UNIQUE INDEX user1_user2_unique_index ON public.duo_rooms USING btree (user_id1, user_id2) WITH (deduplicate_items='true');
 
 -- +goose Down

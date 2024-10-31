@@ -18,7 +18,7 @@ LEFT JOIN blocked_users bu ON (bu.blocked_by_user_id = users_to_add.user_id AND 
 OR (bu.blocked_by_user_id = $4 AND bu.blocked_user_id = users_to_add.user_id )
 WHERE bu.blocked_by_user_id IS NULL RETURNING user_id)
 
-SELECT u.user_id,u.username FROM users u JOIN addusers ad ON ad.user_id = u.user_id;`
+SELECT u.user_id,u.user_name FROM users u JOIN addusers ad ON ad.user_id = u.user_id;`
 
 var addUsersToRoomGroup = fmt.Sprintf(addUsersToRoom, allowGroupInvites)
 var addUsersToRoomDirect = fmt.Sprintf(addUsersToRoom, allowDirectMessages)
@@ -33,6 +33,6 @@ AND room_id IN (
 	WHERE room_id = $2 AND is_group = $3
 ) RETURNING user_id ) 
 
-SELECT u.user_id,u.username FROM users u JOIN delusers de ON de.user_id = u.user_id;`
+SELECT u.user_id,u.user_name FROM users u JOIN delusers de ON de.user_id = u.user_id;`
 
-var CreateRoom = "INSERT INTO rooms (name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id"
+var CreateRoom = "INSERT INTO rooms (room_name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id"

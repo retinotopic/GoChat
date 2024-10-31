@@ -13,51 +13,25 @@ import (
 )
 
 type RoomRequest struct {
-	UserIds []uint32 `json:"UserIds" `
-	RoomIds []uint32 `json:"RoomIds" `
-	Name    string   `json:"Name" `
-	IsGroup bool     `json:"IsGroup" `
+	UserIds  []uint32 `json:"UserIds" `
+	RoomIds  []uint32 `json:"RoomIds" `
+	RoomName string   `json:"RoomName" `
+	IsGroup  bool     `json:"IsGroup" `
 }
 type RoomClient struct {
 	RoomId   uint32 `json:"RoomId" `
 	UserId   uint32 `json:"UserId" `
-	Name     string `json:"Name" `
+	RoomName string `json:"RoomName" `
 	IsGroup  bool   `json:"IsGroup" `
 	Username string `json:"Username" `
 }
 
-func GetNextRooms(ctx context.Context, tx pgx.Tx, event *models.Event) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
-	if err != nil {
-		return err
-	}
-	if len(r.RoomIds) == 0 {
-		return fmt.Errorf("malformed json")
-	}
+func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
 	rows, err := tx.Query(ctx,
-		`SELECT ru.room_id,ru.user_id,r.name,r.is_group,u.username FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
-WHERE ru.room_id = ANY($1) ORDER BY ru.room_id`, r.RoomIds)
-	if err != nil {
-		return err
-	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
-	if err != nil {
-		return err
-	}
-	event.Data, err = json.Marshal(resp)
-	if err != nil {
-		return err
-	}
-	return err
-}
-
-func GetAllRoomsIds(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
-	rows, err := tx.Query(ctx,
-		`SELECT r.room_id
-		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id
+		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,u.user_name
+		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
 		WHERE ru.user_id = $1 
-		ORDER BY r.last_activity DESC;
+		ORDER BY r.last_activity DESC, r.room_id;
 		`, event.UserId)
 	if err != nil {
 		return err
@@ -112,20 +86,20 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	var rows pgx.Rows
 	is_group := false
 	if r.RoomIds[0] == 0 {
-		err := tx.QueryRow(ctx, CreateRoom, r.Name, is_group, event.UserId).Scan(&r.RoomIds[0])
+		err := tx.QueryRow(ctx, CreateRoom, r.RoomName, is_group, event.UserId).Scan(&r.RoomIds[0])
 		if err != nil {
 			return err
 		}
-		rows, err = tx.Query(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
-		if err != nil {
-			return err
-		}
-	} else {
-		rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+		_, err = tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
 		if err != nil {
 			return err
 		}
 	}
+	rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	if err != nil {
+		return err
+	}
+
 	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
 	if err != nil {
 		return err
@@ -149,11 +123,11 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 		return err
 	}
 	r.RoomIds = make([]uint32, 1)
-	if len(r.Name) == 0 || len(r.UserIds) == 0 {
+	if len(r.RoomName) == 0 || len(r.UserIds) == 0 {
 		return fmt.Errorf("malformed json")
 	}
 	// create new room and return room id
-	err = tx.QueryRow(ctx, CreateRoom, r.Name, true, event.UserId).Scan(r.RoomIds[0]) // bool param is is_group
+	err = tx.QueryRow(ctx, CreateRoom, r.RoomName, true, event.UserId).Scan(r.RoomIds[0]) // bool param is is_group
 	if err != nil {
 		return err
 	}

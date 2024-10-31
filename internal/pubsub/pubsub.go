@@ -69,7 +69,7 @@ func (p *PubSub) WsHandle() {
 		}
 		event := &models.Event{Data: b}
 		event.GetEventName()
-		p.ProcessEvent(event)
+		go p.ProcessEvent(event)
 	}
 }
 
@@ -122,6 +122,8 @@ func (p *PubSub) ProcessEvent(event *models.Event) {
 	if err != nil {
 		p.conn.Close(websocket.StatusInternalError, "internal error")
 	}
-	WriteTimeout(time.Second*15, p.conn, bs)
-
+	err = WriteTimeout(time.Second*15, p.conn, bs)
+	if err != nil {
+		p.conn.Close(websocket.StatusInternalError, "internal error")
+	}
 }

@@ -1,8 +1,8 @@
 -- +goose Up
+-- +goose StatementBegin
 CREATE FUNCTION public.check_room_limit() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE
+    AS $$DECLARE
     current_user_count INTEGER;
     current_room_count INTEGER;
 BEGIN	
@@ -43,6 +43,7 @@ BEGIN
     END IF;
 END;
 $$;
+-- +goose StatementEnd
 
 -- +goose Down
 DROP FUNCTION IF EXISTS public.check_room_limit();

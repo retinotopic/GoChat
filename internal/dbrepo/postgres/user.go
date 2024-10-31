@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -26,8 +27,11 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if len(u.Username) == 0 {
 		return fmt.Errorf("malformed json")
 	}
-	name := NormalizeString(u.Username)
-	_, err = tx.Exec(ctx, "UPDATE users SET username = $1 WHERE user_id = $2", name, event.UserId)
+	name, err := NormalizeString(u.Username)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "UPDATE users SET user_name = $1 WHERE user_id = $2", name, event.UserId)
 	if err != nil {
 		return err
 	}
@@ -67,7 +71,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return fmt.Errorf("malformed json")
 	}
 	rows, err := tx.Query(ctx,
-		`SELECT user_id,username FROM users WHERE username ILIKE $1 LIMIT 20`, u.Username+"%")
+		`SELECT user_id,user_name FROM users WHERE user_name ILIKE $1 LIMIT 100`, u.Username+"%")
 	if err != nil {
 		return err
 	}
@@ -81,15 +85,18 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
-func NormalizeString(input string) string {
+func NormalizeString(input string) (string, error) {
 	var builder strings.Builder
 	for _, r := range input {
-		if unicode.IsLetter(r) && unicode.IsLower(unicode.ToLower(r)) || unicode.IsDigit(r) {
+		if unicode.IsLetter(r) && ((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
 			builder.WriteRune(unicode.ToLower(r))
 		}
 		if builder.Len() == 30 {
 			break
 		}
 	}
-	return builder.String()
+	if builder.Len() == 0 {
+		return "", errors.New("malformed name")
+	}
+	return builder.String(), nil
 }

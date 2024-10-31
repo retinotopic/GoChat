@@ -37,9 +37,8 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	pg.Pool = pl
 	pg.Lm = lm
 	pg.UserApi = map[string]FuncLimiter{
-		"GetAllRoomsIds":      {GetAllRoomsIds, 1, 1, time.Second},
+		"GetAllRooms":         {GetAllRooms, 1, 1, time.Second},
 		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},
-		"GetNextRooms":        {GetNextRooms, 1, 9, time.Second},
 		"FindUsers":           {FindUsers, 1, 1, time.Second},
 		"SendMessage":         {SendMessage, 1, 1, time.Second},
 		"ChangeUsername":      {ChangeUsername, 1, 1, time.Hour * 24 * 7},
@@ -58,7 +57,7 @@ func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
 	if strings.ContainsAny(name, " \t\n") {
 		return errors.New("contains spaces")
 	}
-	_, err := p.Exec(ctx, "INSERT INTO users (subject,name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
+	_, err := p.Exec(ctx, "INSERT INTO users (user_subject,user_name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
 	return err
 }
 func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
@@ -90,10 +89,10 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 
 }
 func (p *PgClient) GetUserId(ctx context.Context, sub string) (userid uint32, username string, err error) {
-	row := p.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
+	row := p.QueryRow(ctx, "SELECT user_id,user_name FROM users WHERE user_subject=$1", sub)
 	err = row.Scan(&userid, &username)
 	if err == pgx.ErrNoRows {
-		err = p.QueryRow(ctx, "INSERT INTO users (subject) VALUES ($1) RETURNING user_id, username", sub).Scan(&userid, &username)
+		err = p.QueryRow(ctx, "INSERT INTO users (user_subject) VALUES ($1) RETURNING user_id, user_name", sub).Scan(&userid, &username)
 		if err != nil {
 			return userid, username, fmt.Errorf("failed to create new user: %v", err)
 		}

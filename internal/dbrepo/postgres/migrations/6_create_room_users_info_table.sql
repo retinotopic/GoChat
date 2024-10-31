@@ -7,7 +7,6 @@ CREATE TABLE public.room_users_info (
     CONSTRAINT room_id_fk FOREIGN KEY (room_id) REFERENCES public.rooms(room_id),
     CONSTRAINT users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-
 CREATE UNIQUE INDEX user_room_unique_index ON public.room_users_info USING btree (user_id, room_id) WITH (deduplicate_items='true');
 CREATE INDEX rui_room_index ON public.room_users_info USING btree (room_id) WITH (deduplicate_items='true');
 

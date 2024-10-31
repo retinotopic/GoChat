@@ -9,7 +9,7 @@ type Event struct {
 	Kind      string   `json:"-"` // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
 	SubForPub []string `json:"-"` // a channels to publish to
 	PubForSub []string `json:"-"` // publish in user channelsfor subscribe/unsubscribe only
-	OrderCmd  [2]int   `json:"-"` // 1 means PublishWithMessage, 2 means PublishWithSubscriptions, 0 means nothing
+	OrderCmd  [2]int   `json:"-"` // value 1 means PublishWithMessage, value 2 means PublishWithSubscriptions, 0 means nothing
 	Data      []byte   `json:"-"`
 }
 

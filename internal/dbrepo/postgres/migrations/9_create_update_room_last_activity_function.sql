@@ -1,4 +1,5 @@
 -- +goose Up
+-- +goose StatementBegin
 CREATE FUNCTION public.update_room_last_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -10,6 +11,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+-- +goose StatementEnd
 
 -- +goose Down
 DROP FUNCTION IF EXISTS public.update_room_last_activity();
