@@ -19,16 +19,17 @@ type RoomRequest struct {
 	IsGroup  bool     `json:"IsGroup" `
 }
 type RoomClient struct {
-	RoomId   uint32 `json:"RoomId" `
-	UserId   uint32 `json:"UserId" `
-	RoomName string `json:"RoomName" `
-	IsGroup  bool   `json:"IsGroup" `
-	Username string `json:"Username" `
+	RoomId          uint32 `json:"RoomId" `
+	UserId          uint32 `json:"UserId" `
+	RoomName        string `json:"RoomName" `
+	IsGroup         bool   `json:"IsGroup" `
+	CreatedByUserId uint32 `json:"CreatedByUserId" `
+	Username        string `json:"Username" `
 }
 
 func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
 	rows, err := tx.Query(ctx,
-		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,u.user_name
+		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,r.created_by_user_id,u.user_name
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
 		WHERE ru.user_id = $1 
 		ORDER BY r.last_activity DESC, r.room_id;
@@ -77,7 +78,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	r.RoomIds = make([]uint32, 1)
 	if len(r.UserIds) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	err = r.IsDuoRoomExist(ctx, tx, event)
 	if err != nil {
@@ -124,7 +125,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	}
 	r.RoomIds = make([]uint32, 1)
 	if len(r.RoomName) == 0 || len(r.UserIds) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	// create new room and return room id
 	err = tx.QueryRow(ctx, CreateRoom, r.RoomName, true, event.UserId).Scan(r.RoomIds[0]) // bool param is is_group
@@ -157,7 +158,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	if len(r.RoomIds) == 0 || len(r.UserIds) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
 		err = errors.New("you have no permission to add users to this room")
@@ -189,9 +190,9 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 		return err
 	}
 	if len(r.RoomIds) == 0 || len(r.UserIds) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
-	if len(r.UserIds) != 1 || r.UserIds[0] != event.UserId { // first if statement, if the user wants to remove themselves from the room skip this check
+	if len(r.UserIds) != 1 || r.UserIds[0] != event.UserId { // if the user wants to remove themselves from the room skip this check
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
 			err = errors.New("you have no permission to delete users from this room")
 			if err != nil {
@@ -260,7 +261,7 @@ func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	if len(r.UserIds) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM blocked_users 
 			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, event.UserId, r.UserIds[0])

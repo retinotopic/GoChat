@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strconv"
 
 	"github.com/goccy/go-json"
@@ -24,7 +24,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	if len(m.MessagePayload) == 0 || m.RoomId == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO messages (MessagePayload,user_id,room_id) VALUES ($1,$2,$3)`, m.MessagePayload, event.UserId, m.RoomId)
 	if err != nil {
@@ -41,7 +41,7 @@ func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 		return err
 	}
 	if m.MessageId == 0 || m.RoomId == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT MessagePayload,user_id,

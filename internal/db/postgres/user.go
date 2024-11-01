@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -25,13 +24,16 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	if len(u.Username) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
-	name, err := NormalizeString(u.Username)
+	username, err := NormalizeString(u.Username)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, "UPDATE users SET user_name = $1 WHERE user_id = $2", name, event.UserId)
+	tag, err := tx.Exec(ctx, "UPDATE users SET user_name = $1 WHERE user_id = $2", username, event.UserId)
+	if tag.RowsAffected() == 0 {
+		return errors.New("internal database error, username hasn't changed")
+	}
 	if err != nil {
 		return err
 	}
@@ -43,7 +45,10 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	tag, err := tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	if tag.RowsAffected() == 0 {
+		return errors.New("internal database error, 'allow direct messages' hasn't changed")
+	}
 	if err != nil {
 		return err
 	}
@@ -55,7 +60,10 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.Event) err
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	tag, err := tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	if tag.RowsAffected() == 0 {
+		return errors.New("internal database error, 'allow group invites' hasn't changed")
+	}
 	if err != nil {
 		return err
 	}
@@ -68,7 +76,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 	if len(u.Username) == 0 {
-		return fmt.Errorf("malformed json")
+		return errors.New("malformed json")
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT user_id,user_name FROM users WHERE user_name ILIKE $1 LIMIT 100`, u.Username+"%")
