@@ -93,6 +93,22 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
+func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+	rows, err := tx.Query(ctx,
+		`SELECT u.user_name,b.blocked_user_id FROM blocked_users b JOIN users u ON u.user_id = b.blocked_user_id WHERE blocked_by_user_id = $1`, event.UserId)
+	if err != nil {
+		return err
+	}
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[User])
+	if err != nil {
+		return err
+	}
+	event.Data, err = json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	return err
+}
 func NormalizeString(input string) (string, error) {
 	var builder strings.Builder
 	for _, r := range input {
