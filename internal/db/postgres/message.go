@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/goccy/go-json"
+	json "github.com/bytedance/sonic"
 	"github.com/jackc/pgx/v5"
 	"github.com/retinotopic/GoChat/internal/models"
 )

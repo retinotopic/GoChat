@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
-	db "github.com/retinotopic/GoChat/internal/dbrepo/postgres"
+	db "github.com/retinotopic/GoChat/internal/db/postgres"
 	"github.com/retinotopic/GoChat/internal/logger/loggers/zerolog"
 	rd "github.com/retinotopic/GoChat/internal/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/internal/router"

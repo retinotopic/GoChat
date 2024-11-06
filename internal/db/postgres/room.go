@@ -20,11 +20,12 @@ type RoomRequest struct {
 }
 type RoomClient struct {
 	RoomId          uint32 `json:"RoomId" `
-	UserId          uint32 `json:"UserId" `
 	RoomName        string `json:"RoomName" `
 	IsGroup         bool   `json:"IsGroup" `
 	CreatedByUserId uint32 `json:"CreatedByUserId" `
-	Username        string `json:"Username" `
+	Users           []User `json:"Users" `
+	Username        string
+	UserId          uint32
 }
 
 func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
@@ -101,7 +102,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 		return err
 	}
 
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
 	}
@@ -136,7 +137,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
 	}
@@ -168,7 +169,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
 	}
@@ -204,7 +205,8 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+
+	resp, err := NormalizeRoom(rows, true)
 	if err != nil {
 		return err
 	}
@@ -280,4 +282,32 @@ func ConvertUint32ToString(ids []uint32) []string {
 		strIds[i] = strconv.FormatUint(uint64(id), 10)
 	}
 	return strIds
+}
+func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
+	var rms []RoomClient
+	var err error
+	var currentroom uint32
+	defer rows.Close()
+	for rows.Next() {
+		r, err := pgx.RowToStructByNameLax[RoomClient](rows)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println(r, "aaa")
+		if r.RoomId == currentroom {
+			last := len(rms) - 1
+			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, Bool: userDelete})
+		} else {
+			rms = append(rms, r)
+			last := len(rms) - 1
+			rms[last].Users = make([]User, 0, 3)
+			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, Bool: userDelete})
+			currentroom = r.RoomId
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return rms, err
 }
