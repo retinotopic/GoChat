@@ -38,7 +38,7 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[RoomClient])
+	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
 	}
@@ -272,6 +272,35 @@ func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
+func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+	r := &RoomRequest{}
+	err := json.Unmarshal(event.Data, r)
+	if err != nil {
+		return err
+	}
+	if len(r.RoomIds) == 0 || len(r.RoomName) == 0 {
+		return errors.New("malformed json")
+	}
+	r.RoomName, err = NormalizeString(r.RoomName)
+	if err != nil {
+		return err
+	}
+
+	tag, err := tx.Exec(ctx, `UPDATE rooms SET room_name = $1 WHERE room_id = $2 AND created_by_user_id = $3`, r.RoomName, r.RoomIds[0], event.UserId)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("internal database error, 'change room name' hasn't changed")
+	}
+	event.Data, err = json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	event.OrderCmd[0] = 1
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	return err
+}
 func ConvertUint32ToString(ids []uint32) []string {
 	if len(ids) == 0 {
 		return []string{}
@@ -294,7 +323,6 @@ func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 			return nil, err
 		}
 
-		fmt.Println(r, "aaa")
 		if r.RoomId == currentroom {
 			last := len(rms) - 1
 			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, Bool: userDelete})

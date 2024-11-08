@@ -44,10 +44,10 @@ func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 		return errors.New("malformed json")
 	}
 	rows, err := tx.Query(ctx,
-		`SELECT MessagePayload,user_id,
+		`SELECT MessagePayload,user_id,message_id,room_id
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
-		ORDER BY message_id DESC`, m.RoomId, m.MessageId)
+		ORDER BY message_id DESC LIMIT 50`, m.RoomId, m.MessageId)
 	if err != nil {
 		return err
 	}
