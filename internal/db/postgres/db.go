@@ -38,6 +38,7 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	pg.Lm = lm
 	pg.UserApi = map[string]FuncLimiter{
 		"GetAllRooms":         {GetAllRooms, 1, 1, time.Second},              // initial start
+		"ChangeRoomname":      {ChangeRoomname, 1, 1, time.Second},           // from group room
 		"GetBlockedUsers":     {GetBlockedUsers, 1, 1, time.Second},          // panel
 		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},      // from group room and user room
 		"FindUsers":           {FindUsers, 1, 1, time.Second},                // panel

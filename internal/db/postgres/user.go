@@ -12,7 +12,7 @@ import (
 )
 
 type User struct {
-	UserId   uint32 `json:"UserId"`
+	UserId   uint64 `json:"UserId"`
 	Username string `json:"Username" `
 	Bool     bool   `json:"Bool" `
 }

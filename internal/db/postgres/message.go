@@ -12,9 +12,9 @@ import (
 
 type Message struct {
 	MessagePayload string `json:"MessagePayload"`
-	MessageId      uint32 `json:"MessageId" `
-	RoomId         uint32 `json:"RoomId" `
-	UserId         uint32 `json:"UserId" `
+	MessageId      uint64 `json:"MessageId" `
+	RoomId         uint64 `json:"RoomId" `
+	UserId         uint64 `json:"UserId" `
 }
 
 func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {

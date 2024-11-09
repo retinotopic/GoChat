@@ -5,7 +5,7 @@ import "bytes"
 type Event struct {
 	Event     string   `json:"Event"`
 	ErrorMsg  string   `json:"ErrorMsg"`
-	UserId    uint32   `json:"UserId"`
+	UserId    uint64   `json:"UserId"`
 	Kind      string   `json:"-"` // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
 	SubForPub []string `json:"-"` // a channels to publish to
 	PubForSub []string `json:"-"` // publish in "user" channels for subscribe/unsubscribe only

@@ -13,19 +13,19 @@ import (
 )
 
 type RoomRequest struct {
-	UserIds  []uint32 `json:"UserIds" `
-	RoomIds  []uint32 `json:"RoomIds" `
+	UserIds  []uint64 `json:"UserIds" `
+	RoomIds  []uint64 `json:"RoomIds" `
 	RoomName string   `json:"RoomName" `
 	IsGroup  bool     `json:"IsGroup" `
 }
 type RoomClient struct {
-	RoomId          uint32 `json:"RoomId" `
+	RoomId          uint64 `json:"RoomId" `
 	RoomName        string `json:"RoomName" `
 	IsGroup         bool   `json:"IsGroup" `
-	CreatedByUserId uint32 `json:"CreatedByUserId" `
+	CreatedByUserId uint64 `json:"CreatedByUserId" `
 	Users           []User `json:"Users" `
 	Username        string
-	UserId          uint32
+	UserId          uint64
 }
 
 func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
@@ -77,7 +77,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	r.RoomIds = make([]uint32, 1)
+	r.RoomIds = make([]uint64, 1)
 	if len(r.UserIds) == 0 {
 		return errors.New("malformed json")
 	}
@@ -112,7 +112,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
 	return err
@@ -124,7 +124,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	if err != nil {
 		return err
 	}
-	r.RoomIds = make([]uint32, 1)
+	r.RoomIds = make([]uint64, 1)
 	if len(r.RoomName) == 0 || len(r.UserIds) == 0 {
 		return errors.New("malformed json")
 	}
@@ -147,7 +147,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
 	return err
@@ -179,7 +179,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
 	return err
@@ -216,7 +216,7 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	}
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
-	event.PubForSub = ConvertUint32ToString(r.UserIds)
+	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
 	return err
@@ -229,24 +229,20 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	r.RoomIds = make([]uint32, 1)
+	r.RoomIds = make([]uint64, 1)
 	if len(r.UserIds) == 0 {
 		return fmt.Errorf("malformed json")
 	}
-	err = r.IsDuoRoomExist(ctx, tx, event)
+
+	_, err = tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	if r.RoomIds[0] != 0 {
-		_, err = tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
-		if err != nil {
-			return err
-		}
-		event.OrderCmd[0] = 2
-		event.PubForSub = ConvertUint32ToString(r.UserIds)
-		event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-		event.Kind = "0"
-	}
+	event.OrderCmd[0] = 2
+	event.PubForSub = ConvertUint64ToString(r.UserIds)
+	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = "0"
+
 	_, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
 		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
 	if err != nil {
@@ -301,7 +297,7 @@ func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	return err
 }
-func ConvertUint32ToString(ids []uint32) []string {
+func ConvertUint64ToString(ids []uint64) []string {
 	if len(ids) == 0 {
 		return []string{}
 	}
@@ -315,7 +311,7 @@ func ConvertUint32ToString(ids []uint32) []string {
 func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 	var rms []RoomClient
 	var err error
-	var currentroom uint32
+	var currentroom uint64
 	defer rows.Close()
 	for rows.Next() {
 		r, err := pgx.RowToStructByNameLax[RoomClient](rows)
