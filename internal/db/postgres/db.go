@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/internal/models"
@@ -90,16 +91,22 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	return nil
 
 }
-func (p *PgClient) GetUserId(ctx context.Context, sub string) (userid uint32, username string, err error) {
+func (p *PgClient) GetUser(ctx context.Context, sub string) (b []byte, userid uint64, err error) {
+	var username string
 	row := p.QueryRow(ctx, "SELECT user_id,user_name FROM users WHERE user_subject=$1", sub)
 	err = row.Scan(&userid, &username)
 	if err == pgx.ErrNoRows {
 		err = p.QueryRow(ctx, "INSERT INTO users (user_subject) VALUES ($1) RETURNING user_id, user_name", sub).Scan(&userid, &username)
 		if err != nil {
-			return userid, username, fmt.Errorf("failed to create new user: %v", err)
+			return nil, userid, fmt.Errorf("failed to create new user: %v", err)
 		}
 	} else {
-		return userid, username, fmt.Errorf("failed to query user: %v", err)
+		return nil, userid, fmt.Errorf("failed to query user: %v", err)
 	}
-	return userid, username, err
+	u := User{UserId: userid, Username: username}
+	b, err = json.Marshal(u)
+	if err != nil {
+		return nil, userid, err
+	}
+	return b, userid, err
 }

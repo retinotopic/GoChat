@@ -15,12 +15,11 @@ import (
 
 func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 	sub := middleware.GetUser(r.Context())
-	userid, username, err := p.Db.GetUserId(r.Context(), sub)
+	b, userid, err := p.Db.GetUser(r.Context(), sub)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	w.Write([]byte(`{"UserId":` + strconv.Itoa(int(userid)) + `,"Username":"` + username + `"}`))
 
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
@@ -29,12 +28,16 @@ func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	p.conn = conn
 	p.UserId = userid
+	err = WriteTimeout(time.Second*15, p.conn, b)
+	if err != nil {
+		p.conn.CloseNow()
+	}
 	p.WsHandle()
 }
 
 type Databaser interface {
 	FuncApi(ctx context.Context, event *models.Event) error
-	GetUserId(ctx context.Context, sub string) (uint32, string, error)
+	GetUser(ctx context.Context, sub string) ([]byte, uint64, error)
 }
 
 type Publisher interface {
@@ -45,7 +48,7 @@ type Publisher interface {
 
 // Publish||Subscribe Service
 type PubSub struct {
-	UserId uint32
+	UserId uint64
 	Pb     Publisher
 	Db     Databaser
 	Log    logger.Logger
@@ -108,22 +111,22 @@ func (p *PubSub) ProcessEvent(event *models.Event) {
 		case 1:
 			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(event.Data))
 			if err != nil {
-				p.conn.Close(websocket.StatusInternalError, "internal error")
+				p.conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
 			}
 		case 2:
 			err = p.Pb.PublishWithSubscriptions(ctx, event.PubForSub, event.SubForPub, event.Kind)
 			if err != nil {
-				p.conn.Close(websocket.StatusInternalError, "internal error")
+				p.conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
 			}
 		}
 	}
 
 	bs, err := json.Marshal(event)
 	if err != nil {
-		p.conn.Close(websocket.StatusInternalError, "internal error")
+		p.conn.Close(websocket.StatusInternalError, "Marshal error")
 	}
 	err = WriteTimeout(time.Second*15, p.conn, bs)
 	if err != nil {
-		p.conn.Close(websocket.StatusInternalError, "internal error")
+		p.conn.CloseNow()
 	}
 }

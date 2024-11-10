@@ -24,8 +24,8 @@ type RoomClient struct {
 	IsGroup         bool   `json:"IsGroup" `
 	CreatedByUserId uint64 `json:"CreatedByUserId" `
 	Users           []User `json:"Users" `
-	Username        string
-	UserId          uint64
+	Username        string `json:"-" `
+	UserId          uint64 `json:"-" `
 }
 
 func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {

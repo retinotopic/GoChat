@@ -15,7 +15,7 @@ type Event struct {
 	Data      []byte   `json:"-"` // data to be sent over connection
 }
 
-func (e *Event) GetEventName() string { // in order to not unmarshaling twice
+func (e *Event) GetEventName() string {
 	start := bytes.IndexByte(e.Data, '"')
 	if start == -1 {
 		return ""
