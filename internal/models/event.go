@@ -1,6 +1,8 @@
 package models
 
-import "bytes"
+import (
+	"bytes"
+)
 
 type Event struct {
 	Event     string   `json:"Event"`

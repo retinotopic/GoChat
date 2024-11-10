@@ -59,7 +59,7 @@ func (p *PubSub) WsHandle() {
 		p.conn.CloseNow()
 		p.errch <- true
 	}()
-	go p.ReadRedis()
+	go p.ReadPubSub()
 	startevent := &models.Event{Event: "GetAllRooms"}
 	p.ProcessEvent(startevent)
 	for {
@@ -73,7 +73,7 @@ func (p *PubSub) WsHandle() {
 	}
 }
 
-func (p *PubSub) ReadRedis() {
+func (p *PubSub) ReadPubSub() {
 	closech := make(chan bool, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
