@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/retinotopic/GoChat/internal/logger"
-	"github.com/retinotopic/GoChat/internal/middleware"
-	"github.com/retinotopic/GoChat/internal/pubsub"
+	"github.com/retinotopic/GoChat/server/logger"
+	"github.com/retinotopic/GoChat/server/middleware"
+	"github.com/retinotopic/GoChat/server/pubsub"
 )
 
 type router struct {

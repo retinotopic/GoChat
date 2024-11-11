@@ -7,7 +7,7 @@ import (
 
 	json "github.com/bytedance/sonic"
 	"github.com/jackc/pgx/v5"
-	"github.com/retinotopic/GoChat/internal/models"
+	"github.com/retinotopic/GoChat/server/models"
 )
 
 type Message struct {

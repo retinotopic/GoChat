@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
-	db "github.com/retinotopic/GoChat/internal/db/postgres"
-	"github.com/retinotopic/GoChat/internal/logger/loggers/zerolog"
-	rd "github.com/retinotopic/GoChat/internal/pubsub/impls/redis"
-	"github.com/retinotopic/GoChat/internal/router"
-	"github.com/retinotopic/tinyauth/provider"
+	"github.com/retinotopic/GoChat/server/auth"
+	db "github.com/retinotopic/GoChat/server/db/postgres"
+	"github.com/retinotopic/GoChat/server/logger/loggers/zerolog"
+	rd "github.com/retinotopic/GoChat/server/pubsub/impls/redis"
+	"github.com/retinotopic/GoChat/server/router"
 	"github.com/retinotopic/tinyauth/providers/firebase"
 	"github.com/retinotopic/tinyauth/providers/google"
 )
@@ -24,7 +24,7 @@ func main() {
 	addr := flag.String("addr", "localhost:8080", "app address")
 	rdaddr := flag.String("rdaddr", "localhost:6379", "redis address")
 	pgaddr := flag.String("pgaddr", "localhost:5432", "postgres address")
-	mp := make(map[string]provider.Provider)
+	mp := make(auth.ProviderMap)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	google, err := google.New(ctx, os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "/refresh")

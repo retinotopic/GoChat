@@ -10,7 +10,7 @@ import (
 	json "github.com/bytedance/sonic"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/retinotopic/GoChat/internal/models"
+	"github.com/retinotopic/GoChat/server/models"
 )
 
 type PgClient struct {

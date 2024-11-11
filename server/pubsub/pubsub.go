@@ -8,9 +8,9 @@ import (
 
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
-	"github.com/retinotopic/GoChat/internal/logger"
-	"github.com/retinotopic/GoChat/internal/middleware"
-	"github.com/retinotopic/GoChat/internal/models"
+	"github.com/retinotopic/GoChat/server/logger"
+	"github.com/retinotopic/GoChat/server/middleware"
+	"github.com/retinotopic/GoChat/server/models"
 )
 
 func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
