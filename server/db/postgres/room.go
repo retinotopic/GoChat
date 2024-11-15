@@ -321,12 +321,12 @@ func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 
 		if r.RoomId == currentroom {
 			last := len(rms) - 1
-			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, Bool: userDelete})
+			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
 		} else {
 			rms = append(rms, r)
 			last := len(rms) - 1
 			rms[last].Users = make([]User, 0, 3)
-			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, Bool: userDelete})
+			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
 			currentroom = r.RoomId
 		}
 	}

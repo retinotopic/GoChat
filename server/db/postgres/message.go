@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"math"
 	"strconv"
 
 	json "github.com/bytedance/sonic"
@@ -40,13 +41,17 @@ func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	if m.MessageId == 0 || m.RoomId == 0 {
+
+	if m.RoomId == 0 {
 		return errors.New("malformed json")
+	}
+	if m.MessageId == 0 {
+		m.MessageId = math.MaxUint64
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT MessagePayload,user_id,message_id,room_id
 		FROM messages 
-		WHERE room_id = $1 AND message_id < $2
+		WHERE room_id = $1 AND ($2 = 0 OR message_id < $2)
 		ORDER BY message_id DESC LIMIT 50`, m.RoomId, m.MessageId)
 	if err != nil {
 		return err

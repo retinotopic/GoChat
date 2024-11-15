@@ -12,9 +12,9 @@ import (
 )
 
 type User struct {
-	UserId   uint64 `json:"UserId"`
-	Username string `json:"Username" `
-	Bool     bool   `json:"Bool" `
+	UserId     uint64 `json:"UserId"`
+	Username   string `json:"Username" `
+	RoomToggle bool   `json:"Bool" `
 }
 
 func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
@@ -45,7 +45,7 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	if err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	tag, err := tx.Exec(ctx, "UPDATE users SET allow_direct_messages = $1 WHERE user_id = $2", u.RoomToggle, event.UserId)
 	if tag.RowsAffected() == 0 {
 		return errors.New("internal database error, 'allow direct messages' hasn't changed")
 	}
@@ -60,7 +60,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.Event) err
 	if err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.Bool, event.UserId)
+	tag, err := tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.RoomToggle, event.UserId)
 	if tag.RowsAffected() == 0 {
 		return errors.New("internal database error, 'allow group invites' hasn't changed")
 	}

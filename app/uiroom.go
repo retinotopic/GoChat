@@ -7,12 +7,12 @@ import (
 	"github.com/rivo/tview"
 )
 
-func (r *Rooms) SetSelectedFunc(handler func(*list.Element)) *Rooms {
+func (r *Chat) SetSelectedFunc(handler func(*list.Element)) *Chat {
 	r.selectedFunc = handler
 	return r
 }
 
-func (r *Rooms) Draw(screen tcell.Screen) {
+func (r *Chat) Draw(screen tcell.Screen) {
 	r.Box.DrawForSubclass(screen, r)
 	x, y, width, height := r.GetInnerRect()
 
@@ -43,7 +43,7 @@ func (r *Rooms) Draw(screen tcell.Screen) {
 	}
 }
 
-func (r *Rooms) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+func (r *Chat) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return r.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 		_, _, _, height := r.GetInnerRect()
 
