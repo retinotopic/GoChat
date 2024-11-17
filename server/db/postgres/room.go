@@ -238,7 +238,8 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	event.OrderCmd[0] = 2
+	event.OrderCmd[0] = 1
+	event.OrderCmd[1] = 2
 	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
@@ -261,10 +262,13 @@ func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	if len(r.UserIds) == 0 {
 		return errors.New("malformed json")
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM blocked_users 
+	tag, err := tx.Exec(ctx, `DELETE FROM blocked_users 
 			WHERE blocked_by_user_id = $1 AND blocked_user_id = $2`, event.UserId, r.UserIds[0])
 	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("internal database error, no blocked users found")
 	}
 	return err
 }
