@@ -38,21 +38,21 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	pg.Pool = pl
 	pg.Lm = lm
 	pg.UserApi = map[string]FuncLimiter{
-		"GetAllRooms":         {GetAllRooms, 1, 1, time.Second},              // initial start
-		"ChangeRoomname":      {ChangeRoomname, 1, 1, time.Second},           // from group room
-		"GetBlockedUsers":     {GetBlockedUsers, 1, 1, time.Second},          // menu
-		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},      // from group room and user room
-		"FindUsers":           {FindUsers, 1, 1, time.Second},                // menu
-		"SendMessage":         {SendMessage, 1, 1, time.Second},              // from group room and user room
-		"ChangeUsername":      {ChangeUsername, 1, 1, time.Hour * 24 * 7},    // menu
-		"ChangePrivacyDirect": {ChangePrivacyDirect, 1, 1, time.Minute},      // menu
-		"ChangePrivacyGroup":  {ChangePrivacyGroup, 1, 1, time.Minute},       // menu
-		"CreateDuoRoom":       {CreateDuoRoom, 5, 25, time.Minute * 5},       // from find users menu
-		"CreateGroupRoom":     {CreateGroupRoom, 5, 25, time.Minute * 5},     // from find users menu
-		"AddUsersToRoom":      {AddUsersToRoom, 5, 25, time.Minute * 5},      // from group room
-		"DeleteUsersFromRoom": {DeleteUsersFromRoom, 5, 25, time.Minute * 5}, // from group room if admin
-		"BlockUser":           {BlockUser, 5, 25, time.Minute * 5},           // from user room
-		"UnblockUser":         {UnblockUser, 5, 25, time.Minute * 5},         // from find users menu
+		"GetAllRooms":         {GetAllRooms, 1, 1, time.Second},
+		"ChangeRoomname":      {ChangeRoomname, 1, 1, time.Second},
+		"GetBlockedUsers":     {GetBlockedUsers, 1, 1, time.Second},
+		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},
+		"FindUsers":           {FindUsers, 1, 1, time.Second},
+		"SendMessage":         {SendMessage, 1, 1, time.Second},
+		"ChangeUsername":      {ChangeUsername, 1, 1, time.Hour * 24 * 7},
+		"ChangePrivacyDirect": {ChangePrivacyDirect, 1, 1, time.Minute},
+		"ChangePrivacyGroup":  {ChangePrivacyGroup, 1, 1, time.Minute},
+		"CreateDuoRoom":       {CreateDuoRoom, 5, 25, time.Minute * 5},
+		"CreateGroupRoom":     {CreateGroupRoom, 5, 25, time.Minute * 5},
+		"AddUsersToRoom":      {AddUsersToRoom, 5, 25, time.Minute * 5},
+		"DeleteUsersFromRoom": {DeleteUsersFromRoom, 5, 25, time.Minute * 5},
+		"BlockUser":           {BlockUser, 5, 25, time.Minute * 5},
+		"UnblockUser":         {UnblockUser, 5, 25, time.Minute * 5},
 	}
 	return pg, nil
 }

@@ -1,29 +1,42 @@
 package main
 
 import (
-	"container/list"
-
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-type LinkedListUI struct {
+type List struct {
 	*tview.Box
 	offset       int // scroll offset
-	SelectedFunc func(*list.Element)
-	Items        *list.List
-	Current      *list.Element // type Room
+	SelectedFunc func(ListItem)
+	Items        ListItems
+	Current      ListItem // type Room
+}
+type ListItem interface {
+	GetMainText() string
+	GetSecondaryText() string
+	GetColor() tcell.Color
+	Next() ListItem
+	Prev() ListItem
+}
+type ListItems interface {
+	MoveToFront(ListItem)
+	MoveToBack(ListItem)
+	Front() ListItem
+	Len() int
 }
 
-func (l *LinkedListUI) SetSelectedFunc(handler func(*list.Element)) *LinkedListUI {
+// prev next front move to front
+func (l *List) SetSelectedFunc(handler func(ListItem)) *List {
 	l.SelectedFunc = handler
 	return l
 }
-func (l *LinkedListUI) MoveToFront(e *list.Element) *LinkedListUI {
+func (l *List) MoveToFront(e ListItem) *List {
 	l.Items.MoveToFront(e)
+	//l.Items.MoveToBack()
 	return l
 }
-func (l *LinkedListUI) Draw(screen tcell.Screen) {
+func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
 
@@ -34,19 +47,13 @@ func (l *LinkedListUI) Draw(screen tcell.Screen) {
 
 	row := 0
 	for element != nil && row < height {
-		item := element.Value.(*Room)
 
-		color := tcell.ColorWhite
-		if element == l.Current {
-			color = tcell.ColorYellow
-		}
+		tview.Print(screen, element.GetMainText(), x, y+row, width, tview.AlignLeft, element.GetColor())
 
-		tview.Print(screen, item.RoomName, x, y+row, width, tview.AlignLeft, color)
-
-		if len(item.RoomType) > 0 && width > len(item.RoomName)+3 {
-			secondaryX := x + len(item.RoomName) + 2
-			tview.Print(screen, item.RoomType, secondaryX, y+row,
-				width-len(item.RoomName)-2, tview.AlignLeft, tcell.ColorGray)
+		if len(element.GetSecondaryText()) > 0 && width > len(element.GetMainText())+3 {
+			secondaryX := x + len(element.GetMainText()) + 2
+			tview.Print(screen, element.GetSecondaryText(), secondaryX, y+row,
+				width-len(element.GetMainText())-2, tview.AlignLeft, tcell.ColorGray)
 		}
 
 		element = element.Next()
@@ -54,7 +61,7 @@ func (l *LinkedListUI) Draw(screen tcell.Screen) {
 	}
 }
 
-func (l *LinkedListUI) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 		_, _, _, height := l.GetInnerRect()
 

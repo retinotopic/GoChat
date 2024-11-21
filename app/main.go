@@ -25,7 +25,7 @@ type Room struct {
 	Users           map[uint64]User // user id to User struct
 	lastMessageID   *uint64
 	RoomType        string // Group or Duo
-	Messages        *LinkedListUI
+	Messages        *List
 	RoomLL          *list.Element // node in Rooms linked list (type Room)
 }
 
@@ -34,15 +34,17 @@ type Chat struct {
 	MyId              uint64
 	Conn              *websocket.Conn
 	RoomMsgs          map[uint64]*Room // room id to room message page
-	DuoRooms          map[uint64]*User // duo rooms that
 	currentRoom       *Room            // type Room
-	CurrentUserSearch []User
-	RoomsPanel        *LinkedListUI
+	CurrentUserSearch string
+	UserSearch        []User
+	BlockedUsers      []User
+	DuoUsers          []User
+	RoomsPanel        *List
 }
 
 func NewChat() *Chat {
 	return &Chat{
-		RoomsPanel: &LinkedListUI{Box: tview.NewBox(), Items: list.New()},
+		RoomsPanel: &List{Box: tview.NewBox()},
 	}
 }
 
@@ -99,24 +101,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) *Chat {
 	rm.RoomLL = item
 
 	// creating corresponding page for this room
-	msgInput := tview.NewInputField() // creating input for message
-	SendMsg := func() {               // func for sending message
-		msg := msgInput.GetText()
-		event := Message{
-			Event:          "SendMessage",
-			MessagePayload: msg,
-			RoomId:         c.currentRoom.RoomId,
-		}
-		b, err := json.Marshal(event)
-		if err != nil {
-			WriteTimeout(time.Second*5, c.Conn, b)
-		}
-	}
-	msgInput.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			SendMsg()
-		}
-	})
+
 	if rmsv.IsGroup {
 		rm.RoomType = "Group"
 	} else {
@@ -131,29 +116,44 @@ func main() {
 	chat := NewChat()
 	mainpage := tview.NewPages()
 	menubtn := tview.NewButton("menu").SetSelectedFunc(func() {
-		mainpage.SwitchToPage("menuOptions")
+		mainpage.SwitchToPage("MenuOptions")
 	})
 
-	chat.SetSelectedFunc(func(current *list.Element) {
-		if chat.current != nil {
-			rm, ok := chat.current.Value.(*Room)
-			if ok {
-				chat.RoomPages.SwitchToPage(rm.RoomIdString)
-				mainpage.SwitchToPage("RoomPages")
-			}
+	chat.RoomsPanel.SetSelectedFunc(func(current *list.Element) {
+		if chat.currentRoom != nil {
+			app.QueueUpdateDraw(func() {
+				mainpage.SwitchToPage("RoomPanel")
+			})
 		}
 	})
 	menuOptionsPage := tview.NewForm().
-		AddButton("Event logs", nil).
-		AddButton("Find Users", nil).
-		AddButton("Create Duo Room", nil).
-		AddButton("Create Group Room", nil).
-		AddButton("Unblock user", nil).
-		AddButton("Block user", nil).
-		AddButton("Change username", nil).
-		AddButton("Room's actions", nil). // Change roomname, Add users to room, delete users from room, Show users.
-		AddButton("Change Privacy for Duo Rooms", nil).
-		AddButton("Change Privacy for Group Rooms", nil)
+		AddButton("Event logs", func() {
+			mainpage.SwitchToPage("EventLogs")
+		}).
+		AddButton("FindUsers", func() {
+			mainpage.SwitchToPage("FindUsers")
+		}).
+		AddButton("Create Duo Room", func() {
+			mainpage.SwitchToPage("CreateDuoRoom")
+		}).
+		AddButton("Create Group Room", func() {
+			mainpage.SwitchToPage("CreateGroupRoom")
+		}).
+		AddButton("Unblock user", func() {
+			mainpage.SwitchToPage("UnblockUser")
+		}).
+		AddButton("Change username", func() {
+			mainpage.SwitchToPage("ChangeUsername")
+		}).
+		AddButton("Room actions", func() {
+			mainpage.SwitchToPage("RoomActions")
+		}). // Change roomname, Add users to room, delete users from room, Show users, Change roomname OR Block User
+		AddButton("Change Privacy for Duo Rooms", func() {
+			mainpage.SwitchToPage("ChangePrivacyDirect")
+		}).
+		AddButton("Change Privacy for Group Rooms", func() {
+			mainpage.SwitchToPage("ChangePrivacyGroup")
+		})
 
 	FindUsersForm := tview.NewForm().
 		AddInputField("First name", "", 20, nil, func(text string) {
@@ -168,20 +168,44 @@ func main() {
 			if err != nil {
 				WriteTimeout(time.Second*5, chat.Conn, b)
 			}
-		}).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyRight {
-			app.SetFocus(FindUsersResponse)
-			return nil
-		}
-		return event
-	})
-	FindUsersResponse := tview.NewForm().AddButton("Create Group Room", func() {
+		})
 
+	//RoomActionShowUsers := tview.NewList() //
+	//RoomActionShowUsers := tview.NewList()
+
+	//ListMultOptions := tview.NewList() // add users to room , delete users to room, create group room,
+	//ListOneOption := tview.NewList() // create duo room , unblock
+
+	//RoomActionsGroup := tview.NewFlex().AddItem(RoomActionShowUsers, 0, 1, true)
+	RoomActionsGroupAdmin := tview.NewFlex().AddItem(RoomActionShowUsers, 0, 1, true)
+	//RoomActionsDuo
+
+	msgInput := tview.NewInputField() // creating input for message
+	SendMsg := func() {               // func for sending message
+		msg := msgInput.GetText()
+		event := Message{
+			Event:          "SendMessage",
+			MessagePayload: msg,
+			RoomId:         chat.currentRoom.RoomId,
+		}
+		b, err := json.Marshal(event)
+		if err != nil {
+			WriteTimeout(time.Second*5, chat.Conn, b)
+		}
+	}
+	msgInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			SendMsg()
+		}
 	})
-	mainpage.AddPage("RoomPages", chat.RoomPages, true, true)
+
+	mainpage.AddPage("RoomPanel", chat.RoomsPanel, true, true)
+	mainpage.AddPage("FindUsers", FindUsersForm, true, true)
+	mainpage.AddPage("MenuOptions", menuOptionsPage, true, true)
+	mainpage.AddPage("RoomActions", RoomActionsGroupAdmin, true, true)
 
 	flexapp := tview.NewFlex().
-		AddItem(chat, 0, 1, true).
+		AddItem(chat.RoomsPanel, 0, 1, true).
 		AddItem(mainpage, 0, 1, true).
 		AddItem(menubtn, 0, 1, true)
 	app.QueueUpdateDraw()

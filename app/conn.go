@@ -13,6 +13,7 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func (c *Chat) WsHandle() {
-
+func Connect() {
+	//connected 
+	switch
 }

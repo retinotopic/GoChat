@@ -1,6 +1,6 @@
 package main
 
-type Event struct {
+type Events struct {
 	InProcess int
 }
 type RoomRequest struct {
