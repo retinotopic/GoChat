@@ -97,7 +97,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) *Chat {
 		rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 	}
 	// set new room at the top
-	item := c.RoomsPanel.Items.PushFront(rm)
+	item := c.RoomsPanel.Items.MoveToFront(rm)
 	rm.RoomLL = item
 
 	// creating corresponding page for this room

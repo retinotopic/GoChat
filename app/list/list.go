@@ -1,4 +1,4 @@
-package main
+package list
 
 import (
 	"github.com/gdamore/tcell/v2"
@@ -16,31 +16,30 @@ type ListItem interface {
 	GetMainText() string
 	GetSecondaryText() string
 	GetColor() tcell.Color
+	SetMainText(string)
+	SetSecondaryText(string)
+	SetColor(tcell.Color)
 	Next() ListItem
 	Prev() ListItem
 }
 type ListItems interface {
 	MoveToFront(ListItem)
 	MoveToBack(ListItem)
-	Front() ListItem
-	Len() int
+	GetFront() ListItem
+	Remove(ListItem)
+	Clear()
 }
 
-// prev next front move to front
 func (l *List) SetSelectedFunc(handler func(ListItem)) *List {
 	l.SelectedFunc = handler
 	return l
 }
-func (l *List) MoveToFront(e ListItem) *List {
-	l.Items.MoveToFront(e)
-	//l.Items.MoveToBack()
-	return l
-}
+
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
 
-	element := l.Items.Front()
+	element := l.Items.GetFront()
 	for i := 0; i < l.offset && element != nil; i++ {
 		element = element.Next()
 	}
@@ -70,7 +69,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 			if l.Current != nil && l.Current.Prev() != nil {
 				l.Current = l.Current.Prev()
 				currentIndex := 0
-				for e := l.Items.Front(); e != l.Current; e = e.Next() {
+				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
 					currentIndex++
 				}
 				if currentIndex < l.offset {
@@ -81,7 +80,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 			if l.Current != nil && l.Current.Next() != nil {
 				l.Current = l.Current.Next()
 				currentIndex := 0
-				for e := l.Items.Front(); e != l.Current; e = e.Next() {
+				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
 					currentIndex++
 				}
 				if currentIndex >= l.offset+height {
@@ -93,13 +92,6 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Current = l.Current.Prev()
 				if l.offset > 0 {
 					l.offset--
-				}
-			}
-		case tcell.KeyPgDn:
-			for i := 0; i < height && l.Current != nil && l.Current.Next() != nil; i++ {
-				l.Current = l.Current.Next()
-				if l.offset < l.Items.Len()-height {
-					l.offset++
 				}
 			}
 		case tcell.KeyEnter:

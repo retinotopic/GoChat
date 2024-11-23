@@ -14,6 +14,6 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	return c.Write(ctx, websocket.MessageText, msg)
 }
 func Connect() {
-	//connected 
-	switch
+	//impl connect
+
 }
