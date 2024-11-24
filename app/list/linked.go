@@ -78,6 +78,9 @@ func (l *LinkedItems) SetSecondaryText(str string) {
 func (l *LinkedItems) SetColor(clr tcell.Color) {
 	l.Color = clr
 }
+func (l *LinkedItems) IsNil() bool {
+	return l == nil
+}
 func (l *LinkedItems) Next() ListItem {
 	return l.next
 }

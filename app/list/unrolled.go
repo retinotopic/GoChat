@@ -82,6 +82,9 @@ func (u *UnrolledItems) SetSecondaryText(str string) {
 func (u *UnrolledItems) SetColor(clr tcell.Color) {
 	u.Items[u.CurrentIndex].Color = clr
 }
+func (u *UnrolledItems) IsNil() bool {
+	return u == nil
+}
 func (u *UnrolledItems) Next() ListItem {
 	if u.CurrentIndex == len(u.Items)-1 {
 		return u.next

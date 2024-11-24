@@ -21,6 +21,7 @@ type ListItem interface {
 	SetColor(tcell.Color)
 	Next() ListItem
 	Prev() ListItem
+	IsNil() bool
 }
 type ListItems interface {
 	MoveToFront(ListItem)
@@ -40,12 +41,12 @@ func (l *List) Draw(screen tcell.Screen) {
 	x, y, width, height := l.GetInnerRect()
 
 	element := l.Items.GetFront()
-	for i := 0; i < l.offset && element != nil; i++ {
+	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
 	}
 
 	row := 0
-	for element != nil && row < height {
+	for element != nil && !element.IsNil() && row < height {
 
 		tview.Print(screen, element.GetMainText(), x, y+row, width, tview.AlignLeft, element.GetColor())
 
@@ -66,7 +67,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 
 		switch event.Key() {
 		case tcell.KeyUp:
-			if l.Current != nil && l.Current.Prev() != nil {
+			if l.Current != nil && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
 				l.Current = l.Current.Prev()
 				currentIndex := 0
 				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
@@ -77,7 +78,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				}
 			}
 		case tcell.KeyDown:
-			if l.Current != nil && l.Current.Next() != nil {
+			if l.Current != nil && l.Current.Next() != nil && !l.Current.Next().IsNil() {
 				l.Current = l.Current.Next()
 				currentIndex := 0
 				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
@@ -85,13 +86,6 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				}
 				if currentIndex >= l.offset+height {
 					l.offset++
-				}
-			}
-		case tcell.KeyPgUp:
-			for i := 0; i < height && l.Current != nil && l.Current.Prev() != nil; i++ {
-				l.Current = l.Current.Prev()
-				if l.offset > 0 {
-					l.offset--
 				}
 			}
 		case tcell.KeyEnter:
