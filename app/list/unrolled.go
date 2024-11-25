@@ -54,8 +54,6 @@ func (u *UnrolledList) Clear() {
 type UnrolledItems struct {
 	Elem         *lst.Element
 	Items        []UnrolledItem
-	prev         *UnrolledItems
-	next         *UnrolledItems
 	CurrentIndex int
 }
 type UnrolledItem struct {
@@ -82,20 +80,36 @@ func (u *UnrolledItems) SetSecondaryText(str string) {
 func (u *UnrolledItems) SetColor(clr tcell.Color) {
 	u.Items[u.CurrentIndex].Color = clr
 }
-func (u *UnrolledItems) IsNil() bool {
-	return u == nil
-}
 func (u *UnrolledItems) Next() ListItem {
 	if u.CurrentIndex == len(u.Items)-1 {
-		return u.next
+		val := u.Elem.Next()
+		if val != nil && val.Value != nil {
+			val, ok := val.Value.(*UnrolledItems)
+			if ok && !val.IsNil() {
+				val.CurrentIndex = 0
+				return val
+			}
+		}
+		return nil
 	}
 	u.CurrentIndex++
 	return u
 }
 func (u *UnrolledItems) Prev() ListItem {
 	if u.CurrentIndex == 0 {
-		return u.prev
+		val := u.Elem.Prev()
+		if val != nil && val.Value != nil {
+			val, ok := val.Value.(*UnrolledItems)
+			if ok && !val.IsNil() {
+				val.CurrentIndex = len(val.Items) - 1
+				return val
+			}
+		}
+		return nil
 	}
 	u.CurrentIndex--
 	return u
+}
+func (u *UnrolledItems) IsNil() bool {
+	return u == nil
 }

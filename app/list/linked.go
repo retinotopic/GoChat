@@ -53,8 +53,6 @@ func (l *LinkedList) Clear() {
 
 type LinkedItems struct {
 	Elem          *lst.Element
-	prev          *LinkedItems
-	next          *LinkedItems
 	Color         tcell.Color
 	MainText      string
 	SecondaryText string
@@ -78,12 +76,28 @@ func (l *LinkedItems) SetSecondaryText(str string) {
 func (l *LinkedItems) SetColor(clr tcell.Color) {
 	l.Color = clr
 }
-func (l *LinkedItems) IsNil() bool {
-	return l == nil
-}
 func (l *LinkedItems) Next() ListItem {
-	return l.next
+	val := l.Elem.Next()
+	if val != nil && val.Value != nil {
+		val, ok := val.Value.(*LinkedItems)
+		if ok {
+			return val
+		}
+	}
+	return nil
 }
 func (l *LinkedItems) Prev() ListItem {
-	return l.prev
+
+	val := l.Elem.Prev()
+	if val != nil && val.Value != nil {
+		val, ok := val.Value.(*LinkedItems)
+		if ok {
+			return val
+		}
+	}
+	return nil
+}
+
+func (l *LinkedItems) IsNil() bool {
+	return l == nil
 }
