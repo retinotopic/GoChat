@@ -39,7 +39,7 @@ func (l *List) SetSelectedFunc(handler func(ListItem)) *List {
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
-
+	x = x + 2
 	element := l.Items.GetFront()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
@@ -55,7 +55,9 @@ func (l *List) Draw(screen tcell.Screen) {
 			tview.Print(screen, element.GetSecondaryText(), secondaryX, y+row,
 				width-len(element.GetMainText())-2, tview.AlignLeft, tcell.ColorGray)
 		}
-
+		if element == l.Current {
+			screen.SetContent(x-2, y+row, '✔', nil, tcell.StyleDefault)
+		}
 		element = element.Next()
 		row++
 	}
