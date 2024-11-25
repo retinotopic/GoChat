@@ -56,7 +56,7 @@ func (l *List) Draw(screen tcell.Screen) {
 				width-len(element.GetMainText())-2, tview.AlignLeft, tcell.ColorGray)
 		}
 		if element == l.Current {
-			screen.SetContent(x-2, y+row, '✔', nil, tcell.StyleDefault)
+			screen.SetContent(x-2, y+row, 'X', nil, tcell.StyleDefault)
 		}
 		element = element.Next()
 		row++
