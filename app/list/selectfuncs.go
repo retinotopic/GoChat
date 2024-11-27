@@ -7,7 +7,8 @@ import (
 )
 
 type HandleSelect struct {
-	Selected     map[string]struct{}
+	MultOpts     map[string]struct{}
+	OneOpt       string
 	mtx          sync.RWMutex
 	DefaultColor tcell.Color
 	ChangeColor  tcell.Color
@@ -16,23 +17,24 @@ type HandleSelect struct {
 func (h *HandleSelect) MultOptions(item ListItem) {
 	id := item.GetSecondaryText()
 	h.mtx.RLock()
-	_, ok := h.Selected[id]
+	_, ok := h.MultOpts[id]
 	h.mtx.RUnlock()
 	if ok {
 		item.SetColor(h.DefaultColor)
 		h.mtx.Lock()
-		delete(h.Selected, id)
+		delete(h.MultOpts, id)
 		h.mtx.Unlock()
 	} else {
 		item.SetColor(h.ChangeColor)
 		h.mtx.Lock()
-		h.Selected[id] = struct{}{}
+		h.MultOpts[id] = struct{}{}
 		h.mtx.Unlock()
 	}
 }
 
 func (h *HandleSelect) OneOption(item ListItem) {
 	item.SetColor(h.ChangeColor)
+	h.OneOpt = item.GetSecondaryText()
 	bi := item
 	fi := item
 	back := true

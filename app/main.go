@@ -1,12 +1,12 @@
 package main
 
 import (
-	"container/list"
 	"time"
 
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 	"github.com/gdamore/tcell/v2"
+	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
 )
 
@@ -22,47 +22,59 @@ type Room struct {
 	RoomName        string
 	IsGroup         bool
 	CreatedByUserId uint64
-	Users           map[uint64]User // user id to User struct
-	lastMessageID   *uint64
+	Users           map[uint64]User // user id to users in this room
+	lastMessageID   uint64
+	FirstLoad       bool
 	RoomType        string // Group or Duo
-	Messages        *List
-	RoomLL          *list.Element // node in Rooms linked list (type Room)
+	Messages        []*list.List
+	RoomItem        list.ListItem
 }
 
 // Rooms linked list
 type Chat struct {
-	MyId              uint64
+	UserId            uint64
 	Conn              *websocket.Conn
-	RoomMsgs          map[uint64]*Room // room id to room message page
-	currentRoom       *Room            // type Room
+	RoomMsgs          map[uint64]*Room // room id to room
+	DuoUsers          map[uint64]*User // user id to users that Duo-only
+	BlockedUsers      map[uint64]User  // user id to blocked users
+	FoundUsers        map[uint64]User  // user id to found users
+	currentRoom       *Room            // current selected Room
 	CurrentUserSearch string
-	UserSearch        []User
-	BlockedUsers      []User
-	DuoUsers          []User
-	RoomsPanel        *List
+	RoomsPanel        *list.List
 }
 
 func NewChat() *Chat {
 	return &Chat{
-		RoomsPanel: &List{Box: tview.NewBox()},
+		RoomsPanel: &list.List{Box: tview.NewBox()},
 	}
 }
-
-/*
-	func (r *Chat) ProcessMessage(msgsv Message) *Chat {
-		rm, ok := r.RoomMsgs[msgsv.RoomId]
-		if ok {
-			rm.Messages.InsertItem(int(msgsv.MessageId), msgsv.MessagePayload, msgsv.UserId)
+func (r *Chat) LoadOldMessages(msgsv []Message) *Chat {
+	rm, ok := r.RoomMsgs[msgsv.RoomId]
+	if ok {
+		for i := range len(msgsv) {
+			e := &LinkedItems{Color: tcell.ColorWhite, MainText: msgsv[i].MessagePayload, SecondaryText: rm.Users[msgsv[i].UserId].Username}
+			l.MoveToFront(e)
 		}
-		return r
+		ll := list.NewLinkedList()
+		l := &List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
+		l.SelectedFunc = f
+		rm.Messages = append(rm.Messages,) //InsertItem(int(msgsv.MessageId), msgsv.MessagePayload, msgsv.UserId)
 	}
-*/
-func (r *Chat) ProcessRoom(rmsv RoomServer) *Chat {
+	return r
+}
+func (r *Chat) NewMessage(msgsv Message) *Chat {
+	rm, ok := r.RoomMsgs[msgsv.RoomId]
+	if ok {
+		rm.Messages = append(rm.Messages,) InsertItem(int(msgsv.MessageId), msgsv.MessagePayload, msgsv.UserId)
+	}
+	return r
+}
 
+func (r *Chat) ProcessRoom(rmsv RoomServer) *Chat {
 	rm, ok := r.RoomMsgs[rmsv.RoomId]
 	if ok {
 		for i := range len(rmsv.Users) {
-			if rmsv.Users[i].UserId == r.MyId {
+			if rmsv.Users[i].UserId == r.UserId {
 				r.DeleteRoom(rmsv.RoomId)
 				break
 			}
@@ -82,8 +94,8 @@ func (r *Chat) ProcessRoom(rmsv RoomServer) *Chat {
 func (c *Chat) DeleteRoom(roomid uint64) *Chat {
 	rm, ok := c.RoomMsgs[roomid]
 	if ok {
-		if rm.RoomLL != nil {
-			c.RoomsPanel.Items.Remove(rm.RoomLL) // deleting node in Rooms linked list
+		if rm.RoomItem != nil && !rm.RoomItem.IsNil() {
+			c.RoomsPanel.Items.Remove(rm.RoomItem) // deleting node in Rooms linked list
 		}
 		delete(c.RoomMsgs, roomid) // deleting *Room instance in map
 	}
@@ -130,17 +142,14 @@ func main() {
 		AddButton("Event logs", func() {
 			mainpage.SwitchToPage("EventLogs")
 		}).
-		AddButton("FindUsers", func() {
-			mainpage.SwitchToPage("FindUsers")
-		}).
 		AddButton("Create Duo Room", func() {
-			mainpage.SwitchToPage("CreateDuoRoom")
+			mainpage.SwitchToPage("CreateDuoRoom") // one option {FoundUsers}
 		}).
 		AddButton("Create Group Room", func() {
-			mainpage.SwitchToPage("CreateGroupRoom")
+			mainpage.SwitchToPage("CreateGroupRoom") // multiple options {DuoUsers}
 		}).
 		AddButton("Unblock user", func() {
-			mainpage.SwitchToPage("UnblockUser")
+			mainpage.SwitchToPage("UnblockUser") // one option {GetBlockedUsers}
 		}).
 		AddButton("Change username", func() {
 			mainpage.SwitchToPage("ChangeUsername")
