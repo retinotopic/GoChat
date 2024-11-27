@@ -124,33 +124,65 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 }
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-		_, _, _, height := l.GetInnerRect()
 
 		switch event.Key() {
 		case tcell.KeyUp:
-			if l.Current != nil && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
-				l.Current = l.Current.Prev()
-				currentIndex := 0
-				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
-					currentIndex++
-				}
-				if currentIndex < l.offset {
+			if l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
+				if l.Current == l.getFirstVisibleElement() {
 					l.offset--
 				}
+				l.Current = l.Current.Prev()
 			}
 		case tcell.KeyDown:
-			if l.Current != nil && l.Current.Next() != nil && !l.Current.Next().IsNil() {
-				l.Current = l.Current.Next()
-				currentIndex := 0
-				for e := l.Items.GetFront(); e != l.Current; e = e.Next() {
-					currentIndex++
-				}
-				if currentIndex >= l.offset+height {
+			if l.Current.Next() != nil && !l.Current.Next().IsNil() {
+				if l.isLastVisibleElement(l.Current) {
 					l.offset++
 				}
+				l.Current = l.Current.Next()
 			}
 		case tcell.KeyEnter:
 			l.SelectedFunc(l.Current)
 		}
 	})
+}
+func (l *List) getFirstVisibleElement() ListItem {
+	element := l.Items.GetFront()
+	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
+		element = element.Next()
+	}
+	return element
+}
+
+func (l *List) isLastVisibleElement(item ListItem) bool {
+	_, _, width, height := l.GetInnerRect()
+
+	element := l.getFirstVisibleElement()
+	currentHeight := 0
+
+	for element != nil && !element.IsNil() {
+		elementHeight := len(splitTextIntoLines(element.GetMainText(), width))
+		if len(element.GetSecondaryText()) > 0 {
+			elementHeight += len(splitTextIntoLines(element.GetSecondaryText(), width-2))
+		}
+
+		if element == item {
+			nextElementHeight := 0
+			if element.Next() != nil && !element.Next().IsNil() {
+				nextElementHeight = len(splitTextIntoLines(element.Next().GetMainText(), width))
+				if len(element.Next().GetSecondaryText()) > 0 {
+					nextElementHeight += len(splitTextIntoLines(element.Next().GetSecondaryText(), width-2))
+				}
+			}
+			return currentHeight+elementHeight+nextElementHeight > height
+		}
+
+		currentHeight += elementHeight
+		if currentHeight > height {
+			return false
+		}
+
+		element = element.Next()
+	}
+
+	return false
 }
