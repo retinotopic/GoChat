@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"time"
 
 	json "github.com/bytedance/sonic"
@@ -24,23 +25,26 @@ type Room struct {
 	CreatedByUserId uint64
 	Users           map[uint64]User // user id to users in this room
 	lastMessageID   uint64
-	FirstLoad       bool
 	RoomType        string // Group or Duo
-	Messages        []*list.List
+	Messages        map[int]*list.List
+	MsgPageId       int
+	PaginationBtns  *list.HandleSelect
 	RoomItem        list.ListItem
 }
 
 // Rooms linked list
 type Chat struct {
-	UserId            uint64
-	Conn              *websocket.Conn
-	RoomMsgs          map[uint64]*Room // room id to room
-	DuoUsers          map[uint64]*User // user id to users that Duo-only
-	BlockedUsers      map[uint64]User  // user id to blocked users
-	FoundUsers        map[uint64]User  // user id to found users
-	currentRoom       *Room            // current selected Room
-	CurrentUserSearch string
-	RoomsPanel        *list.List
+	App          *tview.Application
+	UserId       uint64
+	Conn         *websocket.Conn
+	RoomMsgs     map[uint64]*Room // room id to room
+	DuoUsers     map[uint64]*User // user id to users that Duo-only
+	BlockedUsers map[uint64]User  // user id to blocked users
+	FoundUsers   map[uint64]User  // user id to found users
+	currentRoom  *Room            // current selected Room
+	CurrentText  string           // current text for user search || set room name ||
+	RoomsPanel   *list.List
+	Pages        *tview.Pages
 }
 
 func NewChat() *Chat {
@@ -48,34 +52,35 @@ func NewChat() *Chat {
 		RoomsPanel: &list.List{Box: tview.NewBox()},
 	}
 }
-func (r *Chat) LoadOldMessages(msgsv []Message) *Chat {
-	rm, ok := r.RoomMsgs[msgsv.RoomId]
+func (r *Chat) LoadMessagesEvent(msgsv []Message) {
+	if len(msgsv) == 0 {
+		return
+	}
+	rm, ok := r.RoomMsgs[msgsv[0].RoomId]
 	if ok {
-		for i := range len(msgsv) {
-			e := &LinkedItems{Color: tcell.ColorWhite, MainText: msgsv[i].MessagePayload, SecondaryText: rm.Users[msgsv[i].UserId].Username}
-			l.MoveToFront(e)
-		}
 		ll := list.NewLinkedList()
-		l := &List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
-		l.SelectedFunc = f
-		rm.Messages = append(rm.Messages,) //InsertItem(int(msgsv.MessageId), msgsv.MessagePayload, msgsv.UserId)
+		rm.MsgPageId--
+		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageId - 1), Color: tcell.ColorBlue}
+		ll.MoveToBack(prevpgn)
+		for i := range len(msgsv) {
+			e := &list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
+			ll.MoveToFront(e)
+		}
+		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageId + 1), Color: tcell.ColorBlue}
+		ll.MoveToFront(nextpgn)
+		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
+		l.SelectedFunc = rm.PaginationBtns.OneOption
+		rm.Messages[rm.MsgPageId] = l
 	}
-	return r
-}
-func (r *Chat) NewMessage(msgsv Message) *Chat {
-	rm, ok := r.RoomMsgs[msgsv.RoomId]
-	if ok {
-		rm.Messages = append(rm.Messages,) InsertItem(int(msgsv.MessageId), msgsv.MessagePayload, msgsv.UserId)
-	}
-	return r
+
 }
 
-func (r *Chat) ProcessRoom(rmsv RoomServer) *Chat {
-	rm, ok := r.RoomMsgs[rmsv.RoomId]
+func (c *Chat) ProcessRoom(rmsv RoomServer) {
+	rm, ok := c.RoomMsgs[rmsv.RoomId]
 	if ok {
 		for i := range len(rmsv.Users) {
-			if rmsv.Users[i].UserId == r.UserId {
-				r.DeleteRoom(rmsv.RoomId)
+			if rmsv.Users[i].UserId == c.UserId {
+				c.DeleteRoom(rmsv.RoomId)
 				break
 			}
 			if rmsv.Users[i].RoomToggle {
@@ -85,10 +90,8 @@ func (r *Chat) ProcessRoom(rmsv RoomServer) *Chat {
 			}
 		}
 	} else {
-		r.AddRoom(rmsv)
+		c.AddRoom(rmsv)
 	}
-
-	return r
 }
 
 func (c *Chat) DeleteRoom(roomid uint64) *Chat {
@@ -101,93 +104,41 @@ func (c *Chat) DeleteRoom(roomid uint64) *Chat {
 	}
 	return c
 }
-func (c *Chat) AddRoom(rmsv RoomServer) *Chat {
+func (c *Chat) AddRoom(rmsv RoomServer) {
 	//fill room with users
-	c.RoomMsgs[rmsv.RoomId] = &Room{Users: make(map[uint64]User)}
+	c.RoomMsgs[rmsv.RoomId] = &Room{Users: make(map[uint64]User), Messages: make(map[int]*list.List), RoomName: rmsv.RoomName, RoomId: rmsv.RoomId}
 	rm := c.RoomMsgs[rmsv.RoomId]
 	for i := range len(rmsv.Users) {
 		rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 	}
 	// set new room at the top
-	item := c.RoomsPanel.Items.MoveToFront(rm)
-	rm.RoomLL = item
-
-	// creating corresponding page for this room
-
+	c.RoomsPanel.Items.MoveToFront(&list.LinkedItems{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
 	if rmsv.IsGroup {
 		rm.RoomType = "Group"
 	} else {
 		rm.RoomType = "Duo"
 	}
-	rm.RoomName = rmsv.RoomName
-	return c
 }
 func main() {
 	app := tview.NewApplication()
 
 	chat := NewChat()
 	mainpage := tview.NewPages()
-	menubtn := tview.NewButton("menu").SetSelectedFunc(func() {
-		mainpage.SwitchToPage("MenuOptions")
-	})
-
-	chat.RoomsPanel.SetSelectedFunc(func(current *list.Element) {
-		if chat.currentRoom != nil {
-			app.QueueUpdateDraw(func() {
-				mainpage.SwitchToPage("RoomPanel")
-			})
-		}
-	})
-	menuOptionsPage := tview.NewForm().
-		AddButton("Event logs", func() {
-			mainpage.SwitchToPage("EventLogs")
-		}).
-		AddButton("Create Duo Room", func() {
-			mainpage.SwitchToPage("CreateDuoRoom") // one option {FoundUsers}
-		}).
-		AddButton("Create Group Room", func() {
-			mainpage.SwitchToPage("CreateGroupRoom") // multiple options {DuoUsers}
-		}).
-		AddButton("Unblock user", func() {
-			mainpage.SwitchToPage("UnblockUser") // one option {GetBlockedUsers}
-		}).
-		AddButton("Change username", func() {
-			mainpage.SwitchToPage("ChangeUsername")
-		}).
-		AddButton("Room actions", func() {
-			mainpage.SwitchToPage("RoomActions")
-		}). // Change roomname, Add users to room, delete users from room, Show users, Change roomname OR Block User
-		AddButton("Change Privacy for Duo Rooms", func() {
-			mainpage.SwitchToPage("ChangePrivacyDirect")
-		}).
-		AddButton("Change Privacy for Group Rooms", func() {
-			mainpage.SwitchToPage("ChangePrivacyGroup")
-		})
 
 	FindUsersForm := tview.NewForm().
 		AddInputField("First name", "", 20, nil, func(text string) {
-			chat.CurrentUserSearch = text
+			chat.CurrentText = text
 		}).
 		AddButton("Find", func() {
 			event := User{
 				Event:    "FindUsers",
-				Username: chat.CurrentUserSearch,
+				Username: chat.CurrentText,
 			}
 			b, err := json.Marshal(event)
 			if err != nil {
 				WriteTimeout(time.Second*5, chat.Conn, b)
 			}
 		})
-
-	//RoomActionShowUsers := tview.NewList() //
-	//RoomActionShowUsers := tview.NewList()
-
-	//ListMultOptions := tview.NewList() // add users to room , delete users to room, create group room,
-	//ListOneOption := tview.NewList() // create duo room , unblock
-
-	//RoomActionsGroup := tview.NewFlex().AddItem(RoomActionShowUsers, 0, 1, true)
-	RoomActionsGroupAdmin := tview.NewFlex().AddItem(RoomActionShowUsers, 0, 1, true)
-	//RoomActionsDuo
 
 	msgInput := tview.NewInputField() // creating input for message
 	SendMsg := func() {               // func for sending message
@@ -210,14 +161,10 @@ func main() {
 
 	mainpage.AddPage("RoomPanel", chat.RoomsPanel, true, true)
 	mainpage.AddPage("FindUsers", FindUsersForm, true, true)
-	mainpage.AddPage("MenuOptions", menuOptionsPage, true, true)
-	mainpage.AddPage("RoomActions", RoomActionsGroupAdmin, true, true)
 
 	flexapp := tview.NewFlex().
 		AddItem(chat.RoomsPanel, 0, 1, true).
-		AddItem(mainpage, 0, 1, true).
-		AddItem(menubtn, 0, 1, true)
-	app.QueueUpdateDraw()
+		AddItem(mainpage, 0, 1, true)
 	if err := app.SetRoot(flexapp, true).Run(); err != nil {
 		panic(err)
 	}

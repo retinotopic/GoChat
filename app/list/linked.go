@@ -50,6 +50,9 @@ func (l *LinkedList) Remove(e ListItem) {
 func (l *LinkedList) Clear() {
 	l.Items.Init()
 }
+func (l *LinkedList) Len() int {
+	return l.Items.Len()
+}
 
 type LinkedItems struct {
 	Elem          *lst.Element

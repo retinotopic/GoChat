@@ -14,6 +14,10 @@ type HandleSelect struct {
 	ChangeColor  tcell.Color
 }
 
+func (h *HandleSelect) Clear() {
+	clear(h.MultOpts)
+	h.OneOpt = ""
+}
 func (h *HandleSelect) MultOptions(item ListItem) {
 	id := item.GetSecondaryText()
 	h.mtx.RLock()
