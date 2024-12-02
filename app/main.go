@@ -27,7 +27,8 @@ type Room struct {
 	lastMessageID   uint64
 	RoomType        string // Group or Duo
 	Messages        map[int]*list.List
-	MsgPageId       int
+	MsgPageIdBack   int
+	MsgPageIdFront  int
 	PaginationBtns  *list.HandleSelect
 	RoomItem        list.ListItem
 }
@@ -59,22 +60,45 @@ func (r *Chat) LoadMessagesEvent(msgsv []Message) {
 	rm, ok := r.RoomMsgs[msgsv[0].RoomId]
 	if ok {
 		ll := list.NewLinkedList()
-		rm.MsgPageId--
-		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageId - 1), Color: tcell.ColorBlue}
+		rm.MsgPageIdBack--
+		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: tcell.ColorBlue}
 		ll.MoveToBack(prevpgn)
 		for i := range len(msgsv) {
 			e := &list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
 			ll.MoveToFront(e)
 		}
-		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageId + 1), Color: tcell.ColorBlue}
+		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: tcell.ColorBlue}
 		ll.MoveToFront(nextpgn)
 		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
 		l.SelectedFunc = rm.PaginationBtns.OneOption
-		rm.Messages[rm.MsgPageId] = l
+		rm.Messages[rm.MsgPageIdBack] = l
 	}
 
 }
+func (c *Chat) NewMessageEvent(msg Message) {
+	rm, ok := c.RoomMsgs[msg.RoomId]
+	if ok {
+		l, ok2 := rm.Messages[rm.MsgPageIdFront]
+		if ok2 {
+			if l.Items.Len() >= 30 {
 
+				rm.MsgPageIdFront++ // dont forget prev btn at creating new room
+				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack), Color: tcell.ColorBlue}
+				l.Items.MoveToFront(nextpgn)
+
+				ll := list.NewLinkedList()
+				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: tcell.ColorBlue}
+				ll.MoveToBack(prevpgn)
+				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
+				rm.Messages[rm.MsgPageIdFront] = lst
+			} else {
+				l.Items.MoveToFront(&list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msg.UserId].Username + ": " + msg.MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
+			}
+		}
+
+	}
+
+}
 func (c *Chat) ProcessRoom(rmsv RoomServer) {
 	rm, ok := c.RoomMsgs[rmsv.RoomId]
 	if ok {
