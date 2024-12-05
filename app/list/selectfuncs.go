@@ -6,7 +6,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-type HandleSelect struct {
+type SelectHandler struct {
 	MultOpts     map[string]struct{}
 	OneOpt       string
 	mtx          sync.RWMutex
@@ -14,11 +14,11 @@ type HandleSelect struct {
 	ChangeColor  tcell.Color
 }
 
-func (h *HandleSelect) Clear() {
+func (h *SelectHandler) Clear() {
 	clear(h.MultOpts)
 	h.OneOpt = ""
 }
-func (h *HandleSelect) MultOptions(item ListItem) {
+func (h *SelectHandler) MultOptions(item ListItem) {
 	id := item.GetSecondaryText()
 	h.mtx.RLock()
 	_, ok := h.MultOpts[id]
@@ -36,7 +36,7 @@ func (h *HandleSelect) MultOptions(item ListItem) {
 	}
 }
 
-func (h *HandleSelect) OneOption(item ListItem) {
+func (h *SelectHandler) OneOption(item ListItem) {
 	item.SetColor(h.ChangeColor)
 	h.OneOpt = item.GetSecondaryText()
 	bi := item
