@@ -9,10 +9,15 @@ import (
 
 type List struct {
 	*tview.Box
-	offset       int // scroll offset
-	SelectedFunc func(ListItem)
-	Items        ListItems
-	Current      ListItem // type Room
+	offset   int // scroll offset
+	Selector Selector
+	Items    ListItems
+	Current  ListItem // type Room
+}
+type Selector interface {
+	Option(ListItem)
+	Clear()
+	GetItems() []string
 }
 type ListItem interface {
 	GetMainText() string
@@ -32,11 +37,6 @@ type ListItems interface {
 	Remove(ListItem)
 	Clear()
 	Len() int
-}
-
-func (l *List) SetSelectedFunc(handler func(ListItem)) *List {
-	l.SelectedFunc = handler
-	return l
 }
 
 func (l *List) Draw(screen tcell.Screen) {
@@ -141,7 +141,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Current = l.Current.Next()
 			}
 		case tcell.KeyEnter:
-			l.SelectedFunc(l.Current)
+			l.Selector.Option(l.Current)
 		}
 	})
 }

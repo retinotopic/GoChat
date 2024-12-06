@@ -11,7 +11,7 @@ import (
 func (c *Chat) PreLoadElems() {
 	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
 		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
-
+	c.MainFlex = tview.NewFlex()
 	FindUsersForm := tview.NewForm().
 		AddInputField("First name", "", 20, nil, func(text string) {
 			c.CurrentText = text
@@ -27,7 +27,6 @@ func (c *Chat) PreLoadElems() {
 			}
 		})
 	//------------------------------------------
-	c.FlexRoom = tview.NewFlex()
 	roommenu := tview.NewForm()
 	roommenu.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
 		if len(textToCheck) == 0 {
@@ -48,29 +47,11 @@ func (c *Chat) PreLoadElems() {
 			WriteTimeout(time.Second*5, c.Conn, b)
 		}
 	})
-	roommenu.AddButton("Room Actions", func() {
-		if c.currentRoom.IsGroup {
-			if c.currentRoom.IsAdmin {
-				c.Pages.SwitchToPage("AdminGroupActions")
-			} else {
-				c.Pages.SwitchToPage("GroupActions")
-			}
-		} else {
-			c.Pages.SwitchToPage("DuoActions")
-		}
+	/*roommenu.AddButton("Room Actions", func() {
+		c.NavigationOptions("Room Actions")
 	})
-	//---------------------------------------------------
-	for i := range 5 {
-		c.SelectHandlers[i] = list.SelectHandler{List: &list.List{Box: tview.NewBox().SetBorder(true)}, MultOpts: map[string]struct{}{}}
-		//events,
-		//found users - create duo room;
-		// duo users - add users to room;
-		// blocked users - unblock users, update blocked users;
-		//ROOMUSERS: Delete Users From Room,Show users, blocked users,
-	}
-	c.FlexRoom.
-		c.Pages.AddPage("RoomPanel", c.RoomsPanel, true, true)
-	c.Pages.AddPage("FindUsers", FindUsersForm, true, true)
+
+	c.MainFlex.AddItem()*/
 }
 func (c *Chat) NavigationOptions(item list.ListItem) {
 	switch item.GetMainText() {

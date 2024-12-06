@@ -31,28 +31,32 @@ type Room struct {
 	PaginationBtns  func(item list.ListItem) // navigation between Room.Messages lists
 	RoomItem        list.ListItem
 }
+type ListAndHandlers struct{
 
+}
 // Rooms linked list
 type Chat struct {
-	App            *tview.Application
-	UserId         uint64
-	Conn           *websocket.Conn
-	RoomMsgs       map[uint64]*Room // room id to room
-	DuoUsers       map[uint64]*User // user id to users that Duo-only
-	BlockedUsers   map[uint64]User  // user id to blocked
-	FoundUsers     map[uint64]User  // user id to found users
-	SelectHandlers [5]list.SelectHandler
-	currentRoom    *Room  // current selected Room
-	CurrentText    string // current text for user search || set room name ||
-	RoomsList      *list.List
-	MainFlex       *tview.Flex
-	NavText        [13]string
+	App          *tview.Application
+	UserId       uint64
+	Conn         *websocket.Conn
+	RoomMsgs     map[uint64]*Room // room id to room
+	DuoUsers     map[uint64]*User // user id to users that Duo-only
+	BlockedUsers map[uint64]User  // user id to blocked
+	FoundUsers   map[uint64]User  // user id to found users
+	Lists        [4]list.List
+	currentRoom  *Room  // current selected Room
+	CurrentText  string // current text for user search || set room name ||
+	MainFlex     *tview.Flex
+	NavText      [13]string
 }
 
 func NewChat() *Chat {
-	return &Chat{
-		RoomsList: &list.List{Box: tview.NewBox()},
+	c := &Chat{}
+	for i := range len(c.Lists) {
+		sl := list.SelectHandler{}
+		c.Lists[i] = list.List{Box: tview.NewBox(),SelectedFunc: list.}
 	}
+	return c
 }
 func (r *Chat) LoadMessagesEvent(msgsv []Message) {
 	if len(msgsv) == 0 {
