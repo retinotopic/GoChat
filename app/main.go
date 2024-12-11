@@ -31,30 +31,32 @@ type Room struct {
 	PaginationBtns  func(item list.ListItem) // navigation between Room.Messages lists
 	RoomItem        list.ListItem
 }
-type ListAndHandlers struct{
-
+type ListAndHandlers struct {
 }
+
 // Rooms linked list
 type Chat struct {
-	App          *tview.Application
-	UserId       uint64
-	Conn         *websocket.Conn
-	RoomMsgs     map[uint64]*Room // room id to room
-	DuoUsers     map[uint64]*User // user id to users that Duo-only
-	BlockedUsers map[uint64]User  // user id to blocked
-	FoundUsers   map[uint64]User  // user id to found users
-	Lists        [4]list.List
-	currentRoom  *Room  // current selected Room
-	CurrentText  string // current text for user search || set room name ||
-	MainFlex     *tview.Flex
-	NavText      [13]string
+	App           *tview.Application
+	UserId        uint64
+	Conn          *websocket.Conn
+	RoomMsgs      map[uint64]*Room // room id to room
+	DuoUsers      map[uint64]*User // user id to users that Duo-only
+	BlockedUsers  map[uint64]User  // user id to blocked
+	FoundUsers    map[uint64]User  // user id to found users
+	Lists         [6]*list.List    // rooms panel , duo users,blocked users,found users,events, AND ALL NAVIGATION list
+	currentRoom   *Room            // current selected Room
+	CurrentText   string           // current text for user search || set room name ||
+	MainFlex      *tview.Flex
+	NavText       [13]string
+	NavState      int
+	FindUsersForm *tview.Form
+	RoomMenuForm  *tview.Form
 }
 
 func NewChat() *Chat {
 	c := &Chat{}
 	for i := range len(c.Lists) {
-		sl := list.SelectHandler{}
-		c.Lists[i] = list.List{Box: tview.NewBox(),SelectedFunc: list.}
+		c.Lists[i] = &list.List{Box: tview.NewBox()}
 	}
 	return c
 }
@@ -77,7 +79,7 @@ func (r *Chat) LoadMessagesEvent(msgsv []Message) {
 		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: tcell.ColorBlue}
 		ll.MoveToFront(nextpgn)
 		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
-		l.SelectedFunc = rm.PaginationBtns
+		//l.Selector = rm.ch
 		rm.Messages[rm.MsgPageIdBack] = l
 	}
 
@@ -129,7 +131,7 @@ func (c *Chat) DeleteRoom(roomid uint64) *Chat {
 	rm, ok := c.RoomMsgs[roomid]
 	if ok {
 		if rm.RoomItem != nil && !rm.RoomItem.IsNil() {
-			c.RoomsList.Items.Remove(rm.RoomItem) // deleting node in Rooms linked list
+			c.Lists[0].Items.Remove(rm.RoomItem) // deleting node in Rooms linked list
 		}
 		delete(c.RoomMsgs, roomid) // deleting *Room instance in map
 	}
@@ -143,7 +145,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 		rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 	}
 	// set new room at the top
-	c.RoomsList.Items.MoveToFront(&list.LinkedItems{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
+	c.Lists[0].Items.MoveToFront(&list.LinkedItems{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
 	if rmsv.IsGroup {
 		rm.RoomType = "Group"
 	} else {
@@ -154,12 +156,9 @@ func main() {
 	chat := NewChat()
 	chat.App = tview.NewApplication()
 
-	appflex := tview.NewFlex().
-		AddItem(chat.RoomsList, 0, 1, true).
-		AddItem(chat.MainFlex, 0, 1, true)
-	appflex.Clear()
+	chat.MainFlex.AddItem(chat.Lists[0], 0, 1, true)
 
-	if err := chat.App.SetRoot(appflex, true).Run(); err != nil {
+	if err := chat.App.SetRoot(chat.MainFlex, true).Run(); err != nil {
 		panic(err)
 	}
 }

@@ -1,7 +1,10 @@
 package main
 
-type Events struct {
-	InProcess int
+type Event struct {
+	Event    string `json:"Event"`
+	ErrorMsg string `json:"ErrorMsg"`
+	UserId   uint64 `json:"UserId"`
+	Data     []byte `json:"-"`
 }
 type RoomRequest struct {
 	Event    string   `json:"Event" `

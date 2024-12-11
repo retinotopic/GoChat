@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
 )
@@ -12,7 +13,7 @@ func (c *Chat) PreLoadElems() {
 	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
 		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
 	c.MainFlex = tview.NewFlex()
-	FindUsersForm := tview.NewForm().
+	c.FindUsersForm = tview.NewForm().
 		AddInputField("First name", "", 20, nil, func(text string) {
 			c.CurrentText = text
 		}).
@@ -27,16 +28,13 @@ func (c *Chat) PreLoadElems() {
 			}
 		})
 	//------------------------------------------
-	roommenu := tview.NewForm()
-	roommenu.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
-		if len(textToCheck) == 0 {
-			return false
-		}
-		return true
+	c.RoomMenuForm = tview.NewForm()
+	c.RoomMenuForm.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
+		return len(textToCheck) != 0
 	}, func(msg string) {
 		c.CurrentText = msg
 	})
-	roommenu.AddButton("Send Message", func() {
+	c.RoomMenuForm.AddButton("Send Message", func() {
 		event := Message{
 			Event:          "SendMessage",
 			MessagePayload: c.CurrentText,
@@ -47,16 +45,29 @@ func (c *Chat) PreLoadElems() {
 			WriteTimeout(time.Second*5, c.Conn, b)
 		}
 	})
-	/*roommenu.AddButton("Room Actions", func() {
-		c.NavigationOptions("Room Actions")
+	c.RoomMenuForm.AddButton("Room Actions", func() {
+
+	})
+	//-------------------------------------------------
+	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyLeft {
+			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
+			return nil
+		}
+		if event.Key() == tcell.KeyRight {
+			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
+			return nil
+		}
+		return event
 	})
 
-	c.MainFlex.AddItem()*/
 }
 func (c *Chat) NavigationOptions(item list.ListItem) {
 	switch item.GetMainText() {
 	case "Event logs":
+		c.AddItemMainFlex(c.Lists[0], c.Lists[4])
 	case "Create Duo Room":
+		c.AddItemMainFlex(c.Lists[0], c.Lists[4]) // + c.Lists[event button]
 	case "Create Group Room":
 	case "Unblock User":
 	case "Change Username":
@@ -71,5 +82,11 @@ func (c *Chat) NavigationOptions(item list.ListItem) {
 	case "Block":
 	case "Leave Room":
 	case "Menu":
+	}
+}
+func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	c.MainFlex.Clear()
+	for _, v := range prmtvs {
+		c.MainFlex.AddItem(v, 0, 2, true)
 	}
 }

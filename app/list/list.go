@@ -141,7 +141,9 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Current = l.Current.Next()
 			}
 		case tcell.KeyEnter:
-			l.Selector.Option(l.Current)
+			if l.Selector != nil {
+				l.Selector.Option(l.Current)
+			}
 		}
 	})
 }
