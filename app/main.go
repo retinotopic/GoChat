@@ -26,12 +26,9 @@ type Room struct {
 	lastMessageID   uint64
 	RoomType        string // Group or Duo
 	Messages        map[int]*list.List
-	MsgPageIdBack   int                      // for old messages
-	MsgPageIdFront  int                      // for new messages
-	PaginationBtns  func(item list.ListItem) // navigation between Room.Messages lists
+	MsgPageIdBack   int // for old messages
+	MsgPageIdFront  int // for new messages
 	RoomItem        list.ListItem
-}
-type ListAndHandlers struct {
 }
 
 // Rooms linked list
@@ -43,7 +40,7 @@ type Chat struct {
 	DuoUsers      map[uint64]*User // user id to users that Duo-only
 	BlockedUsers  map[uint64]User  // user id to blocked
 	FoundUsers    map[uint64]User  // user id to found users
-	Lists         [6]*list.List    // rooms panel , duo users,blocked users,found users,events, AND ALL NAVIGATION list
+	Lists         [6]*list.List    // rooms panel, duo users, blocked users, found users, room users, events, navigations items,
 	currentRoom   *Room            // current selected Room
 	CurrentText   string           // current text for user search || set room name ||
 	MainFlex      *tview.Flex
@@ -60,26 +57,28 @@ func NewChat() *Chat {
 	}
 	return c
 }
-func (r *Chat) LoadMessagesEvent(msgsv []Message) {
+func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	if len(msgsv) == 0 {
 		return
 	}
-	rm, ok := r.RoomMsgs[msgsv[0].RoomId]
+	rm, ok := c.RoomMsgs[msgsv[0].RoomId]
 	if ok {
-		ll := list.NewLinkedList()
+
+		ll := list.NewUnrolledList()
 		rm.MsgPageIdBack--
 		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: tcell.ColorBlue}
 		ll.MoveToBack(prevpgn)
+
 		for i := range len(msgsv) {
 			rm.lastMessageID = msgsv[i].MessageId
 
 			e := &list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
 			ll.MoveToFront(e)
 		}
+
 		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: tcell.ColorBlue}
 		ll.MoveToFront(nextpgn)
-		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
-		//l.Selector = rm.ch
+		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 		rm.Messages[rm.MsgPageIdBack] = l
 	}
 
@@ -91,56 +90,60 @@ func (c *Chat) NewMessageEvent(msg Message) {
 		if ok2 {
 			if l.Items.Len() >= 30 {
 
-				rm.MsgPageIdFront++ // dont forget prev btn at creating new room
-				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack), Color: tcell.ColorBlue}
+				rm.MsgPageIdFront++
+				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: tcell.ColorBlue}
 				l.Items.MoveToFront(nextpgn)
 
-				ll := list.NewLinkedList()
-				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: tcell.ColorBlue}
+				ll := list.NewUnrolledList()
+				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront - 1), Color: tcell.ColorBlue}
 				ll.MoveToBack(prevpgn)
-				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront()}
+
+				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 				rm.Messages[rm.MsgPageIdFront] = lst
+
 			} else {
 				l.Items.MoveToFront(&list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msg.UserId].Username + ": " + msg.MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
+
 			}
+		} else {
+			ll := list.NewUnrolledList()
+			prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: tcell.ColorBlue}
+			ll.MoveToBack(prevpgn)
+			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
+			rm.Messages[rm.MsgPageIdFront] = lst
 		}
 
 	}
 
 }
-func (c *Chat) ProcessRoom(rmsv RoomServer) {
-	rm, ok := c.RoomMsgs[rmsv.RoomId]
-	if ok {
-		for i := range len(rmsv.Users) {
-			if rmsv.Users[i].UserId == c.UserId {
-				c.DeleteRoom(rmsv.RoomId)
-				break
+func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
+	for _, rmsv := range rmsvs {
+		rm, ok := c.RoomMsgs[rmsv.RoomId]
+		if ok {
+			rm.RoomName = rmsv.RoomName
+			for i := range len(rmsv.Users) {
+				if rmsv.Users[i].UserId == c.UserId {
+					delete(c.RoomMsgs, rmsv.RoomId)
+					break
+				}
+				if rmsv.Users[i].RoomToggle {
+					delete(rm.Users, rmsv.Users[i].UserId)
+				} else {
+					rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
+				}
 			}
-			if rmsv.Users[i].RoomToggle {
-				delete(rm.Users, rmsv.Users[i].UserId)
-			} else {
-				rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
-			}
+		} else {
+			c.AddRoom(rmsv)
 		}
-	} else {
-		c.AddRoom(rmsv)
 	}
+
 }
 
-func (c *Chat) DeleteRoom(roomid uint64) *Chat {
-	rm, ok := c.RoomMsgs[roomid]
-	if ok {
-		if rm.RoomItem != nil && !rm.RoomItem.IsNil() {
-			c.Lists[0].Items.Remove(rm.RoomItem) // deleting node in Rooms linked list
-		}
-		delete(c.RoomMsgs, roomid) // deleting *Room instance in map
-	}
-	return c
-}
 func (c *Chat) AddRoom(rmsv RoomServer) {
-	//fill room with users
 	c.RoomMsgs[rmsv.RoomId] = &Room{Users: make(map[uint64]User), Messages: make(map[int]*list.List), RoomName: rmsv.RoomName, RoomId: rmsv.RoomId}
 	rm := c.RoomMsgs[rmsv.RoomId]
+
+	//fill room with users
 	for i := range len(rmsv.Users) {
 		rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 	}

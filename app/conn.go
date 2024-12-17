@@ -59,7 +59,7 @@ func (c *Chat) TryConnect(username, url string) {
 			return
 		}
 		if rm.RoomId != 0 {
-			c.ProcessRoom(rm)
+			c.ProcessRoom([]RoomServer{rm})
 			continue
 		}
 		e := Event{}
@@ -67,7 +67,8 @@ func (c *Chat) TryConnect(username, url string) {
 		if err != nil {
 			return
 		}
-		if e.Event == "GetMessagesFromRoom" {
+		switch e.Event {
+		case "GetMessagesFromRoom":
 			var msgs []Message
 			err = json.Unmarshal(e.Data, &msgs)
 			if err != nil {
@@ -75,7 +76,26 @@ func (c *Chat) TryConnect(username, url string) {
 			}
 			c.LoadMessagesEvent(msgs)
 			continue
+		case "FindUser":
+			var usrs []User
+			err = json.Unmarshal(e.Data, &usrs)
+			if err != nil {
+				return
+			}
+			for _, v := range usrs {
+				c.FoundUsers[v.UserId] = v
+			}
+		case "GetBlockedUsers":
+			var usrs []User
+			err = json.Unmarshal(e.Data, &usrs)
+			if err != nil {
+				return
+			}
+			for _, v := range usrs {
+				c.BlockedUsers[v.UserId] = v
+			}
 		}
+
 	}
 
 }

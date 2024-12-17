@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/http"
 	"os"
 	"time"
 
@@ -10,13 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
-	"github.com/retinotopic/GoChat/server/auth"
 	db "github.com/retinotopic/GoChat/server/db/postgres"
 	"github.com/retinotopic/GoChat/server/logger/loggers/zerolog"
 	rd "github.com/retinotopic/GoChat/server/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/server/router"
-	"github.com/retinotopic/tinyauth/providers/firebase"
-	"github.com/retinotopic/tinyauth/providers/google"
 )
 
 func main() {
@@ -24,9 +22,11 @@ func main() {
 	addr := flag.String("addr", "localhost:8080", "app address")
 	rdaddr := flag.String("rdaddr", "localhost:6379", "redis address")
 	pgaddr := flag.String("pgaddr", "localhost:5432", "postgres address")
-	mp := make(auth.ProviderMap)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
+
+	/* uncomment to use oauth2
+	mp := make(auth.ProviderMap)
 	google, err := google.New(ctx, os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "/refresh")
 	if err != nil {
 		log.Fatal("google provider:", err)
@@ -40,6 +40,7 @@ func main() {
 	mp[os.Getenv("ISSUER_FIREBASE")] = firebase
 	mp[os.Getenv("ISSUER_GOOGLE")] = google
 	mp[os.Getenv("ISSUER2_GOOGLE")] = google
+	*/
 
 	flag.Parse()
 	client := redis.NewClient(&redis.Options{
@@ -54,7 +55,15 @@ func main() {
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-
+	//FetchUser(http.ResponseWriter, *http.Request) (string, error)
+	
+	FetchUser := func(w http.ResponseWriter, r *http.Request) (string, error) {
+		c, err := r.Cookie("username")
+		if err != nil {
+			return "", err
+		}
+		return c.Value, nil
+	}
 	dbs := stdlib.OpenDBFromPool(pgclient.Pool)
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal("goose set dialect:", err)
@@ -65,7 +74,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, mp, rds, pgclient, log)
+	srv := router.NewRouter(*addr, FetchUser, rds, pgclient, log)
 
 	err = srv.Run(ctx)
 	if err != nil {

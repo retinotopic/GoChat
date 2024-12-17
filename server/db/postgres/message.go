@@ -52,7 +52,7 @@ func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 		`SELECT MessagePayload,user_id,message_id,room_id
 		FROM messages 
 		WHERE room_id = $1 AND message_id < $2
-		ORDER BY message_id DESC LIMIT 50`, m.RoomId, m.MessageId)
+		ORDER BY message_id DESC LIMIT 40`, m.RoomId, m.MessageId)
 	if err != nil {
 		return err
 	}

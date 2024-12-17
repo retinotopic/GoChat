@@ -62,28 +62,41 @@ func (c *Chat) PreLoadElems() {
 	})
 
 }
-func (c *Chat) NavigationOptions(item list.ListItem) {
+func (c *Chat) Option(item list.ListItem) {
+
 	switch item.GetMainText() {
 	case "Event logs":
 		c.AddItemMainFlex(c.Lists[0], c.Lists[4])
 	case "Create Duo Room":
-		c.AddItemMainFlex(c.Lists[0], c.Lists[4]) // + c.Lists[event button]
+		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
 	case "Create Group Room":
+		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
 	case "Unblock User":
+		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
 	case "Change Username":
 	case "Current Room Actions":
 	case "Update Blocked Users":
 	case "Change Privacy for Duo Rooms":
 	case "Change Privacy for Group Rooms":
 	case "Add Users To Room":
+
 	case "Delete Users From Room":
+
 	case "Show users":
 	case "Change Room Name":
 	case "Block":
 	case "Leave Room":
 	case "Menu":
+	default:
+
 	}
 }
+func (c *Chat) Clear() {
+}
+func (c *Chat) GetItems() []string {
+	return []string{}
+}
+
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 	c.MainFlex.Clear()
 	for _, v := range prmtvs {

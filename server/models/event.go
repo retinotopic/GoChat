@@ -6,7 +6,6 @@ import (
 
 type Event struct {
 	Event     string   `json:"Event"`
-	EventId   uint64   `json:"EventId"`
 	ErrorMsg  string   `json:"ErrorMsg"`
 	UserId    uint64   `json:"UserId"`
 	Kind      string   `json:"-"` // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
