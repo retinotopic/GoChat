@@ -56,7 +56,7 @@ func (l *LinkedList) Len() int {
 
 type LinkedItems struct {
 	Elem          *lst.Element
-	Color         tcell.Color
+	Color         [2]tcell.Color
 	MainText      string
 	SecondaryText string
 }
@@ -67,8 +67,11 @@ func (l *LinkedItems) GetMainText() string {
 func (l *LinkedItems) GetSecondaryText() string {
 	return l.SecondaryText
 }
-func (l *LinkedItems) GetColor() tcell.Color {
-	return l.Color
+func (l *LinkedItems) GetColor(idx int) tcell.Color {
+	if idx < 2 && idx >= 0 {
+		return l.Color[idx]
+	}
+	return tcell.ColorWhite
 }
 func (l *LinkedItems) SetMainText(str string) {
 	l.MainText = str
@@ -76,8 +79,11 @@ func (l *LinkedItems) SetMainText(str string) {
 func (l *LinkedItems) SetSecondaryText(str string) {
 	l.SecondaryText = str
 }
-func (l *LinkedItems) SetColor(clr tcell.Color) {
-	l.Color = clr
+
+func (l *LinkedItems) SetColor(clr tcell.Color, idx int) {
+	if idx < 2 && idx >= 0 {
+		l.Color[idx] = clr
+	}
 }
 func (l *LinkedItems) Next() ListItem {
 	val := l.Elem.Next()

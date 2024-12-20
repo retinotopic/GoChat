@@ -22,10 +22,10 @@ type Selector interface {
 type ListItem interface {
 	GetMainText() string
 	GetSecondaryText() string
-	GetColor() tcell.Color
+	GetColor(int) tcell.Color
 	SetMainText(string)
 	SetSecondaryText(string)
-	SetColor(tcell.Color)
+	SetColor(tcell.Color, int)
 	Next() ListItem
 	Prev() ListItem
 	IsNil() bool
@@ -42,7 +42,6 @@ type ListItems interface {
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
-	x = x + 2
 	element := l.Items.GetFront()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
@@ -56,7 +55,10 @@ func (l *List) Draw(screen tcell.Screen) {
 			if row+lineIndex >= height {
 				break
 			}
-			tview.Print(screen, line, x, y+row+lineIndex, width, tview.AlignLeft, element.GetColor())
+			tview.Print(screen, line, x+2, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
+			if element == l.Current {
+				screen.SetContent(x, y+row+lineIndex, '|', nil, tcell.StyleDefault)
+			}
 		}
 
 		if len(element.GetSecondaryText()) > 0 && width > 3 {
@@ -66,16 +68,15 @@ func (l *List) Draw(screen tcell.Screen) {
 				if startY+lineIndex >= height {
 					break
 				}
-				tview.Print(screen, line, x, y+startY+lineIndex,
-					width, tview.AlignLeft, tcell.ColorGray)
+				tview.Print(screen, line, x+2, y+startY+lineIndex,
+					width, tview.AlignLeft, element.GetColor(1))
+				if element == l.Current {
+					screen.SetContent(x, y+startY+lineIndex, '|', nil, tcell.StyleDefault)
+				}
 			}
 			row += len(lines) + len(secondaryLines)
 		} else {
 			row += len(lines)
-		}
-
-		if element == l.Current {
-			screen.SetContent(x-2, y+row-1, '>', nil, tcell.StyleDefault)
 		}
 		element = element.Next()
 	}

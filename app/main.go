@@ -48,6 +48,7 @@ type Chat struct {
 	NavState      int
 	FindUsersForm *tview.Form
 	RoomMenuForm  *tview.Form
+	stopeventUI   bool
 }
 
 func NewChat() *Chat {
@@ -64,19 +65,19 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	rm, ok := c.RoomMsgs[msgsv[0].RoomId]
 	if ok {
 
-		ll := list.NewUnrolledList()
+		ll := list.NewArrayList()
 		rm.MsgPageIdBack--
-		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: tcell.ColorBlue}
+		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 		ll.MoveToBack(prevpgn)
 
 		for i := range len(msgsv) {
 			rm.lastMessageID = msgsv[i].MessageId
 
-			e := &list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
+			e := &list.LinkedItems{Color: [2]tcell.Color{tcell.ColorWhite, tcell.ColorGray}, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
 			ll.MoveToFront(e)
 		}
 
-		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: tcell.ColorBlue}
+		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 		ll.MoveToFront(nextpgn)
 		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 		rm.Messages[rm.MsgPageIdBack] = l
@@ -91,23 +92,23 @@ func (c *Chat) NewMessageEvent(msg Message) {
 			if l.Items.Len() >= 30 {
 
 				rm.MsgPageIdFront++
-				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: tcell.ColorBlue}
+				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 				l.Items.MoveToFront(nextpgn)
 
-				ll := list.NewUnrolledList()
-				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront - 1), Color: tcell.ColorBlue}
+				ll := list.NewArrayList()
+				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront - 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 				ll.MoveToBack(prevpgn)
 
 				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
-				l.Items.MoveToFront(&list.LinkedItems{Color: tcell.ColorWhite, MainText: rm.Users[msg.UserId].Username + ": " + msg.MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
+				l.Items.MoveToFront(&list.LinkedItems{Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, MainText: rm.Users[msg.UserId].Username + ": " + msg.MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
 
 			}
 		} else {
-			ll := list.NewUnrolledList()
-			prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: tcell.ColorBlue}
+			ll := list.NewArrayList()
+			prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 			ll.MoveToBack(prevpgn)
 			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 			rm.Messages[rm.MsgPageIdFront] = lst

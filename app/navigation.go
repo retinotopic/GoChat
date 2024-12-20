@@ -9,6 +9,20 @@ import (
 	"github.com/rivo/tview"
 )
 
+type LoadingState struct {
+	message         string
+	spinner         []string
+	color           string
+	InProgressCount int
+}
+
+var state = LoadingState{
+	message:         " In Progress",
+	spinner:         []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+	color:           "yellow",
+	InProgressCount: 0,
+}
+
 func (c *Chat) PreLoadElems() {
 	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
 		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
@@ -74,6 +88,7 @@ func (c *Chat) Option(item list.ListItem) {
 	case "Unblock User":
 		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
 	case "Change Username":
+
 	case "Current Room Actions":
 	case "Update Blocked Users":
 	case "Change Privacy for Duo Rooms":

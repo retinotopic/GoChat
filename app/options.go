@@ -20,12 +20,12 @@ func (m *MultOptions) Option(item list.ListItem) {
 	_, ok := m.MultOpts[id]
 	m.mtx.RUnlock()
 	if ok {
-		item.SetColor(m.DefaultColor)
+		item.SetColor(m.DefaultColor, 0)
 		m.mtx.Lock()
 		delete(m.MultOpts, id)
 		m.mtx.Unlock()
 	} else {
-		item.SetColor(m.ChangeColor)
+		item.SetColor(m.ChangeColor, 0)
 		m.mtx.Lock()
 		m.MultOpts[id] = struct{}{}
 		m.mtx.Unlock()
@@ -52,7 +52,7 @@ type OneOption struct {
 }
 
 func (o *OneOption) Option(item list.ListItem) {
-	item.SetColor(o.ChangeColor)
+	item.SetColor(o.ChangeColor, 0)
 	o.OneOpt = item.GetSecondaryText()
 	bi := item
 	fi := item
@@ -64,7 +64,7 @@ func (o *OneOption) Option(item list.ListItem) {
 			if bi == nil || bi.IsNil() {
 				back = false
 			} else {
-				bi.SetColor(o.DefaultColor)
+				bi.SetColor(o.DefaultColor, 0)
 			}
 		}
 		if forward {
@@ -72,7 +72,7 @@ func (o *OneOption) Option(item list.ListItem) {
 			if fi == nil || fi.IsNil() {
 				forward = false
 			} else {
-				fi.SetColor(o.DefaultColor)
+				fi.SetColor(o.DefaultColor, 0)
 			}
 		}
 	}

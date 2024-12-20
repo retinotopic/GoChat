@@ -4,7 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-func NewUnrolledList() *ArrayList {
+func NewArrayList() *ArrayList {
 	return &ArrayList{Items: make([]ArrayItem, 0, 40)}
 }
 
@@ -41,7 +41,7 @@ func (a *ArrayList) Len() int {
 
 type ArrayItem struct {
 	ArrList       *ArrayList
-	Color         tcell.Color
+	Color         [2]tcell.Color
 	MainText      string
 	SecondaryText string
 }
@@ -52,8 +52,12 @@ func (a ArrayItem) GetMainText() string {
 func (a ArrayItem) GetSecondaryText() string {
 	return a.SecondaryText
 }
-func (a ArrayItem) GetColor() tcell.Color {
-	return a.Color
+func (a ArrayItem) GetColor(idx int) tcell.Color {
+	if idx < 2 && idx >= 0 {
+		return a.ArrList.Items[a.ArrList.CurrentIndex].Color[idx]
+
+	}
+	return tcell.ColorWhite
 }
 func (a ArrayItem) SetMainText(str string) {
 	a.ArrList.Items[a.ArrList.CurrentIndex].MainText = str
@@ -61,8 +65,10 @@ func (a ArrayItem) SetMainText(str string) {
 func (a ArrayItem) SetSecondaryText(str string) {
 	a.ArrList.Items[a.ArrList.CurrentIndex].SecondaryText = str
 }
-func (a ArrayItem) SetColor(clr tcell.Color) {
-	a.ArrList.Items[a.ArrList.CurrentIndex].Color = clr
+func (a ArrayItem) SetColor(clr tcell.Color, idx int) {
+	if idx < 2 && idx >= 0 {
+		a.ArrList.Items[a.ArrList.CurrentIndex].Color[idx] = clr
+	}
 }
 func (a ArrayItem) Next() ListItem {
 	if a.ArrList.CurrentIndex == len(a.ArrList.Items)-1 {
