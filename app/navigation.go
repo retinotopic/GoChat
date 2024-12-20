@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -23,6 +24,37 @@ var state = LoadingState{
 	InProgressCount: 0,
 }
 
+func (c *Chat) StartEventUILoop() {
+	i := 0
+	var NotIdle bool
+	for {
+		if state.InProgressCount > 0 {
+			c.App.QueueUpdateDraw(func() {
+
+				spinChar := state.spinner[i%len(state.spinner)]
+				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
+				item := c.Lists[5].Items.GetFront()
+				item.SetSecondaryText(text)
+				item.SetColor(tcell.ColorRed, 1)
+			})
+			i++
+			if i == len(state.spinner) {
+				i = 0
+			}
+			NotIdle = true
+		} else if NotIdle {
+			c.App.QueueUpdateDraw(func() {
+				item := c.Lists[5].Items.GetFront()
+				item.SetSecondaryText(" ")
+				item.SetColor(tcell.ColorGrey, 1)
+			})
+			NotIdle = false
+		} else if c.stopeventUI {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
 func (c *Chat) PreLoadElems() {
 	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
 		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
@@ -58,9 +90,6 @@ func (c *Chat) PreLoadElems() {
 		if err != nil {
 			WriteTimeout(time.Second*5, c.Conn, b)
 		}
-	})
-	c.RoomMenuForm.AddButton("Room Actions", func() {
-
 	})
 	//-------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
