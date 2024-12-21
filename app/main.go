@@ -40,14 +40,15 @@ type Chat struct {
 	DuoUsers      map[uint64]*User // user id to users that Duo-only
 	BlockedUsers  map[uint64]User  // user id to blocked
 	FoundUsers    map[uint64]User  // user id to found users
-	Lists         [6]*list.List    // rooms panel, duo users, blocked users, found users, room users, events, navigations items,
+	Lists         [5]*list.List    // rooms[0], one[1], multiple[2], menu[3], navigation[4],
 	currentRoom   *Room            // current selected Room
 	CurrentText   string           // current text for user search || set room name ||
 	MainFlex      *tview.Flex
 	NavText       [13]string
 	NavState      int
 	FindUsersForm *tview.Form
-	RoomMenuForm  *tview.Form
+	SendMsgBtn    *tview.Form
+	InputField    *tview.Form
 	stopeventUI   bool
 }
 

@@ -23,14 +23,14 @@ func (a *ArrayList) MoveToFront(e ListItem) {
 func (a *ArrayList) MoveToBack(e ListItem) {
 	uitem, ok := e.(ArrayItem)
 	if ok {
-		a.Items[len(a.Items)-1] = uitem
+		a.Items = append(a.Items, uitem)
 	}
 }
 func (a *ArrayList) GetFront() ListItem {
 	return a.Items[0]
 }
 func (a *ArrayList) Remove(e ListItem) {
-	a.Items = a.Items[:len(a.Items)-1] // removing the last element. argument is unused, only to satisfy the interface lol
+	a.Items = a.Items[:len(a.Items)-1] // removing the last element. argument is unused, only to satisfy the interface
 }
 func (a *ArrayList) Clear() {
 	a.Items = a.Items[:0]

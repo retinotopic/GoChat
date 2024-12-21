@@ -7,6 +7,8 @@ import (
 	"github.com/rivo/tview"
 )
 
+var lines = make([]string, 0, 1000)
+
 type List struct {
 	*tview.Box
 	offset   int // scroll offset
@@ -85,7 +87,7 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
 		return []string{text}
 	}
-	var lines []string
+	lines = lines[:0]
 	words := strings.Fields(text)
 	currentLine := ""
 	for _, word := range words {

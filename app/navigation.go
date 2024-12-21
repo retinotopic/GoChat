@@ -33,7 +33,7 @@ func (c *Chat) StartEventUILoop() {
 
 				spinChar := state.spinner[i%len(state.spinner)]
 				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
-				item := c.Lists[5].Items.GetFront()
+				item := c.Lists[3].Items.GetFront()
 				item.SetSecondaryText(text)
 				item.SetColor(tcell.ColorRed, 1)
 			})
@@ -44,7 +44,7 @@ func (c *Chat) StartEventUILoop() {
 			NotIdle = true
 		} else if NotIdle {
 			c.App.QueueUpdateDraw(func() {
-				item := c.Lists[5].Items.GetFront()
+				item := c.Lists[3].Items.GetFront()
 				item.SetSecondaryText(" ")
 				item.SetColor(tcell.ColorGrey, 1)
 			})
@@ -59,6 +59,7 @@ func (c *Chat) PreLoadElems() {
 	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
 		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
 	c.MainFlex = tview.NewFlex()
+	//----------------------------------------------------------------
 	c.FindUsersForm = tview.NewForm().
 		AddInputField("First name", "", 20, nil, func(text string) {
 			c.CurrentText = text
@@ -73,14 +74,16 @@ func (c *Chat) PreLoadElems() {
 				WriteTimeout(time.Second*5, c.Conn, b)
 			}
 		})
-	//------------------------------------------
-	c.RoomMenuForm = tview.NewForm()
-	c.RoomMenuForm.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
+	//----------------------------------------------------------------
+	c.InputField = tview.NewForm()
+	c.InputField.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
 		return len(textToCheck) != 0
 	}, func(msg string) {
 		c.CurrentText = msg
 	})
-	c.RoomMenuForm.AddButton("Send Message", func() {
+	//----------------------------------------------------------------
+	c.SendMsgBtn = tview.NewForm()
+	c.SendMsgBtn.AddButton("Send Message", func() {
 		event := Message{
 			Event:          "SendMessage",
 			MessagePayload: c.CurrentText,
@@ -91,7 +94,7 @@ func (c *Chat) PreLoadElems() {
 			WriteTimeout(time.Second*5, c.Conn, b)
 		}
 	})
-	//-------------------------------------------------
+	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyLeft {
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
@@ -109,12 +112,14 @@ func (c *Chat) Option(item list.ListItem) {
 
 	switch item.GetMainText() {
 	case "Event logs":
-		c.AddItemMainFlex(c.Lists[0], c.Lists[4])
+		//
+		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
 	case "Create Duo Room":
-		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
+		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
 	case "Create Group Room":
-		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
+		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
 	case "Unblock User":
+		c.Lists[4].Selector.GetItems()
 		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
 	case "Change Username":
 
