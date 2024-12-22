@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/retinotopic/GoChat/app/list"
 )
 
 func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
@@ -82,8 +84,11 @@ func (c *Chat) TryConnect(username, url string) {
 			if err != nil {
 				return
 			}
+			c.Lists[3].Items.Clear()
 			for _, v := range usrs {
 				c.FoundUsers[v.UserId] = v
+				c.Lists[3].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
+					SecondaryText: strconv.FormatUint(v.UserId, 10)})
 			}
 		case "GetBlockedUsers":
 			var usrs []User
@@ -91,8 +96,11 @@ func (c *Chat) TryConnect(username, url string) {
 			if err != nil {
 				return
 			}
+			c.Lists[1].Items.Clear()
 			for _, v := range usrs {
 				c.BlockedUsers[v.UserId] = v
+				c.Lists[1].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
+					SecondaryText: strconv.FormatUint(v.UserId, 10)})
 			}
 		}
 

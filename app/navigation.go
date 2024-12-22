@@ -56,8 +56,10 @@ func (c *Chat) StartEventUILoop() {
 	}
 }
 func (c *Chat) PreLoadElems() {
-	c.NavText = [13]string{"Event logs", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Change Privacy for Duo Rooms",
-		"Change Privacy for Group Rooms", "Add Users To Room", "Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
+	c.NavText = [16]string{"Menu", "Event logs", "Create Duo Room", "Create Group Room",
+		"Unblock User", "Get Blocked Users", "Change Username", "Change Privacy",
+		"for Duo Rooms", " for Group Rooms", "Add Users To Room",
+		"Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
 	c.FindUsersForm = tview.NewForm().
@@ -109,7 +111,6 @@ func (c *Chat) PreLoadElems() {
 
 }
 func (c *Chat) Option(item list.ListItem) {
-
 	switch item.GetMainText() {
 	case "Event logs":
 		//
@@ -119,8 +120,30 @@ func (c *Chat) Option(item list.ListItem) {
 	case "Create Group Room":
 		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
 	case "Unblock User":
-		c.Lists[4].Selector.GetItems()
-		//c.AddItemMainFlex(c.Lists[0], c.Lists[3])
+		if c.LastNavigation == "Unblock User" {
+			itms := c.Lists[1].Selector.GetItems()
+			if len(itms) != 0 {
+				n, err := strconv.ParseUint(itms[0], 10, 64)
+				if err != nil {
+					c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: "Unblock User",
+						SecondaryText: "Error: no selected user"})
+				}
+				event := User{
+					Event:  "UnblockUser",
+					UserId: n,
+				}
+				b, err := json.Marshal(event)
+				if err != nil {
+					WriteTimeout(time.Second*5, c.Conn, b)
+				}
+			}
+		} else {
+			c.Lists[4].Items.Clear()
+			for i := 4; i < 6; i++ {
+				c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
+			}
+			c.AddItemMainFlex(c.Lists[3], c.Lists[4], c.Lists[1])
+		}
 	case "Change Username":
 
 	case "Current Room Actions":
@@ -139,8 +162,10 @@ func (c *Chat) Option(item list.ListItem) {
 	default:
 
 	}
+	c.LastNavigation = item.GetMainText()
 }
 func (c *Chat) Clear() {
+	c.LastNavigation = ""
 }
 func (c *Chat) GetItems() []string {
 	return []string{}

@@ -16,6 +16,7 @@ type ArrayList struct {
 
 func (a *ArrayList) MoveToFront(e ListItem) {
 	uitem, ok := e.(ArrayItem)
+	uitem.ArrList = a
 	if ok {
 		a.Items[0] = uitem
 	}

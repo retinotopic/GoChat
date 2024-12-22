@@ -33,23 +33,24 @@ type Room struct {
 
 // Rooms linked list
 type Chat struct {
-	App           *tview.Application
-	UserId        uint64
-	Conn          *websocket.Conn
-	RoomMsgs      map[uint64]*Room // room id to room
-	DuoUsers      map[uint64]*User // user id to users that Duo-only
-	BlockedUsers  map[uint64]User  // user id to blocked
-	FoundUsers    map[uint64]User  // user id to found users
-	Lists         [5]*list.List    // rooms[0], one[1], multiple[2], menu[3], navigation[4],
-	currentRoom   *Room            // current selected Room
-	CurrentText   string           // current text for user search || set room name ||
-	MainFlex      *tview.Flex
-	NavText       [13]string
-	NavState      int
-	FindUsersForm *tview.Form
-	SendMsgBtn    *tview.Form
-	InputField    *tview.Form
-	stopeventUI   bool
+	App            *tview.Application
+	UserId         uint64
+	Conn           *websocket.Conn
+	RoomMsgs       map[uint64]*Room // room id to room
+	DuoUsers       map[uint64]*User // user id to users that Duo-only
+	BlockedUsers   map[uint64]User  // user id to blocked
+	FoundUsers     map[uint64]User  // user id to found users
+	Lists          [6]*list.List    // rooms[0], BlockedUsers[1], DuoUsers[2], FoundUsers[3], navigation[4],events[5],
+	currentRoom    *Room            // current selected Room
+	CurrentText    string           // current text for user search || set room name ||
+	LastNavigation string
+	MainFlex       *tview.Flex
+	NavText        [16]string
+	NavState       int
+	FindUsersForm  *tview.Form
+	SendMsgBtn     *tview.Form
+	InputField     *tview.Form
+	stopeventUI    bool
 }
 
 func NewChat() *Chat {
@@ -68,17 +69,21 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 
 		ll := list.NewArrayList()
 		rm.MsgPageIdBack--
-		prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack - 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
+		prevpgn := list.ArrayItem{ArrList: ll, SecondaryText: "Previos Page: " + strconv.Itoa(rm.MsgPageIdBack-1),
+			Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 		ll.MoveToBack(prevpgn)
 
 		for i := range len(msgsv) {
 			rm.lastMessageID = msgsv[i].MessageId
 
-			e := &list.LinkedItems{Color: [2]tcell.Color{tcell.ColorWhite, tcell.ColorGray}, MainText: rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
+			e := list.ArrayItem{ArrList: ll, Color: [2]tcell.Color{tcell.ColorWhite, tcell.ColorGray},
+				MainText:      rm.Users[msgsv[i].UserId].Username + ": " + msgsv[i].MessagePayload,
+				SecondaryText: "UserId: " + strconv.FormatUint(msgsv[i].UserId, 10)}
 			ll.MoveToFront(e)
 		}
 
-		nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdBack + 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
+		nextpgn := list.ArrayItem{ArrList: ll, SecondaryText: "Next Page: " + strconv.Itoa(rm.MsgPageIdBack+1),
+			Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 		ll.MoveToFront(nextpgn)
 		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 		rm.Messages[rm.MsgPageIdBack] = l
@@ -93,23 +98,28 @@ func (c *Chat) NewMessageEvent(msg Message) {
 			if l.Items.Len() >= 30 {
 
 				rm.MsgPageIdFront++
-				nextpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
+				nextpgn := list.ArrayItem{SecondaryText: "Next Page: " + strconv.Itoa(rm.MsgPageIdFront),
+					Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 				l.Items.MoveToFront(nextpgn)
 
 				ll := list.NewArrayList()
-				prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront - 1), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
+				prevpgn := list.ArrayItem{SecondaryText: "Previos Page: " + strconv.Itoa(rm.MsgPageIdFront-1),
+					Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 				ll.MoveToBack(prevpgn)
 
 				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
-				l.Items.MoveToFront(&list.LinkedItems{Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, MainText: rm.Users[msg.UserId].Username + ": " + msg.MessagePayload, SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
+				l.Items.MoveToFront(list.ArrayItem{Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+					MainText:      rm.Users[msg.UserId].Username + ": " + msg.MessagePayload,
+					SecondaryText: "UserId: " + strconv.FormatUint(msg.UserId, 10)})
 
 			}
 		} else {
 			ll := list.NewArrayList()
-			prevpgn := &list.LinkedItems{SecondaryText: strconv.Itoa(rm.MsgPageIdFront), Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
+			prevpgn := list.ArrayItem{SecondaryText: "Previos Page: " + strconv.Itoa(rm.MsgPageIdFront),
+				Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 			ll.MoveToBack(prevpgn)
 			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
 			rm.Messages[rm.MsgPageIdFront] = lst
