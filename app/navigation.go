@@ -10,6 +10,10 @@ import (
 	"github.com/rivo/tview"
 )
 
+var NavText = []string{"Menu", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Current Room Actions", "Change Privacy",
+	"Current Room Actions", "Block", "Leave Room", "Show users", "Add Users To Room", "Delete Users From Room", "Change Room Name",
+	"Events", "Change Privacy", "for Duo Rooms", "for Group Rooms", "Unblock User", "Get Blocked Users", "Unblock User"}
+
 type LoadingState struct {
 	message         string
 	spinner         []string
@@ -18,10 +22,14 @@ type LoadingState struct {
 }
 
 var state = LoadingState{
-	message:         " In Progress",
+	message:         "In Progress",
 	spinner:         []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 	color:           "yellow",
 	InProgressCount: 0,
+}
+
+type Dispatcher interface {
+	SendEvent(item list.ListItem)
 }
 
 func (c *Chat) StartEventUILoop() {
@@ -30,7 +38,6 @@ func (c *Chat) StartEventUILoop() {
 	for {
 		if state.InProgressCount > 0 {
 			c.App.QueueUpdateDraw(func() {
-
 				spinChar := state.spinner[i%len(state.spinner)]
 				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
 				item := c.Lists[3].Items.GetFront()
@@ -55,17 +62,13 @@ func (c *Chat) StartEventUILoop() {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+// MARK: ELEMS
 func (c *Chat) PreLoadElems() {
-	c.NavText = [16]string{"Menu", "Event logs", "Create Duo Room", "Create Group Room",
-		"Unblock User", "Get Blocked Users", "Change Username", "Change Privacy",
-		"for Duo Rooms", " for Group Rooms", "Add Users To Room",
-		"Delete Users From Room", "Show users", "Change Room Name", "Block", "Leave Room"}
+
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
 	c.FindUsersForm = tview.NewForm().
-		AddInputField("First name", "", 20, nil, func(text string) {
-			c.CurrentText = text
-		}).
 		AddButton("Find", func() {
 			event := User{
 				Event:    "FindUsers",
@@ -111,7 +114,32 @@ func (c *Chat) PreLoadElems() {
 
 }
 func (c *Chat) Option(item list.ListItem) {
-	switch item.GetMainText() {
+
+}
+func (c *Chat) Clear() {
+
+}
+func (c *Chat) GetItems() []string {
+	return []string{}
+}
+
+func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	c.MainFlex.Clear()
+	c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
+	c.MainFlex.AddItem(c.Lists[7], 0, 2, true)
+	for _, v := range prmtvs {
+		c.MainFlex.AddItem(v, 0, 2, true)
+	}
+}
+func (c *Chat) GetUsers(m map[uint64]User, idx int) {
+	for _, v := range m {
+		c.Lists[idx].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
+			SecondaryText: strconv.FormatUint(v.UserId, 10)})
+	}
+}
+
+/*	maintext := item.GetMainText()
+	switch maintext {
 	case "Event logs":
 		//
 		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
@@ -120,39 +148,47 @@ func (c *Chat) Option(item list.ListItem) {
 	case "Create Group Room":
 		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
 	case "Unblock User":
-		if c.LastNavigation == "Unblock User" {
-			itms := c.Lists[1].Selector.GetItems()
-			if len(itms) != 0 {
-				n, err := strconv.ParseUint(itms[0], 10, 64)
-				if err != nil {
-					c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: "Unblock User",
-						SecondaryText: "Error: no selected user"})
-				}
-				event := User{
-					Event:  "UnblockUser",
-					UserId: n,
-				}
-				b, err := json.Marshal(event)
-				if err != nil {
-					WriteTimeout(time.Second*5, c.Conn, b)
-				}
-			}
-		} else {
-			c.Lists[4].Items.Clear()
-			for i := 4; i < 6; i++ {
-				c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
-			}
-			c.AddItemMainFlex(c.Lists[3], c.Lists[4], c.Lists[1])
+
+		c.Lists[4].Items.Clear() // clearing navigation list
+		for i := 4; i < 6; i++ {
+			c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
 		}
+		c.AddItemMainFlex(c.Lists[7], c.Lists[4], c.Lists[1])
+
 	case "Change Username":
 
 	case "Current Room Actions":
 	case "Update Blocked Users":
 	case "Change Privacy for Duo Rooms":
 	case "Change Privacy for Group Rooms":
-	case "Add Users To Room":
+	case "Add Users To Room", "Delete Users From Room": // string to list
+		if c.LastNavigation == "Add Users To Room" || c.LastNavigation == "Delete Users From Room" {
+			itms := c.Lists[6].Selector.GetItems()
+			var usrs []uint64
+			for i, _ := range itms {
+				n, err := strconv.ParseUint(itms[i], 10, 64)
+				if err != nil {
+					c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: maintext,
+						SecondaryText: "Error: parse error"})
+				}
+				usrs = append(usrs, n)
+			}
+			event := RoomRequest{
+				Event:   maintext,
+				RoomIds: usrs,
+			}
+			b, err := json.Marshal(event)
+			if err != nil {
+				WriteTimeout(time.Second*5, c.Conn, b)
+			}
 
-	case "Delete Users From Room":
+		} else {
+			c.Lists[6].Items.Clear()
+			for i, v := range c.currentRoom.Users {
+				c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
+			}
+			c.AddItemMainFlex(c.Lists[3], c.Lists[4], c.Lists[1])
+		}
 
 	case "Show users":
 	case "Change Room Name":
@@ -162,18 +198,23 @@ func (c *Chat) Option(item list.ListItem) {
 	default:
 
 	}
-	c.LastNavigation = item.GetMainText()
-}
-func (c *Chat) Clear() {
-	c.LastNavigation = ""
-}
-func (c *Chat) GetItems() []string {
-	return []string{}
-}
-
-func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
-	c.MainFlex.Clear()
-	for _, v := range prmtvs {
-		c.MainFlex.AddItem(v, 0, 2, true)
-	}
-}
+	secondtext := item.GetSecondaryText()
+	switch secondtext {
+	case "Unblock User", "Add Users To Room", "Delete Users From Room", "Create Group Room", "Create Duo Room":
+		itms := c.Lists[1].Selector.GetItems()
+		if len(itms) != 0 {
+			n, err := strconv.ParseUint(itms[0], 10, 64)
+			if err != nil {
+				c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: "Unblock User",
+					SecondaryText: "Error: no selected user"})
+			}
+			event := User{
+				Event:  "UnblockUser",
+				UserId: n,
+			}
+			b, err := json.Marshal(event)
+			if err != nil {
+				WriteTimeout(time.Second*5, c.Conn, b)
+			}
+		}
+	}*/

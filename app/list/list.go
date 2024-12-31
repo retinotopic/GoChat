@@ -13,6 +13,7 @@ type List struct {
 	*tview.Box
 	offset   int // scroll offset
 	Selector Selector
+	Event    func([]string)
 	Items    ListItems
 	Current  ListItem // type Room
 }

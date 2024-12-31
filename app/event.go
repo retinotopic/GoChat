@@ -14,6 +14,10 @@ type RoomRequest struct {
 	IsGroup  bool     `json:"IsGroup" `
 }
 
+func (r RoomRequest) SendEvent() {
+
+}
+
 type Message struct {
 	Event          string `json:"Event" `
 	MessagePayload string `json:"MessagePayload"`
@@ -21,9 +25,18 @@ type Message struct {
 	RoomId         uint64 `json:"RoomId" `
 	UserId         uint64 `json:"UserId" `
 }
+
+func (m Message) SendEvent() {
+
+}
+
 type User struct {
 	Event      string `json:"Event" `
 	UserId     uint64 `json:"UserId"`
 	Username   string `json:"Username" `
 	RoomToggle bool   `json:"Bool" `
+}
+
+func (u User) SendEvent() {
+
 }

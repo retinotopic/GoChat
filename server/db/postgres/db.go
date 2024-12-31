@@ -38,21 +38,21 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	pg.Pool = pl
 	pg.Lm = lm
 	pg.UserApi = map[string]FuncLimiter{
-		"GetAllRooms":         {GetAllRooms, 1, 1, time.Second},
-		"ChangeRoomname":      {ChangeRoomname, 1, 1, time.Second},
-		"GetBlockedUsers":     {GetBlockedUsers, 1, 1, time.Second},
-		"GetMessagesFromRoom": {GetMessagesFromRoom, 1, 1, time.Second},
-		"FindUsers":           {FindUsers, 1, 1, time.Second},
-		"SendMessage":         {SendMessage, 1, 1, time.Second},
-		"ChangeUsername":      {ChangeUsername, 1, 1, time.Hour * 24 * 7},
-		"ChangePrivacyDirect": {ChangePrivacyDirect, 1, 1, time.Minute},
-		"ChangePrivacyGroup":  {ChangePrivacyGroup, 1, 1, time.Minute},
-		"CreateDuoRoom":       {CreateDuoRoom, 5, 25, time.Minute * 5},
-		"CreateGroupRoom":     {CreateGroupRoom, 5, 25, time.Minute * 5},
-		"AddUsersToRoom":      {AddUsersToRoom, 5, 25, time.Minute * 5},
-		"DeleteUsersFromRoom": {DeleteUsersFromRoom, 5, 25, time.Minute * 5},
-		"BlockUser":           {BlockUser, 5, 25, time.Minute * 5},
-		"UnblockUser":         {UnblockUser, 5, 25, time.Minute * 5},
+		"Get All Rooms":          {GetAllRooms, 1, 1, time.Second},
+		"Change Room Name":       {ChangeRoomname, 1, 1, time.Second},
+		"Get Blocked Users":      {GetBlockedUsers, 1, 1, time.Second},
+		"Get Messages From Room": {GetMessagesFromRoom, 1, 1, time.Second},
+		"Find Users":             {FindUsers, 1, 1, time.Second},
+		"Send Message":           {SendMessage, 1, 1, time.Second},
+		"Change Username":        {ChangeUsername, 1, 1, time.Hour * 24 * 7},
+		"Change Privacy Direct":  {ChangePrivacyDirect, 1, 1, time.Minute},
+		"Change Privacy Group":   {ChangePrivacyGroup, 1, 1, time.Minute},
+		"Create Duo Room":        {CreateDuoRoom, 5, 25, time.Minute * 5},
+		"Create Group Room":      {CreateGroupRoom, 5, 25, time.Minute * 5},
+		"Add Users To Room":      {AddUsersToRoom, 5, 25, time.Minute * 5},
+		"Delete Users From Room": {DeleteUsersFromRoom, 5, 25, time.Minute * 5},
+		"Block User":             {BlockUser, 5, 25, time.Minute * 5},
+		"Unblock User":           {UnblockUser, 5, 25, time.Minute * 5},
 	}
 	return pg, nil
 }
