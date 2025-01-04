@@ -40,7 +40,7 @@ type Chat struct {
 	DuoUsers      map[uint64]User  // user id to users that Duo-only
 	BlockedUsers  map[uint64]User  // user id to blocked
 	FoundUsers    map[uint64]User  // user id to found users
-	Lists         []*list.List     // rooms[0], BlockedUsers[1], DuoUsers[2], FoundUsers[3], navigation[4],events[5],roomusers[6], menu[7]
+	Lists         []*list.List     // rooms[0],menu[1],events[2],navigation[3],FoundUsers[4],DuoUsers[5],BlockedUsers[6],roomusers[7]
 	currentRoom   *Room            // current selected Room
 	CurrentText   string           // current text for user search || set room name ||
 	MainFlex      *tview.Flex

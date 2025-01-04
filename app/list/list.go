@@ -13,14 +13,11 @@ type List struct {
 	*tview.Box
 	offset   int // scroll offset
 	Selector Selector
-	Event    func([]string)
 	Items    ListItems
 	Current  ListItem // type Room
 }
 type Selector interface {
 	Option(ListItem)
-	Clear()
-	GetItems() []string
 }
 type ListItem interface {
 	GetMainText() string

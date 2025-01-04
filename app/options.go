@@ -42,6 +42,7 @@ func (m *MultOptions) GetItems() []string {
 		sli[i] = s
 		i++
 	}
+	m.Clear()
 	return sli
 }
 
@@ -81,5 +82,7 @@ func (o *OneOption) Clear() {
 	o.OneOpt = ""
 }
 func (o *OneOption) GetItems() []string {
-	return []string{o.OneOpt}
+	o.Clear()
+	sli := []string{o.OneOpt}
+	return sli
 }

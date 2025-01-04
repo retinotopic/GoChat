@@ -119,9 +119,6 @@ func (c *Chat) Option(item list.ListItem) {
 func (c *Chat) Clear() {
 
 }
-func (c *Chat) GetItems() []string {
-	return []string{}
-}
 
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 	c.MainFlex.Clear()
