@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -26,10 +25,6 @@ var state = LoadingState{
 	spinner:         []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 	color:           "yellow",
 	InProgressCount: 0,
-}
-
-type Dispatcher interface {
-	SendEvent(item list.ListItem)
 }
 
 func (c *Chat) StartEventUILoop() {
@@ -68,37 +63,7 @@ func (c *Chat) PreLoadElems() {
 
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
-	c.FindUsersForm = tview.NewForm().
-		AddButton("Find", func() {
-			event := User{
-				Event:    "FindUsers",
-				Username: c.CurrentText,
-			}
-			b, err := json.Marshal(event)
-			if err != nil {
-				WriteTimeout(time.Second*5, c.Conn, b)
-			}
-		})
-	//----------------------------------------------------------------
-	c.InputField = tview.NewForm()
-	c.InputField.AddInputField("Enter text", "", 0, func(textToCheck string, lastChar rune) bool {
-		return len(textToCheck) != 0
-	}, func(msg string) {
-		c.CurrentText = msg
-	})
-	//----------------------------------------------------------------
-	c.SendMsgBtn = tview.NewForm()
-	c.SendMsgBtn.AddButton("Send Message", func() {
-		event := Message{
-			Event:          "SendMessage",
-			MessagePayload: c.CurrentText,
-			RoomId:         c.currentRoom.RoomId,
-		}
-		b, err := json.Marshal(event)
-		if err != nil {
-			WriteTimeout(time.Second*5, c.Conn, b)
-		}
-	})
+
 	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyLeft {
@@ -115,9 +80,7 @@ func (c *Chat) PreLoadElems() {
 }
 func (c *Chat) Option(item list.ListItem) {
 
-}
-func (c *Chat) Clear() {
-
+	// todo :
 }
 
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
@@ -128,90 +91,3 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 		c.MainFlex.AddItem(v, 0, 2, true)
 	}
 }
-func (c *Chat) GetUsers(m map[uint64]User, idx int) {
-	for _, v := range m {
-		c.Lists[idx].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
-			SecondaryText: strconv.FormatUint(v.UserId, 10)})
-	}
-}
-
-/*	maintext := item.GetMainText()
-	switch maintext {
-	case "Event logs":
-		//
-		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
-	case "Create Duo Room":
-		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
-	case "Create Group Room":
-		c.AddItemMainFlex(c.Lists[3], c.Lists[4])
-	case "Unblock User":
-
-		c.Lists[4].Items.Clear() // clearing navigation list
-		for i := 4; i < 6; i++ {
-			c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
-		}
-		c.AddItemMainFlex(c.Lists[7], c.Lists[4], c.Lists[1])
-
-	case "Change Username":
-
-	case "Current Room Actions":
-	case "Update Blocked Users":
-	case "Change Privacy for Duo Rooms":
-	case "Change Privacy for Group Rooms":
-	case "Add Users To Room", "Delete Users From Room": // string to list
-		if c.LastNavigation == "Add Users To Room" || c.LastNavigation == "Delete Users From Room" {
-			itms := c.Lists[6].Selector.GetItems()
-			var usrs []uint64
-			for i, _ := range itms {
-				n, err := strconv.ParseUint(itms[i], 10, 64)
-				if err != nil {
-					c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: maintext,
-						SecondaryText: "Error: parse error"})
-				}
-				usrs = append(usrs, n)
-			}
-			event := RoomRequest{
-				Event:   maintext,
-				RoomIds: usrs,
-			}
-			b, err := json.Marshal(event)
-			if err != nil {
-				WriteTimeout(time.Second*5, c.Conn, b)
-			}
-
-		} else {
-			c.Lists[6].Items.Clear()
-			for i, v := range c.currentRoom.Users {
-				c.Lists[4].Items.MoveToFront(list.ArrayItem{MainText: c.NavText[i]})
-			}
-			c.AddItemMainFlex(c.Lists[3], c.Lists[4], c.Lists[1])
-		}
-
-	case "Show users":
-	case "Change Room Name":
-	case "Block":
-	case "Leave Room":
-	case "Menu":
-	default:
-
-	}
-	secondtext := item.GetSecondaryText()
-	switch secondtext {
-	case "Unblock User", "Add Users To Room", "Delete Users From Room", "Create Group Room", "Create Duo Room":
-		itms := c.Lists[1].Selector.GetItems()
-		if len(itms) != 0 {
-			n, err := strconv.ParseUint(itms[0], 10, 64)
-			if err != nil {
-				c.Lists[5].Items.MoveToFront(list.ArrayItem{MainText: "Unblock User",
-					SecondaryText: "Error: no selected user"})
-			}
-			event := User{
-				Event:  "UnblockUser",
-				UserId: n,
-			}
-			b, err := json.Marshal(event)
-			if err != nil {
-				WriteTimeout(time.Second*5, c.Conn, b)
-			}
-		}
-	}*/

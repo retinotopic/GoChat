@@ -33,22 +33,19 @@ type Room struct {
 
 // Rooms linked list
 type Chat struct {
-	App           *tview.Application
-	UserId        uint64
-	Conn          *websocket.Conn
-	RoomMsgs      map[uint64]*Room // room id to room
-	DuoUsers      map[uint64]User  // user id to users that Duo-only
-	BlockedUsers  map[uint64]User  // user id to blocked
-	FoundUsers    map[uint64]User  // user id to found users
-	Lists         []*list.List     // rooms[0],menu[1],events[2],navigation[3],FoundUsers[4],DuoUsers[5],BlockedUsers[6],roomusers[7]
-	currentRoom   *Room            // current selected Room
-	CurrentText   string           // current text for user search || set room name ||
-	MainFlex      *tview.Flex
-	NavState      int
-	FindUsersForm *tview.Form
-	SendMsgBtn    *tview.Form
-	InputField    *tview.Form
-	stopeventUI   bool
+	App          *tview.Application
+	UserId       uint64
+	Conn         *websocket.Conn
+	RoomMsgs     map[uint64]*Room // room id to room
+	DuoUsers     map[uint64]User  // user id to users that Duo-only
+	BlockedUsers map[uint64]User  // user id to blocked
+	FoundUsers   map[uint64]User  // user id to found users
+	Lists        []*list.List     // menu[0],rooms[1],events[2],navigation[3],FoundUsers[4],DuoUsers[5],BlockedUsers[6],roomusers[7]
+	currentRoom  *Room            // current selected Room
+	CurrentText  string           // current text for user search || set room name || message
+	MainFlex     *tview.Flex
+	NavState     int
+	stopeventUI  bool
 }
 
 func NewChat() *Chat {

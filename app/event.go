@@ -1,11 +1,19 @@
 package main
 
+var EventMap map[string]EventButton
+
+type EventButton struct {
+	ListIdx   int
+	SendEvent func([]string)
+}
+
 type Event struct {
 	Event    string `json:"Event"`
 	ErrorMsg string `json:"ErrorMsg"`
 	UserId   uint64 `json:"UserId"`
 	Data     []byte `json:"-"`
 }
+
 type RoomRequest struct {
 	Event    string   `json:"Event" `
 	UserIds  []uint64 `json:"UserIds" `
