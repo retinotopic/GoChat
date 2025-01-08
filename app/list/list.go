@@ -11,14 +11,12 @@ var lines = make([]string, 0, 1000)
 
 type List struct {
 	*tview.Box
-	offset   int // scroll offset
-	Selector Selector
-	Items    ListItems
-	Current  ListItem // type Room
+	offset  int // scroll offset
+	Option  func(ListItem)
+	Items   ListItems
+	Current ListItem // type Room
 }
-type Selector interface {
-	Option(ListItem)
-}
+
 type ListItem interface {
 	GetMainText() string
 	GetSecondaryText() string
@@ -142,8 +140,8 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Current = l.Current.Next()
 			}
 		case tcell.KeyEnter:
-			if l.Selector != nil {
-				l.Selector.Option(l.Current)
+			if l.Option != nil {
+				l.Option(l.Current)
 			}
 		}
 	})

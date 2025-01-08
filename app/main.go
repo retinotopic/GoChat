@@ -80,7 +80,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 		nextpgn := list.ArrayItem{ArrList: ll, SecondaryText: "Next Page: " + strconv.Itoa(rm.MsgPageIdBack+1),
 			Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 		ll.MoveToFront(nextpgn)
-		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
+		l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.}
 		rm.Messages[rm.MsgPageIdBack] = l
 	}
 
@@ -102,7 +102,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 				ll.MoveToBack(prevpgn)
 
-				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
+				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.}
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
@@ -116,7 +116,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 			prevpgn := list.ArrayItem{SecondaryText: "Previos Page: " + strconv.Itoa(rm.MsgPageIdFront),
 				Color: [2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}}
 			ll.MoveToBack(prevpgn)
-			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Selector: c}
+			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.}
 			rm.Messages[rm.MsgPageIdFront] = lst
 		}
 

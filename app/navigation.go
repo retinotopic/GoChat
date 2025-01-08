@@ -13,6 +13,13 @@ var NavText = []string{"Menu", "Create Duo Room", "Create Group Room", "Unblock 
 	"Current Room Actions", "Block", "Leave Room", "Show users", "Add Users To Room", "Delete Users From Room", "Change Room Name",
 	"Events", "Change Privacy", "for Duo Rooms", "for Group Rooms", "Unblock User", "Get Blocked Users", "Unblock User"}
 
+var NavigateEventtMap map[string]NavigateEvent
+
+type NavigateEvent struct {
+	From  int // slicing NavText from -> to, like NavText[From:To]
+	To    int
+	Lists []int // lists for main *tview.Flex
+}
 type LoadingState struct {
 	message         string
 	spinner         []string
@@ -63,7 +70,6 @@ func (c *Chat) PreLoadElems() {
 
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
-
 	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyLeft {
@@ -74,16 +80,18 @@ func (c *Chat) PreLoadElems() {
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
 			return nil
 		}
+		event.Rune()
 		return event
 	})
 
 }
 func (c *Chat) Option(item list.ListItem) {
 
-	// todo :
+	// todo : rewrite
 }
 
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	// todo: rewrite
 	c.MainFlex.Clear()
 	c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
 	c.MainFlex.AddItem(c.Lists[7], 0, 2, true)

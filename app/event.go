@@ -1,10 +1,10 @@
 package main
 
-var EventMap map[string]EventButton
+var SendEventMap map[string]SendEvent
 
-type EventButton struct {
-	ListIdx   int
-	SendEvent func([]string)
+type SendEvent struct {
+	ListIdx int
+	Event   func([]string)
 }
 
 type Event struct {
