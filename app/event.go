@@ -1,12 +1,5 @@
 package main
 
-var SendEventMap map[string]SendEvent
-
-type SendEvent struct {
-	ListIdx int
-	Event   func([]string)
-}
-
 type Event struct {
 	Event    string `json:"Event"`
 	ErrorMsg string `json:"ErrorMsg"`

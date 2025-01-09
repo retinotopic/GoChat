@@ -3,36 +3,12 @@ package main
 import (
 	"strconv"
 	"time"
+	"unicode"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
 )
-
-var NavText = []string{"Menu", "Create Duo Room", "Create Group Room", "Unblock User", "Change Username", "Current Room Actions", "Change Privacy",
-	"Current Room Actions", "Block", "Leave Room", "Show users", "Add Users To Room", "Delete Users From Room", "Change Room Name",
-	"Events", "Change Privacy", "for Duo Rooms", "for Group Rooms", "Unblock User", "Get Blocked Users", "Unblock User"}
-
-var NavigateEventtMap map[string]NavigateEvent
-
-type NavigateEvent struct {
-	From  int // slicing NavText from -> to, like NavText[From:To]
-	To    int
-	Lists []int // lists for main *tview.Flex
-}
-type LoadingState struct {
-	message         string
-	spinner         []string
-	color           string
-	InProgressCount int
-}
-
-var state = LoadingState{
-	message:         "In Progress",
-	spinner:         []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-	color:           "yellow",
-	InProgressCount: 0,
-}
 
 func (c *Chat) StartEventUILoop() {
 	i := 0
@@ -70,7 +46,6 @@ func (c *Chat) PreLoadElems() {
 
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
-	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyLeft {
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
@@ -80,21 +55,45 @@ func (c *Chat) PreLoadElems() {
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
 			return nil
 		}
-		event.Rune()
+		if c.IsInputActive {
+			k := []rune(event.Name())[5:6][0] // take the name of the event, convert to runes, take only the name of key via slicing
+			if unicode.IsPrint(k) {           // write only printable key
+				txt := c.Lists[3].Items.GetFront().GetMainText()
+				c.Lists[3].Items.GetFront().SetMainText(txt + string(k))
+			}
+		}
 		return event
 	})
 
 }
-func (c *Chat) Option(item list.ListItem) {
+func (c *Chat) OptionBtn(item list.ListItem) {
 
 	// todo : rewrite
 }
-
+func (c *Chat) OptionRoom(item list.ListItem) {
+	sec := item.GetSecondaryText() // room id
+	//main := item.GetMainText()     // btn prev or next
+	if sec[:9] == "Room Id: " {
+		v, err := strconv.ParseUint(sec[9:], 10, 64)
+		if err != nil {
+			return
+		}
+		rm, ok := c.RoomMsgs[v]
+		if ok {
+			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
+		}
+	}
+	// todo : rewrite
+}
+func (c *Chat) OptionInput(item list.ListItem) {
+	c.IsInputActive = true
+	// todo : rewrite
+}
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 	// todo: rewrite
 	c.MainFlex.Clear()
 	c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
-	c.MainFlex.AddItem(c.Lists[7], 0, 2, true)
+	c.MainFlex.AddItem(c.Lists[1], 0, 2, true)
 	for _, v := range prmtvs {
 		c.MainFlex.AddItem(v, 0, 2, true)
 	}

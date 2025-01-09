@@ -47,6 +47,14 @@ type ArrayItem struct {
 	SecondaryText string
 }
 
+func NewArrayItem(arr *ArrayList, clr [2]tcell.Color, main string, sec string) ArrayItem {
+	return ArrayItem{
+		ArrList:       arr,
+		Color:         clr,
+		MainText:      main,
+		SecondaryText: sec,
+	}
+}
 func (a ArrayItem) GetMainText() string {
 	return a.MainText
 }
