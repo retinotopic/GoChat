@@ -2,6 +2,7 @@ package list
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -87,22 +88,30 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 	words := strings.Fields(text)
 	currentLine := ""
 	for _, word := range words {
-		if len(word) > maxWidth {
+		wordWidth := utf8.RuneCountInString(word)
+
+		if wordWidth > maxWidth {
 			if len(currentLine) > 0 {
 				lines = append(lines, currentLine)
 				currentLine = ""
 			}
 
-			for i := 0; i < len(word); i += maxWidth {
+			runes := []rune(word)
+			for i := 0; i < len(runes); i += maxWidth {
 				end := i + maxWidth
-				if end > len(word) {
-					end = len(word)
+				if end > len(runes) {
+					end = len(runes)
 				}
-				lines = append(lines, word[i:end])
+				lines = append(lines, string(runes[i:end]))
 			}
 			continue
 		}
-		if len(currentLine)+len(word)+1 <= maxWidth {
+		currentLineWidth := utf8.RuneCountInString(currentLine)
+		separatorWidth := 0
+		if len(currentLine) > 0 {
+			separatorWidth = 1
+		}
+		if currentLineWidth+separatorWidth+wordWidth <= maxWidth {
 			if len(currentLine) > 0 {
 				currentLine += " "
 			}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -43,17 +42,15 @@ func (c *Chat) StartEventUILoop() {
 
 // MARK: ELEMS
 func (c *Chat) PreLoadNavigation() {
-
 	c.MainFlex = tview.NewFlex()
-	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyLeft:
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
-			return nil
+			return event
 		case tcell.KeyRight:
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
-			return nil
+			return event
 		case tcell.KeyRune:
 			if c.IsInputActive {
 				txt := c.Lists[3].Items.GetFront().GetMainText()
@@ -74,7 +71,6 @@ func (c *Chat) PreLoadNavigation() {
 		}
 		return event
 	})
-
 }
 func (c *Chat) OptionBtn(item list.ListItem) {
 
@@ -97,16 +93,13 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 	} else {
 		v, err := strconv.Atoi(main[11:])
 		if err != nil {
-			fmt.Println(err)
 			return
 		}
 		c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
 	}
-	// todo : rewrite
 }
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
-	// todo : rewrite
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 	// todo: rewrite
