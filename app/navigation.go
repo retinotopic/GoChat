@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"time"
-	"unicode"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
@@ -42,24 +42,34 @@ func (c *Chat) StartEventUILoop() {
 }
 
 // MARK: ELEMS
-func (c *Chat) PreLoadElems() {
+func (c *Chat) PreLoadNavigation() {
 
 	c.MainFlex = tview.NewFlex()
 	//----------------------------------------------------------------
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyLeft {
+		switch event.Key() {
+		case tcell.KeyLeft:
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
 			return nil
-		}
-		if event.Key() == tcell.KeyRight {
+		case tcell.KeyRight:
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
 			return nil
-		}
-		if c.IsInputActive {
-			k := []rune(event.Name())[5:6][0] // take the name of the event, convert to runes, take only the name of key via slicing
-			if unicode.IsPrint(k) {           // write only printable key
+		case tcell.KeyRune:
+			if c.IsInputActive {
 				txt := c.Lists[3].Items.GetFront().GetMainText()
-				c.Lists[3].Items.GetFront().SetMainText(txt + string(k))
+				if len([]rune(txt)) <= 300 {
+					r := event.Rune()
+					c.Lists[3].Items.GetFront().SetMainText(txt + string(r))
+				}
+			}
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			if c.IsInputActive {
+				main := c.Lists[3].Items.GetFront().GetMainText()
+				mr := []rune(main)
+				if len(mr) != 0 {
+					mr = mr[:len(mr)-1]
+					c.Lists[3].Items.GetFront().SetMainText(string(mr))
+				}
 			}
 		}
 		return event
@@ -72,7 +82,7 @@ func (c *Chat) OptionBtn(item list.ListItem) {
 }
 func (c *Chat) OptionRoom(item list.ListItem) {
 	sec := item.GetSecondaryText() // room id
-	//main := item.GetMainText()     // btn prev or next
+	main := item.GetMainText()     // pagination bttns in rooms, prev or next
 	if sec[:9] == "Room Id: " {
 		v, err := strconv.ParseUint(sec[9:], 10, 64)
 		if err != nil {
@@ -80,8 +90,17 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		}
 		rm, ok := c.RoomMsgs[v]
 		if ok {
+			c.currentRoom = rm
+			//c.NavigateEventMap["Current Room Actions"].Lists
 			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
+	} else {
+		v, err := strconv.Atoi(main[11:])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
 	}
 	// todo : rewrite
 }

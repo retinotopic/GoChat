@@ -80,7 +80,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 		prevpgn := list.NewArrayItem(
 			ll,
 			[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-			"Previos Page: "+strconv.Itoa(rm.MsgPageIdBack-1),
+			"Prev Page: "+strconv.Itoa(rm.MsgPageIdBack-1),
 			"",
 		)
 
@@ -132,7 +132,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					ll,
 					[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 					"",
-					"Previos Page: "+strconv.Itoa(rm.MsgPageIdFront-1),
+					"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront-1),
 				)
 				ll.MoveToBack(prevpgn)
 
@@ -157,7 +157,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				ll,
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 				"",
-				"Previos Page: "+strconv.Itoa(rm.MsgPageIdFront),
+				"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront),
 			)
 			ll.MoveToBack(prevpgn)
 			lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.OptionRoom}
