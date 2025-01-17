@@ -7,54 +7,18 @@ import (
 	"github.com/retinotopic/GoChat/app/list"
 )
 
-type MultOptions struct {
-	MultOpts     map[string]struct{}
-	mtx          sync.RWMutex
-	DefaultColor tcell.Color
-	ChangeColor  tcell.Color
-}
+func MultOption(item list.ListItem) {
+	color := item.GetColor(0)
 
-func (m *MultOptions) Option(item list.ListItem) {
-	id := item.GetSecondaryText()
-	m.mtx.RLock()
-	_, ok := m.MultOpts[id]
-	m.mtx.RUnlock()
-	if ok {
-		item.SetColor(m.DefaultColor, 0)
-		m.mtx.Lock()
-		delete(m.MultOpts, id)
-		m.mtx.Unlock()
+	if color != tcell.ColorYellow {
+		item.SetColor(tcell.ColorWhite, 0)
 	} else {
-		item.SetColor(m.ChangeColor, 0)
-		m.mtx.Lock()
-		m.MultOpts[id] = struct{}{}
-		m.mtx.Unlock()
+		item.SetColor(tcell.ColorYellow, 0)
 	}
 }
 
-func (m *MultOptions) Clear() {
-	clear(m.MultOpts)
-}
-func (m *MultOptions) GetItems() []string {
-	sli := make([]string, len(m.MultOpts))
-	i := 0
-	for s := range m.MultOpts {
-		sli[i] = s
-		i++
-	}
-	m.Clear()
-	return sli
-}
-
-type OneOption struct {
-	OneOpt       string
-	DefaultColor tcell.Color
-	ChangeColor  tcell.Color
-}
-
-func (o *OneOption) Option(item list.ListItem) {
-	item.SetColor(o.ChangeColor, 0)
-	o.OneOpt = item.GetSecondaryText()
+func OneOption(item list.ListItem) {
+	item.SetColor(tcell.ColorYellow, 0)
 	bi := item
 	fi := item
 	back := true
@@ -65,7 +29,7 @@ func (o *OneOption) Option(item list.ListItem) {
 			if bi == nil || bi.IsNil() {
 				back = false
 			} else {
-				bi.SetColor(o.DefaultColor, 0)
+				bi.SetColor(tcell.ColorWhite, 0)
 			}
 		}
 		if forward {
@@ -73,16 +37,8 @@ func (o *OneOption) Option(item list.ListItem) {
 			if fi == nil || fi.IsNil() {
 				forward = false
 			} else {
-				fi.SetColor(o.DefaultColor, 0)
+				fi.SetColor(tcell.ColorWhite, 0)
 			}
 		}
 	}
-}
-func (o *OneOption) Clear() {
-	o.OneOpt = ""
-}
-func (o *OneOption) GetItems() []string {
-	o.Clear()
-	sli := []string{o.OneOpt}
-	return sli
 }
