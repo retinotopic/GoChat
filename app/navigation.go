@@ -73,8 +73,29 @@ func (c *Chat) PreLoadNavigation() {
 	})
 }
 func (c *Chat) OptionBtn(item list.ListItem) {
+	sec := item.GetSecondaryText()
+	main := item.GetMainText()
+	if len(sec) != 0 {
+		se := c.SendEventMap[sec]
+		go se.Event(c.Lists[se.ListIdx].GetSelected())
+	} else {
+		ne := c.NavigateEventMap[main]
+		c.Lists[2].Items.Clear()
+		ll, ok := c.Lists[2].Items.(*list.ArrayList)
+		if ok {
+			for i := ne.From; i <= ne.To; i++ {
+				navitem := list.NewArrayItem(
+					ll,
+					[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+					NavText[i],
+					"",
+				)
+				c.Lists[2].Items.MoveToFront(navitem)
+			}
+			c.AddItemMainFlex(ne.Lists...)
+		}
 
-	// todo : rewrite
+	}
 }
 func (c *Chat) OptionRoom(item list.ListItem) {
 	sec := item.GetSecondaryText() // room id

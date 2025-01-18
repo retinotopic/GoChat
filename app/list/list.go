@@ -38,6 +38,15 @@ type ListItems interface {
 	Len() int
 }
 
+func (l *List) GetSelected() []string {
+	front := l.Items.GetFront()
+	selected := []string{}
+	for front != nil && front.IsNil() {
+		selected = append(selected, front.GetMainText())
+		front = front.Next()
+	}
+	return selected
+}
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"sync"
-
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 )
@@ -10,7 +8,7 @@ import (
 func MultOption(item list.ListItem) {
 	color := item.GetColor(0)
 
-	if color != tcell.ColorYellow {
+	if color == tcell.ColorYellow {
 		item.SetColor(tcell.ColorWhite, 0)
 	} else {
 		item.SetColor(tcell.ColorYellow, 0)
