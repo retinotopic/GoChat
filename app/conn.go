@@ -88,15 +88,18 @@ func (c *Chat) TryConnect(username, url string) {
 
 }
 func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
-	var usrs []User
-	err := json.Unmarshal(data, &usrs)
-	if err != nil {
-		return
-	}
-	c.Lists[idx].Items.Clear()
-	for _, v := range usrs {
-		m[v.UserId] = v
-		c.Lists[idx].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
-			SecondaryText: strconv.FormatUint(v.UserId, 10)})
-	}
+	c.App.QueueUpdateDraw(func() {
+		var usrs []User
+		err := json.Unmarshal(data, &usrs)
+		if err != nil {
+			return
+		}
+		c.Lists[idx].Items.Clear()
+		for _, v := range usrs {
+			m[v.UserId] = v
+			c.Lists[idx].Items.MoveToFront(list.ArrayItem{MainText: v.Username,
+				SecondaryText: strconv.FormatUint(v.UserId, 10)})
+		}
+	})
+
 }

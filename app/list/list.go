@@ -42,7 +42,7 @@ func (l *List) GetSelected() []string {
 	front := l.Items.GetFront()
 	selected := []string{}
 	for front != nil && front.IsNil() {
-		selected = append(selected, front.GetMainText())
+		selected = append(selected, front.GetMainText(), front.GetSecondaryText())
 		front = front.Next()
 	}
 	return selected

@@ -17,7 +17,7 @@ func (c *Chat) StartEventUILoop() {
 			c.App.QueueUpdateDraw(func() {
 				spinChar := state.spinner[i%len(state.spinner)]
 				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
-				item := c.Lists[3].Items.GetFront()
+				item := c.Lists[0].Items.GetFront()
 				item.SetSecondaryText(text)
 				item.SetColor(tcell.ColorRed, 1)
 			})
@@ -28,7 +28,7 @@ func (c *Chat) StartEventUILoop() {
 			NotIdle = true
 		} else if NotIdle {
 			c.App.QueueUpdateDraw(func() {
-				item := c.Lists[3].Items.GetFront()
+				item := c.Lists[0].Items.GetFront()
 				item.SetSecondaryText(" ")
 				item.SetColor(tcell.ColorGrey, 1)
 			})
@@ -73,61 +73,65 @@ func (c *Chat) PreLoadNavigation() {
 	})
 }
 func (c *Chat) OptionBtn(item list.ListItem) {
-	sec := item.GetSecondaryText()
-	main := item.GetMainText()
-	if len(sec) != 0 {
-		se := c.SendEventMap[sec]
-		go se.Event(c.Lists[se.ListIdx].GetSelected())
-	} else {
-		ne := c.NavigateEventMap[main]
-		c.Lists[2].Items.Clear()
-		ll, ok := c.Lists[2].Items.(*list.ArrayList)
-		if ok {
-			for i := ne.From; i <= ne.To; i++ {
-				navitem := list.NewArrayItem(
-					ll,
-					[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-					NavText[i],
-					"",
-				)
-				c.Lists[2].Items.MoveToFront(navitem)
+	c.App.QueueUpdateDraw(func() {
+		sec := item.GetSecondaryText()
+		main := item.GetMainText()
+		if len(sec) != 0 {
+			se := c.SendEventMap[sec]
+			go se.Event(c.Lists[se.ListIdx].GetSelected())
+		} else {
+			ne := c.NavigateEventMap[main]
+			c.Lists[2].Items.Clear()
+			ll, ok := c.Lists[2].Items.(*list.ArrayList)
+			if ok {
+				for i := ne.From; i <= ne.To; i++ {
+					navitem := list.NewArrayItem(
+						ll,
+						[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+						NavText[i],
+						"",
+					)
+					c.Lists[2].Items.MoveToFront(navitem)
+				}
+				c.AddItemMainFlex(ne.Lists...)
 			}
-			c.AddItemMainFlex(ne.Lists...)
-		}
 
-	}
+		}
+	})
 }
 func (c *Chat) OptionRoom(item list.ListItem) {
-	sec := item.GetSecondaryText() // room id
-	main := item.GetMainText()     // pagination bttns in rooms, prev or next
-	if sec[:9] == "Room Id: " {
-		v, err := strconv.ParseUint(sec[9:], 10, 64)
-		if err != nil {
-			return
+	c.App.QueueUpdateDraw(func() {
+		sec := item.GetSecondaryText()
+		main := item.GetMainText()
+		if sec[:9] == "Room Id: " {
+			v, err := strconv.ParseUint(sec[9:], 10, 64)
+			if err != nil {
+				return
+			}
+			rm, ok := c.RoomMsgs[v]
+			if ok {
+				c.currentRoom = rm
+				//c.NavigateEventMap["Current Room Actions"].Lists
+				c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
+			}
+		} else {
+			v, err := strconv.Atoi(main[11:])
+			if err != nil {
+				return
+			}
+			c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
 		}
-		rm, ok := c.RoomMsgs[v]
-		if ok {
-			c.currentRoom = rm
-			//c.NavigateEventMap["Current Room Actions"].Lists
-			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
-		}
-	} else {
-		v, err := strconv.Atoi(main[11:])
-		if err != nil {
-			return
-		}
-		c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
-	}
+	})
 }
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
-	// todo: rewrite
 	c.MainFlex.Clear()
 	c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
 	c.MainFlex.AddItem(c.Lists[1], 0, 2, true)
 	for _, v := range prmtvs {
 		c.MainFlex.AddItem(v, 0, 2, true)
 	}
+
 }
