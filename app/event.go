@@ -18,7 +18,7 @@ type RoomRequest struct {
 }
 
 // RoomRequest SendEvents
-func (r RoomRequest) SendEvent1(args []string) {
+func (r RoomRequest) SendEvent1(args []string, event string) {
 	// AddUsersToRoom , DeleteUsersFromRoom
 	// len(r.RoomIds) == 0 || len(r.UserIds) == 0
 	//r.RoomIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
@@ -29,21 +29,21 @@ func (r RoomRequest) SendEvent1(args []string) {
 	r.Event = args[0] // "add_users_to_room" or "delete_users_from_room"
 }
 
-func (r RoomRequest) SendEvent2(args []string) {
+func (r RoomRequest) SendEvent2(args []string, event string) {
 	// BlockUser и UnblockUser
 	// len(r.UserIds) == 0
 	//r.UserIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
 	r.Event = args[0] // "block_user" or "unblock_user"
 }
 
-func (r RoomRequest) SendEvent3(args []string) {
+func (r RoomRequest) SendEvent3(args []string, event string) {
 	// CreateDuoRoom
 	// len(r.UserIds) == 0
 	//r.UserIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
 	r.Event = "create_duo_room"
 }
 
-func (r RoomRequest) SendEvent4(args []string) {
+func (r RoomRequest) SendEvent4(args []string, event string) {
 	// CreateGroupRoom
 	// len(r.RoomName) == 0 || len(r.UserIds) == 0
 	r.RoomName = args[1]
@@ -54,7 +54,7 @@ func (r RoomRequest) SendEvent4(args []string) {
 	r.Event = "create_group_room"
 }
 
-func (r RoomRequest) SendEvent5(args []string) {
+func (r RoomRequest) SendEvent5(args []string, event string) {
 	//  ChangeRoomname
 	//  len(r.RoomIds) == 0 || len(r.RoomName) == 0
 	//r.RoomIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
@@ -70,7 +70,7 @@ type Message struct {
 	UserId         uint64 `json:"UserId" `
 }
 
-func (m Message) SendEvent1(args []string) {
+func (m Message) SendEvent1(args []string, event string) {
 	// SendMessage
 	// len(m.MessagePayload) == 0 || m.RoomId == 0
 	m.RoomId, _ = strconv.ParseUint(args[1], 10, 64)
@@ -78,7 +78,7 @@ func (m Message) SendEvent1(args []string) {
 	m.Event = "send_message"
 }
 
-func (m Message) SendEvent2(args []string) {
+func (m Message) SendEvent2(args []string, event string) {
 	// GetMessagesFromRoom
 	// m.RoomId == 0
 	m.RoomId, _ = strconv.ParseUint(args[1], 10, 64)
@@ -96,13 +96,13 @@ type User struct {
 }
 
 // User SendEvents
-func (u User) SendEvent1(args []string) {
+func (u User) SendEvent1(args []string, event string) {
 	// ChangePrivacyDirect , ChangePrivacyGroup
 	u.RoomToggle = args[1] == "true"
 	u.Event = args[0] // "change_privacy_direct" or "change_privacy_group"
 }
 
-func (u User) SendEvent2(args []string) {
+func (u User) SendEvent2(args []string, event string) {
 	// ChangeUsername , FindUsers
 	// len(u.Username) == 0
 	u.Username = args[1]

@@ -81,6 +81,7 @@ func (c *Chat) OptionBtn(item list.ListItem) {
 			go se.Event(c.Lists[se.ListIdx].GetSelected())
 		} else {
 			ne := c.NavigateEventMap[main]
+			c.Lists[3].Items.GetFront().SetSecondaryText(ne.InputMsg)
 			c.Lists[2].Items.Clear()
 			ll, ok := c.Lists[2].Items.(*list.ArrayList)
 			if ok {
@@ -103,6 +104,7 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 	c.App.QueueUpdateDraw(func() {
 		sec := item.GetSecondaryText()
 		main := item.GetMainText()
+		c.Lists[3].Items.GetFront().SetSecondaryText("Send Message")
 		if sec[:9] == "Room Id: " {
 			v, err := strconv.ParseUint(sec[9:], 10, 64)
 			if err != nil {

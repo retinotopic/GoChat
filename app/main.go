@@ -52,9 +52,9 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists []*list.List // menu[0],rooms[1],navigation[2]
-	//input[3],events[4],FoundUsers[5],DuoUsers[6]
-	//BlockedUsers[7],RoomUsers[8]
+	Lists []*list.List /* menu[0],rooms[1],navigation[2]
+	input[3],events[4],FoundUsers[5],DuoUsers[6]
+	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
 	currentRoom *Room  // current selected Room
 	CurrentText string // current text for user search || set room name || message
