@@ -54,7 +54,7 @@ type Chat struct {
 
 	Lists []*list.List /* menu[0],rooms[1],navigation[2]
 	input[3],events[4],FoundUsers[5],DuoUsers[6]
-	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
+	BlockedUsers[7],RoomUsers[8],SendEvents[9],Boolean[10]*/
 
 	currentRoom *Room  // current selected Room
 	CurrentText string // current text for user search || set room name || message
@@ -182,6 +182,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 			for i := range len(rmsv.Users) {
 				if rmsv.Users[i].UserId == c.UserId {
 					delete(c.RoomMsgs, rmsv.RoomId)
+					c.Lists[6].Items.Remove()
 					break
 				}
 				if rmsv.Users[i].RoomToggle {

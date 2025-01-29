@@ -72,58 +72,67 @@ func (c *Chat) PreLoadNavigation() {
 		return event
 	})
 }
-func (c *Chat) OptionBtn(item list.ListItem) {
-	c.App.QueueUpdateDraw(func() {
-		sec := item.GetSecondaryText()
-		main := item.GetMainText()
-		if len(sec) != 0 {
-			se := c.SendEventMap[sec]
-			go se.Event(c.Lists[se.ListIdx].GetSelected())
-		} else {
-			ne := c.NavigateEventMap[main]
-			c.Lists[3].Items.GetFront().SetSecondaryText(ne.InputMsg)
-			c.Lists[2].Items.Clear()
-			ll, ok := c.Lists[2].Items.(*list.ArrayList)
+func (c *Chat) OptionNavigate(item list.ListItem) {
+
+	main := item.GetMainText()
+
+	ne := c.NavigateEventMap[main]
+	c.Lists[ne.TargetList].Items.Clear()
+	ll, ok := c.Lists[ne.TargetList].Items.(*list.ArrayList)
+	if ok {
+		for i := ne.From; i <= ne.To; i++ {
+			navitem := list.NewArrayItem(
+				ll,
+				[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+				NavText[i],
+				"",
+			)
+			c.Lists[ne.TargetList].Items.MoveToFront(navitem)
+		}
+		c.AddItemMainFlex(ne.Lists...)
+	}
+
+}
+func (c *Chat) OptionSendEvent(item list.ListItem) {
+	main := item.GetMainText()
+	se := c.SendEventMap[main]
+	go se.Event(c.Lists[se.ListIdx].GetSelected())
+
+}
+func (c *Chat) OptionRoom(item list.ListItem) {
+	sec := item.GetSecondaryText()
+	main := item.GetMainText()
+	if sec[:9] == "Room Id: " {
+		v, err := strconv.ParseUint(sec[9:], 10, 64)
+		if err != nil {
+			return
+		}
+		rm, ok := c.RoomMsgs[v]
+		if ok {
+			c.currentRoom = rm
+			c.Lists[8].Items.Clear()
+			ll, ok := c.Lists[8].Items.(*list.ArrayList)
 			if ok {
-				for i := ne.From; i <= ne.To; i++ {
+				for _, v := range c.currentRoom.Users {
 					navitem := list.NewArrayItem(
 						ll,
 						[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-						NavText[i],
-						"",
+						v.Username,
+						strconv.FormatUint(v.UserId, 10),
 					)
-					c.Lists[2].Items.MoveToFront(navitem)
+					c.Lists[8].Items.MoveToFront(navitem)
 				}
-				c.AddItemMainFlex(ne.Lists...)
 			}
-
+			//c.NavigateEventMap["Current Room Actions"].Lists
+			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
-	})
-}
-func (c *Chat) OptionRoom(item list.ListItem) {
-	c.App.QueueUpdateDraw(func() {
-		sec := item.GetSecondaryText()
-		main := item.GetMainText()
-		c.Lists[3].Items.GetFront().SetSecondaryText("Send Message")
-		if sec[:9] == "Room Id: " {
-			v, err := strconv.ParseUint(sec[9:], 10, 64)
-			if err != nil {
-				return
-			}
-			rm, ok := c.RoomMsgs[v]
-			if ok {
-				c.currentRoom = rm
-				//c.NavigateEventMap["Current Room Actions"].Lists
-				c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
-			}
-		} else {
-			v, err := strconv.Atoi(main[11:])
-			if err != nil {
-				return
-			}
-			c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
+	} else {
+		v, err := strconv.Atoi(main[11:])
+		if err != nil {
+			return
 		}
-	})
+		c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
+	}
 }
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
