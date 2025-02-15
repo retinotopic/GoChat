@@ -2,7 +2,7 @@ package main
 
 import "github.com/rivo/tview"
 
-var TextUI = []string{"Events", "Menu", "Current Room Actions", "Create Duo Room", "Create Group Room", "Unblock User",
+var TextUI = []string{"Events", "Menu", "Current Group Room","Current Duo Room", "Create Duo Room", "Create Group Room", "Unblock User",
 	"Change Username", "Change Privacy", "Adding You To Group Rooms", "Adding You To Duo Rooms", "Find User", "Get Blocked Users", "Unblock User",
 	"Block", "Leave Room", "Show users", "Delete Users From Room", "Add Users To Room", "Change Room Name", "Enter Text Here", "Add Users", "Delete Users"}
 var NavEventText = [][5]int{
