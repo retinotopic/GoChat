@@ -22,7 +22,9 @@ type ListItem interface {
 	GetMainText() string
 	GetSecondaryText() string
 	GetColor(int) tcell.Color
-	SetMainText(string)
+	SetMainText(string, uint8) /* can be: default string override,
+	concatenate string via bytes.Buffer,
+	delete last (len(string)) bytes */
 	SetSecondaryText(string)
 	SetColor(tcell.Color, int)
 	Next() ListItem

@@ -1,6 +1,8 @@
 package list
 
 import (
+	"bytes"
+
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -44,6 +46,7 @@ type ArrayItem struct {
 	ArrList       *ArrayList
 	Color         [2]tcell.Color
 	MainText      string
+	MainTextBuf   *bytes.Buffer
 	SecondaryText string
 }
 
@@ -52,10 +55,14 @@ func NewArrayItem(arr *ArrayList, clr [2]tcell.Color, main string, sec string) A
 		ArrList:       arr,
 		Color:         clr,
 		MainText:      main,
+		MainTextBuf:   nil,
 		SecondaryText: sec,
 	}
 }
 func (a ArrayItem) GetMainText() string {
+	if a.MainTextBuf != nil {
+		return a.MainTextBuf.String()
+	}
 	return a.MainText
 }
 func (a ArrayItem) GetSecondaryText() string {
@@ -68,8 +75,21 @@ func (a ArrayItem) GetColor(idx int) tcell.Color {
 	}
 	return tcell.ColorWhite
 }
-func (a ArrayItem) SetMainText(str string) {
-	a.ArrList.Items[a.ArrList.CurrentIndex].MainText = str
+func (a ArrayItem) SetMainText(str string, mode uint8) {
+	switch mode {
+	case 0:
+		a.ArrList.Items[a.ArrList.CurrentIndex].MainText = str
+	case 1:
+		if a.MainTextBuf != nil {
+			a.MainTextBuf.WriteString(str)
+			return
+		}
+		a.MainTextBuf = bytes.NewBufferString(str)
+	case 2:
+		if a.MainTextBuf != nil {
+			a.MainTextBuf.Truncate(len(a.MainTextBuf.String()) - len(str))
+		}
+	}
 }
 func (a ArrayItem) SetSecondaryText(str string) {
 	a.ArrList.Items[a.ArrList.CurrentIndex].SecondaryText = str
