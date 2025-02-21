@@ -208,7 +208,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 			rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 		}
 		// set new room at the top
-		c.Lists[1].Items.MoveToFront(&list.LinkedItems{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
+		c.Lists[1].Items.MoveToFront(&list.LinkedItem{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
 		if rmsv.IsGroup {
 			rm.RoomType = "Group"
 		} else {
