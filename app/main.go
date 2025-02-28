@@ -17,7 +17,7 @@ type RoomServer struct {
 	Users           []User `json:"Users" `
 }
 
-type Room struct {
+type RoomInfo struct {
 	RoomId   uint64
 	RoomName string
 
@@ -44,17 +44,16 @@ type Chat struct {
 	Conn     *websocket.Conn
 	MainFlex *tview.Flex
 
-	RoomMsgs         map[uint64]*Room // room id to room
-	SendEventMap     map[string]SendEvent
-	NavigateEventMap map[string]NavigateEvent
+	RoomMsgs map[uint64]*RoomInfo // room id to room
+	EventMap map[Content]Event
 
 	DuoUsers     map[uint64]User // user id to users that Duo-only
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists []*list.List /* menu[0],rooms[1],navigation[2]
-	input[3],events[4],FoundUsers[5],DuoUsers[6]
-	BlockedUsers[7],RoomUsers[8],SendEvents[9],Boolean[10]*/
+	Lists []*list.List /* menu[0],rooms[1],events[2]
+	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
+	BlockedUsers[7],RoomUsers[8],Boolean[10]*/
 
 	currentRoom *Room  // current selected Room
 	CurrentText string // current text for user search || set room name || message
@@ -200,7 +199,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 
 func (c *Chat) AddRoom(rmsv RoomServer) {
 	c.App.QueueUpdate(func() {
-		c.RoomMsgs[rmsv.RoomId] = &Room{Users: make(map[uint64]User), Messages: make(map[int]*list.List), RoomName: rmsv.RoomName, RoomId: rmsv.RoomId}
+		c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User), Messages: make(map[int]*list.List), RoomName: rmsv.RoomName, RoomId: rmsv.RoomId}
 		rm := c.RoomMsgs[rmsv.RoomId]
 
 		//fill room with users

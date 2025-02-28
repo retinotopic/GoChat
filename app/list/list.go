@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/retinotopic/GoChat/app/"
 	"github.com/rivo/tview"
 )
 
@@ -40,7 +41,7 @@ type ListItems interface {
 	Len() int
 }
 
-func (l *List) GetSelected() []string {
+func (l *List) GetSelected() []conte {
 	front := l.Items.GetFront()
 	selected := []string{}
 	for front != nil && front.IsNil() {

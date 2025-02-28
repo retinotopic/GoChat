@@ -72,6 +72,16 @@ func (c *Chat) PreLoadNavigation() {
 		return event
 	})
 }
+func (c *Chat) OptionEvent(item list.ListItem) {
+	key := Content{}
+	text := item.GetMainText()
+	if len(text) != 0 {
+		key.IsMain = true
+	}
+	key.Text = text
+	ev := c.EventMap[key]
+	ev.Kind(ev.content, ev.targets...)
+}
 func (c *Chat) OptionNavigate(item list.ListItem) {
 
 	main := item.GetMainText()

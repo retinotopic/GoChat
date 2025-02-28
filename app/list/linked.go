@@ -9,7 +9,7 @@ import (
 func NewLinkedList(lenl int) *LinkedList {
 	ll := &LinkedList{}
 	ll.items = make([]LinkedItem, lenl)
-	ll.stack = make([]int, 0, lenl)
+	ll.stack = make([]int, lenl)
 
 	for i := range ll.items {
 		ll.items[i].idx = i
