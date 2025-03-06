@@ -45,7 +45,7 @@ type Chat struct {
 	MainFlex *tview.Flex
 
 	RoomMsgs map[uint64]*RoomInfo // room id to room
-	EventMap map[Content]Event
+	EventMap map[list.Content]Event
 
 	DuoUsers     map[uint64]User // user id to users that Duo-only
 	BlockedUsers map[uint64]User // user id to blocked
@@ -55,8 +55,8 @@ type Chat struct {
 	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[10]*/
 
-	currentRoom *Room  // current selected Room
-	CurrentText string // current text for user search || set room name || message
+	currentRoom *RoomInfo // current selected Room
+	CurrentText string    // current text for user search || set room name || message
 
 	NavState      int
 	stopeventUI   bool

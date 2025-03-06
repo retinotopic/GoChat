@@ -5,18 +5,23 @@ import (
 	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/retinotopic/GoChat/app/"
 	"github.com/rivo/tview"
 )
+
+type Content struct {
+	Text   string
+	IsMain bool
+}
 
 var lines = make([]string, 0, 1000)
 
 type List struct {
 	*tview.Box
-	offset  int // scroll offset
-	Option  func(ListItem)
-	Items   ListItems
-	Current ListItem // type Room
+	offset      int // scroll offset
+	selectedBuf []Content
+	Option      func(ListItem)
+	Items       ListItems
+	Current     ListItem // type Room
 }
 
 type ListItem interface {
@@ -41,14 +46,22 @@ type ListItems interface {
 	Len() int
 }
 
-func (l *List) GetSelected() []conte {
+func (l *List) GetSelected() []Content {
 	front := l.Items.GetFront()
-	selected := []string{}
+	l.selectedBuf = l.selectedBuf[:0]
 	for front != nil && front.IsNil() {
-		selected = append(selected, front.GetMainText(), front.GetSecondaryText())
+
+		sel := front.GetMainText()
+		ismain := true
+		if len(sel) == 0 {
+			sel = front.GetSecondaryText()
+			ismain = false
+		}
+		cnt := Content{Text: sel, IsMain: ismain}
+		l.selectedBuf = append(l.selectedBuf, cnt)
 		front = front.Next()
 	}
-	return selected
+	return l.selectedBuf
 }
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)

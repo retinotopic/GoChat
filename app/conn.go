@@ -64,7 +64,7 @@ func (c *Chat) TryConnect(username, url string) {
 			c.ProcessRoom([]RoomServer{rm})
 			continue
 		}
-		e := Event{}
+		e := SendEvent{}
 		err = json.Unmarshal(b, &e)
 		if err != nil {
 			return

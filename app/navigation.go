@@ -72,43 +72,26 @@ func (c *Chat) PreLoadNavigation() {
 		return event
 	})
 }
+
 func (c *Chat) OptionEvent(item list.ListItem) {
-	key := Content{}
+	key := list.Content{}
 	text := item.GetMainText()
-	if len(text) != 0 {
-		key.IsMain = true
-	}
+	key.IsMain = true
 	key.Text = text
 	ev := c.EventMap[key]
+	if len(text) == 0 {
+		key.IsMain = false
+		l := ev.targets[0]
+		sel := c.Lists[l].GetSelected()
+		str1 := strconv.FormatUint(c.currentRoom.RoomId)
+		str2 := c.Lists[3].Items.GetFront().GetMainText()
+		sel = append(sel, list.Content{Text: str1}, list.Content{Text: str2})
+		ev.Kind(sel, ev.targets[1:]...)
+
+	}
 	ev.Kind(ev.content, ev.targets...)
 }
-func (c *Chat) OptionNavigate(item list.ListItem) {
 
-	main := item.GetMainText()
-
-	ne := c.NavigateEventMap[main]
-	c.Lists[ne.TargetList].Items.Clear()
-	ll, ok := c.Lists[ne.TargetList].Items.(*list.ArrayList)
-	if ok {
-		for i := ne.From; i <= ne.To; i++ {
-			navitem := list.NewArrayItem(
-				ll,
-				[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-				NavText[i],
-				"",
-			)
-			c.Lists[ne.TargetList].Items.MoveToFront(navitem)
-		}
-		c.AddItemMainFlex(ne.Lists...)
-	}
-
-}
-func (c *Chat) OptionSendEvent(item list.ListItem) {
-	main := item.GetMainText()
-	se := c.SendEventMap[main]
-	go se.Event(c.Lists[se.ListIdx].GetSelected())
-
-}
 func (c *Chat) OptionRoom(item list.ListItem) {
 	sec := item.GetSecondaryText()
 	main := item.GetMainText()
@@ -149,10 +132,7 @@ func (c *Chat) OptionInput(item list.ListItem) {
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 	c.MainFlex.Clear()
-	c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
-	c.MainFlex.AddItem(c.Lists[1], 0, 2, true)
 	for _, v := range prmtvs {
 		c.MainFlex.AddItem(v, 0, 2, true)
 	}
-
 }
