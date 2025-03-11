@@ -29,8 +29,12 @@ type LinkedList struct {
 func (l *LinkedList) MoveToFront(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
 	if ok && uitem != nil && uitem.parent == l {
-		uitem.next = l.front
-		l.front.prev = uitem
+		uitem.prev = l.front
+		if l.front != nil {
+			l.front.next = uitem
+		} else {
+			l.back = uitem
+		}
 		l.front = uitem
 	}
 }
@@ -38,8 +42,12 @@ func (l *LinkedList) MoveToFront(e ListItem) {
 func (l *LinkedList) MoveToBack(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
 	if ok && uitem != nil && uitem.parent == l {
-		uitem.prev = l.back
-		l.back.next = uitem
+		uitem.next = l.back
+		if l.back != nil {
+			l.back.prev = uitem
+		} else {
+			l.front = uitem
+		}
 		l.back = uitem
 	}
 }
@@ -51,10 +59,21 @@ func (l *LinkedList) GetFront() ListItem {
 func (l *LinkedList) Remove(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
 	if ok && uitem != nil && uitem.parent == l {
-		pr := uitem.prev
-		nxt := uitem.next
-		pr.next = nxt
-		nxt.prev = pr
+		if uitem == l.front {
+			pr := uitem.prev
+			l.front = pr
+		} // item can be both front and back simultaneously
+		if uitem == l.back {
+			nxt := uitem.next
+			l.back = nxt
+		}
+		if uitem != l.back && uitem != l.front {
+			pr := uitem.prev
+			nxt := uitem.next
+			pr.next = nxt
+			nxt.prev = pr
+		}
+
 		l.stack = append(l.stack, uitem.idx)
 	}
 }
@@ -69,10 +88,10 @@ func (l *LinkedList) Clear() {
 }
 
 func (l *LinkedList) Len() int {
-	return len(l.stack)
+	return len(l.items) - len(l.stack)
 }
 
-func (l *LinkedList) NewLinkedItem(clr [2]tcell.Color, main string, sec string) *LinkedItem {
+func (l *LinkedList) NewItem(clr [2]tcell.Color, main string, sec string) *LinkedItem {
 	if len(l.stack) == 0 {
 		return nil
 	}
@@ -160,6 +179,6 @@ func (l *LinkedItem) Prev() ListItem {
 	return nil
 }
 
-func (l *LinkedItem) IsNil() bool {
+func (l *LinkedItem) IsNil() bool { // if interface is not nil but interface value is
 	return l == nil
 }

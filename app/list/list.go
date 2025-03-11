@@ -13,10 +13,18 @@ type Content struct {
 	IsMain bool
 }
 
-var lines = make([]string, 0, 1000)
+func NewList() *List {
+
+	return &List{
+		Box:         tview.NewBox(),
+		lines:       make([]string, 0, 1000),
+		selectedBuf: make([]Content, 0, 100),
+	}
+}
 
 type List struct {
 	*tview.Box
+	lines       []string
 	offset      int // scroll offset
 	selectedBuf []Content
 	Option      func(ListItem)
@@ -74,7 +82,7 @@ func (l *List) Draw(screen tcell.Screen) {
 	row := 0
 	for element != nil && !element.IsNil() && row < height {
 		mainText := element.GetMainText()
-		lines := splitTextIntoLines(mainText, width)
+		lines := l.splitTextIntoLines(mainText, width)
 		for lineIndex, line := range lines {
 			if row+lineIndex >= height {
 				break
@@ -86,7 +94,7 @@ func (l *List) Draw(screen tcell.Screen) {
 		}
 
 		if len(element.GetSecondaryText()) > 0 && width > 3 {
-			secondaryLines := splitTextIntoLines(element.GetSecondaryText(), width-2)
+			secondaryLines := l.splitTextIntoLines(element.GetSecondaryText(), width-2)
 			startY := row + len(lines)
 			for lineIndex, line := range secondaryLines {
 				if startY+lineIndex >= height {
@@ -105,11 +113,11 @@ func (l *List) Draw(screen tcell.Screen) {
 		element = element.Next()
 	}
 }
-func splitTextIntoLines(text string, maxWidth int) []string {
+func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
 		return []string{text}
 	}
-	lines = lines[:0]
+	l.lines = l.lines[:0]
 	words := strings.Fields(text)
 	currentLine := ""
 	for _, word := range words {
@@ -117,7 +125,7 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 
 		if wordWidth > maxWidth {
 			if len(currentLine) > 0 {
-				lines = append(lines, currentLine)
+				l.lines = append(l.lines, currentLine)
 				currentLine = ""
 			}
 
@@ -127,7 +135,7 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 				if end > len(runes) {
 					end = len(runes)
 				}
-				lines = append(lines, string(runes[i:end]))
+				l.lines = append(l.lines, string(runes[i:end]))
 			}
 			continue
 		}
@@ -143,17 +151,17 @@ func splitTextIntoLines(text string, maxWidth int) []string {
 			currentLine += word
 		} else {
 			if len(currentLine) > 0 {
-				lines = append(lines, currentLine)
+				l.lines = append(l.lines, currentLine)
 			}
 			currentLine = word
 		}
 	}
 
 	if len(currentLine) > 0 {
-		lines = append(lines, currentLine)
+		l.lines = append(l.lines, currentLine)
 	}
 
-	return lines
+	return l.lines
 }
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
@@ -195,17 +203,17 @@ func (l *List) isLastVisibleElement(item ListItem) bool {
 	currentHeight := 0
 
 	for element != nil && !element.IsNil() {
-		elementHeight := len(splitTextIntoLines(element.GetMainText(), width))
+		elementHeight := len(l.splitTextIntoLines(element.GetMainText(), width))
 		if len(element.GetSecondaryText()) > 0 {
-			elementHeight += len(splitTextIntoLines(element.GetSecondaryText(), width-2))
+			elementHeight += len(l.splitTextIntoLines(element.GetSecondaryText(), width-2))
 		}
 
 		if element == item {
 			nextElementHeight := 0
 			if element.Next() != nil && !element.Next().IsNil() {
-				nextElementHeight = len(splitTextIntoLines(element.Next().GetMainText(), width))
+				nextElementHeight = len(l.splitTextIntoLines(element.Next().GetMainText(), width))
 				if len(element.Next().GetSecondaryText()) > 0 {
-					nextElementHeight += len(splitTextIntoLines(element.Next().GetSecondaryText(), width-2))
+					nextElementHeight += len(l.splitTextIntoLines(element.Next().GetSecondaryText(), width-2))
 				}
 			}
 			return currentHeight+elementHeight+nextElementHeight > height

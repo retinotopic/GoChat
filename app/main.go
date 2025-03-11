@@ -66,7 +66,7 @@ type Chat struct {
 func NewChat() *Chat {
 	c := &Chat{}
 	for i := range len(c.Lists) {
-		c.Lists[i] = &list.List{Box: tview.NewBox()}
+		c.Lists[i] = list.NewList()
 	}
 	return c
 }
@@ -181,7 +181,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 			for i := range len(rmsv.Users) {
 				if rmsv.Users[i].UserId == c.UserId {
 					delete(c.RoomMsgs, rmsv.RoomId)
-					c.Lists[6].Items.Remove()
+					// c.Lists[6].Items.Remove()
 					break
 				}
 				if rmsv.Users[i].RoomToggle {
