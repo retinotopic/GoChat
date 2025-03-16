@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"strconv"
@@ -9,6 +9,7 @@ import (
 	"github.com/rivo/tview"
 )
 
+// animation for in progress events
 func (c *Chat) StartEventUILoop() {
 	i := 0
 	var NotIdle bool
@@ -40,7 +41,6 @@ func (c *Chat) StartEventUILoop() {
 	}
 }
 
-// MARK: ELEMS
 func (c *Chat) PreLoadNavigation() {
 	c.MainFlex = tview.NewFlex()
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -51,21 +51,21 @@ func (c *Chat) PreLoadNavigation() {
 		case tcell.KeyRight:
 			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
 			return event
-		case tcell.KeyRune:
+		case tcell.KeyRune: // write letter via buffer.WriteString
 			if c.IsInputActive {
 				txt := c.Lists[3].Items.GetFront().GetMainText()
 				if len([]rune(txt)) <= 300 {
 					r := event.Rune()
-					c.Lists[3].Items.GetFront().SetMainText(txt + string(r))
+					c.Lists[3].Items.GetFront().SetMainText(string(r), 1)
 				}
 			}
-		case tcell.KeyBackspace, tcell.KeyBackspace2:
+		case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
 			if c.IsInputActive {
 				main := c.Lists[3].Items.GetFront().GetMainText()
 				mr := []rune(main)
 				if len(mr) != 0 {
 					mr = mr[:len(mr)-1]
-					c.Lists[3].Items.GetFront().SetMainText(string(mr))
+					c.Lists[3].Items.GetFront().SetMainText(string(mr), 2)
 				}
 			}
 		}
@@ -73,21 +73,26 @@ func (c *Chat) PreLoadNavigation() {
 	})
 }
 
+/*
+one of the most important methods, pressing a functional option either changes the state of the current UI
+or sends a request to the server if it is a form submission
+*/
 func (c *Chat) OptionEvent(item list.ListItem) {
 	key := list.Content{}
-	text := item.GetMainText()
-	key.IsMain = true
-	key.Text = text
+	key.MainText = item.GetMainText()
+	key.SecondaryText = item.GetSecondaryText()
 	ev := c.EventMap[key]
-	if len(text) == 0 {
-		key.IsMain = false
+	if len(key.MainText) == 0 {
 		l := ev.targets[0]
 		sel := c.Lists[l].GetSelected()
-		str1 := strconv.FormatUint(c.currentRoom.RoomId)
-		str2 := c.Lists[3].Items.GetFront().GetMainText()
-		sel = append(sel, list.Content{Text: str1}, list.Content{Text: str2})
-		ev.Kind(sel, ev.targets[1:]...)
 
+		str1 := strconv.FormatUint(c.currentRoom.RoomId, 10)
+		str2 := c.Lists[3].Items.GetFront().GetMainText()
+
+		sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
+		the current room's id and input text*/
+		ev.Kind(sel, ev.targets[1:]...)
+		return
 	}
 	ev.Kind(ev.content, ev.targets...)
 }
@@ -96,6 +101,8 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 	sec := item.GetSecondaryText()
 	main := item.GetMainText()
 	if sec[:9] == "Room Id: " {
+		/*When changing a room, add current users to the list for current users of
+		the room of the selected room (it does not allocate anything, just copies it).*/
 		v, err := strconv.ParseUint(sec[9:], 10, 64)
 		if err != nil {
 			return
@@ -107,8 +114,7 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 			ll, ok := c.Lists[8].Items.(*list.ArrayList)
 			if ok {
 				for _, v := range c.currentRoom.Users {
-					navitem := list.NewArrayItem(
-						ll,
+					navitem := ll.NewItem(
 						[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
 						v.Username,
 						strconv.FormatUint(v.UserId, 10),
@@ -116,7 +122,15 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 					c.Lists[8].Items.MoveToFront(navitem)
 				}
 			}
-			//c.NavigateEventMap["Current Room Actions"].Lists
+			if c.currentRoom.IsGroup {
+				if c.currentRoom.IsAdmin {
+					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
+				} else {
+					c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
+				}
+			} else {
+				c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
+			}
 			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
 	} else {

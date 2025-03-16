@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"reflect"
@@ -64,9 +64,9 @@ var InitMapText = []string{
 func (c *Chat) ParseAndInitUI() {
 
 	SendEventKind := map[string]interface{}{
-		"Room":    Room{},
-		"User":    User{},
-		"Message": Message{},
+		"Room":    &Room{UserIds: make([]uint64, 0, 100), RoomIds: make([]uint64, 0, 100)},
+		"User":    &User{},
+		"Message": &Message{},
 	}
 
 	target := make([]int, 5)
@@ -79,22 +79,29 @@ func (c *Chat) ParseAndInitUI() {
 			mode := targetStr[:2]
 			targetStr = targetStr[2:]
 			ev := Event{}
-			key := list.Content{Text: mode[0]}
+			key := list.Content{}
+
 			if mode[1] == "true" {
-				key.IsMain = true
+				key.MainText = mode[0]
 				for i, _ := range targetStr {
 					if i%2 == 0 {
+						evv := list.Content{}
 						b, err := strconv.ParseBool(targetStr[i+1])
 						if err != nil {
 							panic("Parse Bool Error")
 						}
-						ev.content = append(ev.content,
-							list.Content{Text: targetStr[i], IsMain: b})
+						if b {
+							evv.MainText = targetStr[i]
+						} else {
+							evv.SecondaryText = targetStr[i]
+						}
+						ev.content = append(ev.content, evv)
 					}
 				}
 				ev.targets = target
 				ev.Kind = c.EventUI
 			} else {
+				key.SecondaryText = mode[0]
 				val := SendEventKind[targetStr[0]]
 				raw := reflect.ValueOf(val).MethodByName(targetStr[1]).Interface()
 				fn := raw.(func([]list.Content, ...int))
@@ -125,11 +132,11 @@ func (c *Chat) EventUI(cnt []list.Content, trgt ...int) {
 			a := list.ArrayItem{}
 			a.ArrList = ll
 			a.Color = [2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}
-			if cnt[i].IsMain {
-				a.MainText = cnt[i].Text
-			} else {
-				a.SecondaryText = cnt[i].Text
-			}
+
+			a.MainText = cnt[i].MainText
+
+			a.SecondaryText = cnt[i].SecondaryText
+
 			c.Lists[trgt[0]].Items.MoveToFront(a)
 		}
 	}

@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"strconv"
@@ -26,13 +26,12 @@ type RoomInfo struct {
 
 	CreatedByUserId uint64
 
-	Users         map[uint64]User // user id to users in this room
-	lastMessageID uint64
-	RoomType      string // Group or Duo
-	Messages      map[int]*list.List
-
-	MsgPageIdBack  int // for old messages
-	MsgPageIdFront int // for new messages
+	Users          map[uint64]User // user id to users in this room
+	lastMessageID  uint64
+	RoomType       string             // Group or Duo
+	Messages       map[int]*list.List // id to the page that contains the messages
+	MsgPageIdBack  int                // for old messages
+	MsgPageIdFront int                // for new messages
 
 	RoomItem list.ListItem
 }
@@ -41,6 +40,7 @@ type RoomInfo struct {
 type Chat struct {
 	App      *tview.Application
 	UserId   uint64
+	UrlConn  string
 	Conn     *websocket.Conn
 	MainFlex *tview.Flex
 
@@ -63,12 +63,16 @@ type Chat struct {
 	IsInputActive bool
 }
 
-func NewChat() *Chat {
+func NewChat() (chat *Chat, err error) {
 	c := &Chat{}
 	for i := range len(c.Lists) {
 		c.Lists[i] = list.NewList()
 	}
-	return c
+	err = c.TryConnect()
+	if err != nil {
+		return nil, err
+	}
+	return c, err
 }
 func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	if len(msgsv) == 0 {
@@ -77,10 +81,9 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	rm, ok := c.RoomMsgs[msgsv[0].RoomId]
 	if ok {
 		c.App.QueueUpdate(func() {
-			ll := list.NewArrayList()
+			ll := list.NewArrayList(30)
 			rm.MsgPageIdBack--
-			prevpgn := list.NewArrayItem(
-				ll,
+			prevpgn := ll.NewItem(
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 				"Prev Page: "+strconv.Itoa(rm.MsgPageIdBack-1),
 				"",
@@ -91,8 +94,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 			for i := range len(msgsv) {
 				rm.lastMessageID = msgsv[i].MessageId
 
-				e := list.NewArrayItem(
-					ll,
+				e := ll.NewItem(
 					[2]tcell.Color{tcell.ColorWhite, tcell.ColorGray},
 					rm.Users[msgsv[i].UserId].Username+": "+msgsv[i].MessagePayload,
 					"UserId: "+strconv.FormatUint(msgsv[i].UserId, 10),
@@ -100,8 +102,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 				ll.MoveToFront(e)
 			}
 
-			nextpgn := list.NewArrayItem(
-				ll,
+			nextpgn := ll.NewItem(
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 				"",
 				"Next Page: "+strconv.Itoa(rm.MsgPageIdBack+1),
@@ -123,19 +124,17 @@ func (c *Chat) NewMessageEvent(msg Message) {
 			if ok2 {
 
 				if l.Items.Len() >= 30 {
-					lv := l.Items.(*list.ArrayList) // to correct type assertion l.Iterms MUST always be *list.ArrayList
+					lv := l.Items.(*list.ArrayList) // to correct type assertion l.Items MUST always be *list.ArrayList
 					rm.MsgPageIdFront++
-					nextpgn := list.NewArrayItem(
-						lv,
+					nextpgn := lv.NewItem(
 						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 						"",
 						"Next Page: "+strconv.Itoa(rm.MsgPageIdFront),
 					)
 					l.Items.MoveToFront(nextpgn)
 
-					ll := list.NewArrayList()
-					prevpgn := list.NewArrayItem(
-						ll,
+					ll := list.NewArrayList(30)
+					prevpgn := ll.NewItem(
 						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 						"",
 						"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront-1),
@@ -148,8 +147,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				} else {
 
 					lv := l.Items.(*list.ArrayList)
-					msg := list.NewArrayItem(
-						lv,
+					msg := lv.NewItem(
 						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 						rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
 						"UserId: "+strconv.FormatUint(msg.UserId, 10),
@@ -158,9 +156,8 @@ func (c *Chat) NewMessageEvent(msg Message) {
 
 				}
 			} else {
-				ll := list.NewArrayList()
-				prevpgn := list.NewArrayItem(
-					ll,
+				ll := list.NewArrayList(30)
+				prevpgn := ll.NewItem(
 					[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 					"",
 					"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront),
@@ -214,14 +211,4 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 			rm.RoomType = "Duo"
 		}
 	})
-}
-func main() {
-	chat := NewChat()
-	chat.App = tview.NewApplication()
-
-	chat.MainFlex.AddItem(chat.Lists[0], 0, 1, true)
-	go chat.StartEventUILoop()
-	if err := chat.App.SetRoot(chat.MainFlex, true).Run(); err != nil {
-		panic(err)
-	}
 }

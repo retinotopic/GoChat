@@ -9,8 +9,8 @@ import (
 )
 
 type Content struct {
-	Text   string
-	IsMain bool
+	MainText      string
+	SecondaryText string
 }
 
 func NewList() *List {
@@ -58,14 +58,7 @@ func (l *List) GetSelected() []Content {
 	front := l.Items.GetFront()
 	l.selectedBuf = l.selectedBuf[:0]
 	for front != nil && front.IsNil() {
-
-		sel := front.GetMainText()
-		ismain := true
-		if len(sel) == 0 {
-			sel = front.GetSecondaryText()
-			ismain = false
-		}
-		cnt := Content{Text: sel, IsMain: ismain}
+		cnt := Content{MainText: front.GetMainText(), SecondaryText: front.GetSecondaryText()}
 		l.selectedBuf = append(l.selectedBuf, cnt)
 		front = front.Next()
 	}
