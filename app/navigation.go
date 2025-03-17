@@ -84,13 +84,15 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 	ev := c.EventMap[key]
 	if len(key.MainText) == 0 {
 		l := ev.targets[0]
-		sel := c.Lists[l].GetSelected()
-
+		sel := []list.Content{}
+		if l >= 0 {
+			sel = c.Lists[l].GetSelected()
+		}
 		str1 := strconv.FormatUint(c.currentRoom.RoomId, 10)
 		str2 := c.Lists[3].Items.GetFront().GetMainText()
 
 		sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
-		the current room's id and input text*/
+		the current room's id and input area text*/
 		ev.Kind(sel, ev.targets[1:]...)
 		return
 	}
@@ -138,7 +140,18 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		if err != nil {
 			return
 		}
-		c.AddItemMainFlex(c.currentRoom.Messages[v], c.Lists[3])
+		l, ok := c.currentRoom.Messages[v]
+		if ok {
+			c.AddItemMainFlex(l, c.Lists[3])
+		} else {
+			ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
+
+			str1 := strconv.FormatUint(c.currentRoom.RoomId, 10)
+			str2 := c.Lists[3].Items.GetFront().GetMainText()
+			ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.currentRoom.lastMessageID, 10)},
+				{MainText: str1}, {MainText: str2}})
+		}
+
 	}
 }
 func (c *Chat) OptionInput(item list.ListItem) {
