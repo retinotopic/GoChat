@@ -25,23 +25,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	/* uncomment to use oauth2
-	mp := make(auth.ProviderMap)
-	google, err := google.New(ctx, os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "/refresh")
-	if err != nil {
-		log.Fatal("google provider:", err)
-	}
-	firebase, err := firebase.New(ctx, os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "refresh")
-	if err != nil {
-		log.Fatal("firebase provider:", err)
-	}
-
-	// with the issuer claim, we know which provider issued token.
-	mp[os.Getenv("ISSUER_FIREBASE")] = firebase
-	mp[os.Getenv("ISSUER_GOOGLE")] = google
-	mp[os.Getenv("ISSUER2_GOOGLE")] = google
-	*/
-
 	flag.Parse()
 	client := redis.NewClient(&redis.Options{
 		Addr: *rdaddr,
@@ -55,8 +38,8 @@ func main() {
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
+
 	//FetchUser(http.ResponseWriter, *http.Request) (string, error)
-	
 	FetchUser := func(w http.ResponseWriter, r *http.Request) (string, error) {
 		c, err := r.Cookie("username")
 		if err != nil {

@@ -66,7 +66,7 @@ func (p *PubSub) WsHandle() {
 	startevent := &models.Event{Event: "GetAllRooms"}
 	p.ProcessEvent(startevent)
 	for {
-		_, b, err := p.conn.Read(context.TODO())
+		_, b, err := p.conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
 			return
 		}
@@ -83,7 +83,7 @@ func (p *PubSub) ReadPubSub() {
 	chps := p.Pb.Channel(ctx, closech, strconv.Itoa(int(p.UserId)))
 	for {
 		select {
-		case b := <-chps:
+		case b := <-chps: // incoming successful events from others users
 			err := WriteTimeout(time.Second*15, p.conn, b)
 			if err != nil {
 				p.conn.CloseNow()

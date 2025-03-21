@@ -1,4 +1,4 @@
-package chat
+package app
 
 import (
 	"context"
@@ -19,7 +19,7 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func (c *Chat) TryConnect(username string) error {
+func (c *Chat) TryConnect(username, url string) error {
 	hd := http.Header{}
 	cookie := http.Cookie{
 		Name:     "username",
@@ -56,19 +56,23 @@ func (c *Chat) TryConnect(username string) error {
 			c.NewMessageEvent(msg)
 			continue
 		}
-		rm := RoomServer{}
+		rm := []RoomServer{}
 		err = json.Unmarshal(b, &rm)
 		if err != nil {
 			return err
 		}
-		if rm.RoomId != 0 {
-			c.ProcessRoom([]RoomServer{rm})
+		if len(rm) != 0 {
+			c.ProcessRoom(rm)
 			continue
 		}
 		e := SendEvent{}
 		err = json.Unmarshal(b, &e)
 		if err != nil {
 			return err
+		}
+		if e.UserId != 0 {
+			c.NewEvent(e)
+			continue
 		}
 		switch e.Event {
 		case "GetMessagesFromRoom":
@@ -93,13 +97,6 @@ func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 		var usrs []User
 		err := json.Unmarshal(data, &usrs)
 		if err != nil {
-			ll := c.Lists[2].Items.(*list.ArrayList)
-			ni := ll.NewItem(
-				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-				"erro fill users",
-				"",
-			)
-			c.Lists[2].Items.MoveToFront(ni)
 			return
 		}
 		c.Lists[idx].Items.Clear()
@@ -110,4 +107,17 @@ func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 		}
 	})
 
+}
+func (c *Chat) NewEvent(e SendEvent) {
+	ll := c.Lists[4].Items.(*list.ArrayList)
+	errstr := ""
+	if len(e.ErrorMsg) != 0 {
+		errstr = "Error: " + e.ErrorMsg
+	}
+	ni := ll.NewItem(
+		[2]tcell.Color{tcell.ColorBlue, tcell.ColorRed},
+		e.Event,
+		errstr,
+	)
+	c.Lists[4].Items.MoveToFront(ni)
 }

@@ -1,4 +1,4 @@
-package chat
+package app
 
 import (
 	"reflect"
@@ -25,7 +25,7 @@ var SendEventNames = []string{"Add Users To Room", "Delete Users From Room",
 var InitMapText = []string{
 	"Events", "true", "4",
 	"Menu", "true", "Create Duo Room", "true", "Create Group Room", "true",
-	"Unblock User", "true", "Change Username", "true", "Change Privacy", "true",
+	"Unblock Users", "true", "Change Username", "true", "Change Privacy", "true",
 	"Find User", "true", "2",
 	"This Group Room(Admin)", "true", "Delete Users From Room", "true",
 	"Add Users To Room", "true", "Change Room Name", "true", "Show Users", "true",
@@ -36,6 +36,7 @@ var InitMapText = []string{
 	"Create Duo Room", "true", "Create Duo Room", "false", "2", "5",
 	"Create Group Room", "true", "Create Group Room", "false", "2", "6", "3",
 	"Unblock Users", "true", "Unblock User", "false", "2", "7",
+	"Block Users", "true", "Block User", "false", "2", "6",
 	"Add Users To Room", "true", "Add Users", "false", "2", "6",
 	"Delete Users From Room", "true", "Delete Users", "false", "2", "6",
 	"Change Room Name", "true", "Change Roomname", "false", "2", "3",
@@ -48,7 +49,7 @@ var InitMapText = []string{
 	"Add Users", "false", "Room", "AddDeleteUsersInRoom", "6", "0",
 	"Delete Users", "false", "Room", "AddDeleteUsersInRoom", "8", "1",
 	"Unblock User", "false", "Room", "BlockUnblockUser", "7", "2",
-	"Block", "false", "Room", "BlockUnblockUser", "-1", "3",
+	"Block User", "false", "Room", "BlockUnblockUser", "6", "3",
 	"Change Duo Room Policy", "false", "User", "ChangePrivacy", "10", "4",
 	"Change Group Room Policy", "false", "User", "ChangePrivacy", "10", "5",
 	"Change Username", "false", "User", "ChangeUsernameFindUsers", "3", "6",

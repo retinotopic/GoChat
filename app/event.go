@@ -1,4 +1,4 @@
-package chat
+package app
 
 import (
 	"strconv"

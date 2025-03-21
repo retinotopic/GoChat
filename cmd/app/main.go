@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/jackc/pgx/v5/stdlib"
+	// "github.com/jackc/pgx/v5/stdlib"
 	"github.com/retinotopic/GoChat/app"
-	"github.com/rivo/tview"
+	// "github.com/rivo/tview"
 )
 
 func main() {
@@ -17,16 +17,11 @@ func main() {
 	for scanner.Scan() {
 		token := scanner.Text()
 		io.WriteString(os.Stdout, token)
+		io.WriteString(bufstr, token)
 	}
-	chat := chat.NewChat()
-	chat.App = tview.NewApplication()
-	err := chat.TryConnect()
+	_, err := app.NewChat(bufstr.String(), os.Getenv("CHAT_CONNECT_ADDRESS"))
 	if err != nil {
 		panic(err)
 	}
-	chat.MainFlex.AddItem(chat.Lists[0], 0, 1, true)
-	go chat.StartEventUILoop()
-	if err := chat.App.SetRoot(chat.MainFlex, true).Run(); err != nil {
-		panic(err)
-	}
+
 }

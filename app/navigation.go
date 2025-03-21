@@ -1,4 +1,4 @@
-package chat
+package app
 
 import (
 	"strconv"
@@ -71,6 +71,8 @@ func (c *Chat) PreLoadNavigation() {
 		}
 		return event
 	})
+	c.App = tview.NewApplication()
+	c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
 }
 
 /*

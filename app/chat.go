@@ -1,6 +1,7 @@
-package chat
+package app
 
 import (
+	"image/color"
 	"strconv"
 
 	"github.com/coder/websocket"
@@ -23,8 +24,6 @@ type RoomInfo struct {
 
 	IsGroup bool
 	IsAdmin bool
-
-	CreatedByUserId uint64
 
 	Users          map[uint64]User // user id to users in this room
 	lastMessageID  uint64
@@ -51,7 +50,7 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists []*list.List /* menu[0],rooms[1],events[2]
+	Lists [11]*list.List /* menu[0],rooms[1],events[2]
 	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[10]*/
 
@@ -63,14 +62,20 @@ type Chat struct {
 	IsInputActive bool
 }
 
-func NewChat() (chat *Chat, err error) {
+func NewChat(username, url string) (chat *Chat, err error) {
 	c := &Chat{}
 	for i := range len(c.Lists) {
 		c.Lists[i] = list.NewList()
 	}
-	err = c.TryConnect()
+	c.ParseAndInitUI()
+	c.PreLoadNavigation()
+	err = c.TryConnect(username, url)
 	if err != nil {
 		return nil, err
+	}
+	go chat.StartEventUILoop()
+	if err := chat.App.SetRoot(chat.MainFlex, true).Run(); err != nil {
+		panic(err)
 	}
 	return c, err
 }
@@ -177,8 +182,8 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 			rm.RoomName = rmsv.RoomName
 			for i := range len(rmsv.Users) {
 				if rmsv.Users[i].UserId == c.UserId {
+					c.Lists[1].Items.Remove(c.RoomMsgs[rmsv.RoomId].RoomItem)
 					delete(c.RoomMsgs, rmsv.RoomId)
-					// c.Lists[6].Items.Remove()
 					break
 				}
 				if rmsv.Users[i].RoomToggle {
@@ -196,7 +201,11 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 
 func (c *Chat) AddRoom(rmsv RoomServer) {
 	c.App.QueueUpdate(func() {
-		c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User), Messages: make(map[int]*list.List), RoomName: rmsv.RoomName, RoomId: rmsv.RoomId}
+
+		c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User),
+			Messages: make(map[int]*list.List), RoomName: rmsv.RoomName,
+			RoomId: rmsv.RoomId}
+
 		rm := c.RoomMsgs[rmsv.RoomId]
 
 		//fill room with users
@@ -204,7 +213,17 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 			rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 		}
 		// set new room at the top
-		c.Lists[1].Items.MoveToFront(&list.LinkedItem{MainText: rm.RoomName, SecondaryText: strconv.FormatUint(rm.RoomId, 10)})
+		ll, ok := c.Lists[1].Items.(*list.LinkedList) // MUST BE LINKED LIST
+		if ok {
+			rmitem := ll.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
+			c.Lists[1].Items.MoveToFront(rmitem)
+			rm.RoomItem = rmitem
+		} else {
+			panic("WTF")
+		}
+		if rmsv.CreatedByUserId == c.UserId {
+			rm.IsAdmin = true
+		}
 		if rmsv.IsGroup {
 			rm.RoomType = "Group"
 		} else {

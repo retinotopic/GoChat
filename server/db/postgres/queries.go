@@ -18,7 +18,7 @@ LEFT JOIN blocked_users bu ON (bu.blocked_by_user_id = users_to_add.user_id AND 
 OR (bu.blocked_by_user_id = $4 AND bu.blocked_user_id = users_to_add.user_id )
 WHERE bu.blocked_by_user_id IS NULL RETURNING user_id,room_id)
 
-SELECT ad.user_id,u.user_name,ad.room_id,r.room_name,r.is_group FROM addusers ad JOIN users u ON ad.user_id = u.user_id JOIN rooms r ON ad.room_id = r.room_id`
+SELECT ad.user_id,u.user_name,ad.room_id,r.room_name,r.is_group,r.created_by_user_id FROM addusers ad JOIN users u ON ad.user_id = u.user_id JOIN rooms r ON ad.room_id = r.room_id`
 
 var addUsersToRoomGroup = fmt.Sprintf(addUsersToRoom, allowGroupInvites)
 var addUsersToRoomDirect = fmt.Sprintf(addUsersToRoom, allowDirectMessages)

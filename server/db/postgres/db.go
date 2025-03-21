@@ -56,13 +56,14 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	}
 	return pg, nil
 }
-func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
-	if strings.ContainsAny(name, " \t\n") {
-		return errors.New("contains spaces")
-	}
-	_, err := p.Exec(ctx, "INSERT INTO users (user_subject,user_name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
-	return err
-}
+
+//	func (p *PgClient) NewUser(ctx context.Context, sub, name string) error {
+//		if strings.ContainsAny(name, " \t\n") {
+//			return errors.New("contains spaces")
+//		}
+//		_, err := p.Exec(ctx, "INSERT INTO users (user_subject,user_name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
+//		return err
+//	}
 func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
