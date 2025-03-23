@@ -35,7 +35,7 @@ var InitMapText = []string{
 	"This Duo Room", "true", "Block", "false", "2",
 	"Create Duo Room", "true", "Create Duo Room", "false", "2", "5",
 	"Create Group Room", "true", "Create Group Room", "false", "2", "6", "3",
-	"Unblock Users", "true", "Unblock User", "false", "2", "7",
+	"Unblock Users", "true", "Unblock User", "false", "Get Blocked Users", "false", "2", "7",
 	"Block Users", "true", "Block User", "false", "2", "6",
 	"Add Users To Room", "true", "Add Users", "false", "2", "6",
 	"Delete Users From Room", "true", "Delete Users", "false", "2", "6",
@@ -48,14 +48,15 @@ var InitMapText = []string{
 	"Send Message", "false", "Message", "SendMessage", "-1",
 	"Add Users", "false", "Room", "AddDeleteUsersInRoom", "6", "0",
 	"Delete Users", "false", "Room", "AddDeleteUsersInRoom", "8", "1",
+	"Get Blocked Users", "false", "User", "GetBlockedUsers", "-1",
 	"Unblock User", "false", "Room", "BlockUnblockUser", "7", "2",
 	"Block User", "false", "Room", "BlockUnblockUser", "6", "3",
 	"Change Duo Room Policy", "false", "User", "ChangePrivacy", "10", "4",
 	"Change Group Room Policy", "false", "User", "ChangePrivacy", "10", "5",
-	"Change Username", "false", "User", "ChangeUsernameFindUsers", "3", "6",
-	"Find Users", "false", "User", "ChangeUsernameFindUsers", "3", "6",
+	"Change Username", "false", "User", "ChangeUsernameFindUsers", "-1", "6",
+	"Find Users", "false", "User", "ChangeUsernameFindUsers", "-1", "7",
 	"Get Messages From Room", "false", "Message", "GetMessagesFromRoom", "-1",
-	"Change Room Name", "false", "Room", "ChangeRoomname", "3",
+	"Change Room Name", "false", "Room", "ChangeRoomName", "-1",
 	"Create Duo Room", "false", "Room", "CreateDuoRoom", "5",
 	"Create Group Room", "false", "Room", "CreateGroupRoom", "6",
 	"",
@@ -65,9 +66,9 @@ var InitMapText = []string{
 func (c *Chat) ParseAndInitUI() {
 
 	SendEventKind := map[string]interface{}{
-		"Room":    &Room{UserIds: make([]uint64, 0, 100), RoomIds: make([]uint64, 0, 100)},
-		"User":    &User{},
-		"Message": &Message{},
+		"Room":    &Room{UserIds: make([]uint64, 0, 100), RoomIds: make([]uint64, 0, 100), ToSend: c.ToSend},
+		"User":    &User{ToSend: c.ToSend},
+		"Message": &Message{ToSend: c.ToSend},
 	}
 
 	target := make([]int, 5)

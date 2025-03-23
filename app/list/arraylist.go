@@ -29,6 +29,7 @@ func (a *ArrayList) MoveToBack(e ListItem) {
 }
 func (a *ArrayList) MoveToFront(e ListItem) {
 	uitem, ok := e.(ArrayItem)
+	uitem.ArrList = a
 	if ok {
 		uitem.idx = len(a.Items)
 		a.Items = append(a.Items, uitem)

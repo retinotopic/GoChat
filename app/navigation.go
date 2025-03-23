@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -89,13 +90,21 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 		sel := []list.Content{}
 		if l >= 0 {
 			sel = c.Lists[l].GetSelected()
+			if len(sel) < 1 {
+				return
+			}
 		}
-		str1 := strconv.FormatUint(c.currentRoom.RoomId, 10)
+		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
 		str2 := c.Lists[3].Items.GetFront().GetMainText()
 
 		sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
 		the current room's id and input area text*/
 		ev.Kind(sel, ev.targets[1:]...)
+		b, err := c.ToSend.Copy()
+		if err != nil {
+			panic("json marshal fatal error")
+		}
+		go WriteTimeout(time.Second*15, c.Conn, b)
 		return
 	}
 	ev.Kind(ev.content, ev.targets...)
@@ -113,11 +122,11 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		}
 		rm, ok := c.RoomMsgs[v]
 		if ok {
-			c.currentRoom = rm
+			c.CurrentRoom = rm
 			c.Lists[8].Items.Clear()
 			ll, ok := c.Lists[8].Items.(*list.ArrayList)
 			if ok {
-				for _, v := range c.currentRoom.Users {
+				for _, v := range c.CurrentRoom.Users {
 					navitem := ll.NewItem(
 						[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
 						v.Username,
@@ -126,8 +135,8 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 					c.Lists[8].Items.MoveToFront(navitem)
 				}
 			}
-			if c.currentRoom.IsGroup {
-				if c.currentRoom.IsAdmin {
+			if c.CurrentRoom.IsGroup {
+				if c.CurrentRoom.IsAdmin {
 					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
 				} else {
 					c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
@@ -138,24 +147,34 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
 	} else {
-		v, err := strconv.Atoi(main[11:])
-		if err != nil {
-			return
-		}
-		l, ok := c.currentRoom.Messages[v]
-		if ok {
-			c.AddItemMainFlex(l, c.Lists[3])
-		} else {
-			ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
+		c.PaginationRoom(main)
+	}
+}
 
-			str1 := strconv.FormatUint(c.currentRoom.RoomId, 10)
-			str2 := c.Lists[3].Items.GetFront().GetMainText()
-			ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.currentRoom.lastMessageID, 10)},
-				{MainText: str1}, {MainText: str2}})
+func (c *Chat) PaginationRoom(maintxt string) {
+	v, err := strconv.Atoi(maintxt[11:])
+	if err != nil {
+		return
+	}
+	l, ok := c.CurrentRoom.Messages[v]
+	if ok {
+		c.AddItemMainFlex(l, c.Lists[3])
+	} else {
+		ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
+
+		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
+		str2 := c.Lists[3].Items.GetFront().GetMainText()
+		ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.CurrentRoom.LastMessageID, 10)},
+			{MainText: str1}, {MainText: str2}})
+		b, err := c.ToSend.Copy()
+		if err != nil {
+			panic("json marshal fatal error")
 		}
+		go WriteTimeout(time.Second*15, c.Conn, b)
 
 	}
 }
+
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
 }

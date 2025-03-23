@@ -75,7 +75,7 @@ func (c *Chat) TryConnect(username, url string) error {
 			continue
 		}
 		switch e.Event {
-		case "GetMessagesFromRoom":
+		case "Get MessagesFrom Room":
 			var msgs []Message
 			err = json.Unmarshal(e.Data, &msgs)
 			if err != nil {
@@ -83,9 +83,9 @@ func (c *Chat) TryConnect(username, url string) error {
 			}
 			c.LoadMessagesEvent(msgs)
 			continue
-		case "FindUser":
+		case "Find Users":
 			c.FillUsers(e.Data, 3, c.FoundUsers)
-		case "GetBlockedUsers":
+		case "Get Blocked Users":
 			c.FillUsers(e.Data, 1, c.BlockedUsers)
 		}
 

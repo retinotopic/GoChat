@@ -64,6 +64,7 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 //		_, err := p.Exec(ctx, "INSERT INTO users (user_subject,user_name,allow_group_invites,allow_direct_messages) VALUES ($1,$2,true,true)", sub, name)
 //		return err
 //	}
+
 func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
@@ -75,9 +76,7 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
 		if err != nil {
 			return err
 		}
-		defer func() {
-			tx.Rollback(ctx)
-		}()
+		defer tx.Rollback(ctx)
 		err = fn.fn(ctx, tx, event)
 		if err != nil {
 			return err
