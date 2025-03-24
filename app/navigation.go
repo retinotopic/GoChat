@@ -124,17 +124,16 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		if ok {
 			c.CurrentRoom = rm
 			c.Lists[8].Items.Clear()
-			ll, ok := c.Lists[8].Items.(*list.ArrayList)
-			if ok {
-				for _, v := range c.CurrentRoom.Users {
-					navitem := ll.NewItem(
-						[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-						v.Username,
-						strconv.FormatUint(v.UserId, 10),
-					)
-					c.Lists[8].Items.MoveToFront(navitem)
-				}
+
+			for _, v := range c.CurrentRoom.Users {
+				navitem := c.Lists[8].Items.NewItem(
+					[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+					v.Username,
+					strconv.FormatUint(v.UserId, 10),
+				)
+				c.Lists[8].Items.MoveToFront(navitem)
 			}
+
 			if c.CurrentRoom.IsGroup {
 				if c.CurrentRoom.IsAdmin {
 					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)

@@ -43,7 +43,7 @@ var InitMapText = []string{
 	"Change Username", "true", "Change Username", "false", "2", "3",
 	"Find Users", "true", "Find Users", "false", "2", "5", "3",
 	"Change Privacy", "true", "Change Duo Room Policy", "false",
-	"Change Group Room Policy", "false", "2", "10",
+	"Change Group Room Policy", "false", "2", "9",
 	"Show Users", "true", "8",
 	"Send Message", "false", "Message", "SendMessage", "-1",
 	"Add Users", "false", "Room", "AddDeleteUsersInRoom", "6", "0",
@@ -51,8 +51,8 @@ var InitMapText = []string{
 	"Get Blocked Users", "false", "User", "GetBlockedUsers", "-1",
 	"Unblock User", "false", "Room", "BlockUnblockUser", "7", "2",
 	"Block User", "false", "Room", "BlockUnblockUser", "6", "3",
-	"Change Duo Room Policy", "false", "User", "ChangePrivacy", "10", "4",
-	"Change Group Room Policy", "false", "User", "ChangePrivacy", "10", "5",
+	"Change Duo Room Policy", "false", "User", "ChangePrivacy", "9", "4",
+	"Change Group Room Policy", "false", "User", "ChangePrivacy", "9", "5",
 	"Change Username", "false", "User", "ChangeUsernameFindUsers", "-1", "6",
 	"Find Users", "false", "User", "ChangeUsernameFindUsers", "-1", "7",
 	"Get Messages From Room", "false", "Message", "GetMessagesFromRoom", "-1",
@@ -123,7 +123,28 @@ func (c *Chat) ParseAndInitUI() {
 		}
 		laststr = v
 	}
-}
+
+	for i := range len(c.Lists) {
+		c.Lists[i] = list.NewList()
+		c.Lists[i].Items = list.NewArrayList(c.MaxMsgsOnPage)
+	}
+	c.Lists[1].Items = list.NewLinkedList(250)
+
+	c.Lists[0].Option = c.OptionEvent
+	c.Lists[1].Option = c.OptionRoom
+	c.Lists[2].Option = c.OptionEvent
+	c.Lists[3].Option = c.OptionInput
+	c.Lists[4].Option = OneOption
+	c.Lists[5].Option = OneOption
+	c.Lists[6].Option = MultOption
+	c.Lists[7].Option = OneOption
+	c.Lists[8].Option = MultOption
+	c.Lists[9].Option = OneOption
+
+	c.Lists[3].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Enter Text Here")
+	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", "")
+	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", "")
+} //
 
 func (c *Chat) EventUI(cnt []list.Content, trgt ...int) {
 	lists := make([]tview.Primitive, 0, 5)

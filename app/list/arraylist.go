@@ -60,7 +60,7 @@ type ArrayItem struct {
 	SecondaryText string
 }
 
-func (a *ArrayList) NewItem(clr [2]tcell.Color, main string, sec string) ArrayItem {
+func (a *ArrayList) NewItem(clr [2]tcell.Color, main string, sec string) ListItem {
 	return ArrayItem{
 		ArrList:       a,
 		Color:         clr,
@@ -68,6 +68,9 @@ func (a *ArrayList) NewItem(clr [2]tcell.Color, main string, sec string) ArrayIt
 		MainTextBuf:   nil,
 		SecondaryText: sec,
 	}
+}
+func (a ArrayItem) GetParent() ListItems {
+	return a.ArrList
 }
 func (a ArrayItem) GetMainText() string {
 	if a.MainTextBuf != nil {

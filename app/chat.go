@@ -52,9 +52,9 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists [11]*list.List /* menu[0],rooms[1],events[2]
+	Lists [11]*list.List /* menu[0],rooms[1],events menu[2]
 	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
-	BlockedUsers[7],RoomUsers[8],Boolean[10]*/
+	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
 	CurrentRoom *RoomInfo // current selected Room
 	CurrentText string    // current text for user search || set room name || message
@@ -70,12 +70,6 @@ func NewChat(username, url string, maxMsgsOnPage int) (chat *Chat, err error) {
 	c := &Chat{}
 	c.MaxMsgsOnPage = maxMsgsOnPage
 	c.ToSend = &SendEvent{}
-	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList()
-		c.Lists[i].Items = list.NewArrayList(c.MaxMsgsOnPage)
-	}
-	c.Lists[1].Items = list.NewLinkedList(250)
-
 	c.ParseAndInitUI()
 	c.PreLoadNavigation()
 	err = c.TryConnect(username, url)
@@ -127,7 +121,8 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 			)
 
 			ll.MoveToFront(nextpgn)
-			l := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.OptionRoom}
+			l := &list.List{Box: tview.NewBox().SetBorder(true),
+				Items: ll, Option: c.OptionRoom}
 			rm.Messages[rm.MsgPageIdBack] = l
 		})
 	}
@@ -142,9 +137,8 @@ func (c *Chat) NewMessageEvent(msg Message) {
 			if ok2 {
 
 				if l.Items.Len() >= c.MaxMsgsOnPage {
-					lv := l.Items.(*list.ArrayList) // to correct type assertion l.Items MUST always be *list.ArrayList
 					rm.MsgPageIdFront++
-					nextpgn := lv.NewItem(
+					nextpgn := l.Items.NewItem(
 						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 						"",
 						"Next Page: "+strconv.Itoa(rm.MsgPageIdFront),
@@ -159,13 +153,12 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					)
 					ll.MoveToBack(prevpgn)
 
-					lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.OptionRoom}
+					lst := &list.List{Box: tview.NewBox().SetBorder(true),
+						Items: ll, Option: c.OptionRoom}
 					rm.Messages[rm.MsgPageIdFront] = lst
 
 				} else {
-
-					lv := l.Items.(*list.ArrayList)
-					msg := lv.NewItem(
+					msg := l.Items.NewItem(
 						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 						rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
 						"UserId: "+strconv.FormatUint(msg.UserId, 10),
@@ -181,7 +174,8 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront),
 				)
 				ll.MoveToBack(prevpgn)
-				lst := &list.List{Box: tview.NewBox().SetBorder(true), Items: ll, Current: ll.GetFront(), Option: c.OptionRoom}
+				lst := &list.List{Box: tview.NewBox().SetBorder(true),
+					Items: ll, Option: c.OptionRoom}
 				rm.Messages[rm.MsgPageIdFront] = lst
 			}
 		})
@@ -226,14 +220,11 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 			rm.Users[rmsv.Users[i].UserId] = rmsv.Users[i]
 		}
 		// set new room at the top
-		ll, ok := c.Lists[1].Items.(*list.LinkedList) // MUST BE LINKED LIST
-		if ok {
-			rmitem := ll.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
-			c.Lists[1].Items.MoveToFront(rmitem)
-			rm.RoomItem = rmitem
-		} else {
-			panic("its not linked list, wtf?")
-		}
+		rmitem := c.Lists[1].Items.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+			rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
+		c.Lists[1].Items.MoveToFront(rmitem)
+		rm.RoomItem = rmitem
+
 		if rmsv.CreatedByUserId == c.UserId {
 			rm.IsAdmin = true
 		}

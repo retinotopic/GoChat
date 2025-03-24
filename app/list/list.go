@@ -33,6 +33,7 @@ type List struct {
 }
 
 type ListItem interface {
+	GetParent() ListItems
 	GetMainText() string
 	GetSecondaryText() string
 	GetColor(int) tcell.Color
@@ -46,6 +47,7 @@ type ListItem interface {
 	IsNil() bool
 }
 type ListItems interface {
+	NewItem([2]tcell.Color, string, string) ListItem
 	MoveToFront(ListItem)
 	MoveToBack(ListItem)
 	GetFront() ListItem
@@ -67,6 +69,9 @@ func (l *List) GetSelected() []Content {
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
+	if l.Current == nil && l.Items.Len() > 0 {
+		l.Current = l.Items.GetFront()
+	}
 	element := l.Items.GetFront()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
@@ -177,6 +182,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 		case tcell.KeyEnter:
 			if l.Option != nil {
 				l.Option(l.Current)
+				l.Current.
 			}
 		}
 	})

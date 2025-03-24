@@ -91,7 +91,7 @@ func (l *LinkedList) Len() int {
 	return len(l.items) - len(l.stack)
 }
 
-func (l *LinkedList) NewItem(clr [2]tcell.Color, main string, sec string) *LinkedItem {
+func (l *LinkedList) NewItem(clr [2]tcell.Color, main string, sec string) ListItem {
 	if len(l.stack) == 0 {
 		return nil
 	}
@@ -116,6 +116,9 @@ type LinkedItem struct {
 	prev          *LinkedItem
 }
 
+func (l *LinkedItem) GetParent() ListItems {
+	return l.parent
+}
 func (l *LinkedItem) GetMainText() string {
 	if l.MainTextBuf != nil {
 		return l.MainTextBuf.String()
