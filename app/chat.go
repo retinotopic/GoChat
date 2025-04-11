@@ -66,7 +66,7 @@ type Chat struct {
 	ToSend *SendEvent
 }
 
-func NewChat(username, url string, maxMsgsOnPage int) (chat *Chat, err error) {
+func NewChat(username, url string, maxMsgsOnPage int, debug bool) (chat *Chat, err error) {
 	c := &Chat{}
 	c.MaxMsgsOnPage = maxMsgsOnPage
 	c.ToSend = &SendEvent{}
@@ -121,8 +121,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 			)
 
 			ll.MoveToFront(nextpgn)
-			l := &list.List{Box: tview.NewBox().SetBorder(true),
-				Items: ll, Option: c.OptionRoom}
+			l := list.NewList(ll, c.OptionRoom)
 			rm.Messages[rm.MsgPageIdBack] = l
 		})
 	}
@@ -153,8 +152,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					)
 					ll.MoveToBack(prevpgn)
 
-					lst := &list.List{Box: tview.NewBox().SetBorder(true),
-						Items: ll, Option: c.OptionRoom}
+					lst := list.NewList(ll, c.OptionRoom)
 					rm.Messages[rm.MsgPageIdFront] = lst
 
 				} else {
@@ -174,8 +172,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront),
 				)
 				ll.MoveToBack(prevpgn)
-				lst := &list.List{Box: tview.NewBox().SetBorder(true),
-					Items: ll, Option: c.OptionRoom}
+				lst := list.NewList(ll, c.OptionRoom)
 				rm.Messages[rm.MsgPageIdFront] = lst
 			}
 		})

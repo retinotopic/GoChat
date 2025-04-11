@@ -1,7 +1,7 @@
 package app
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"strconv"
 	"time"
 
@@ -78,7 +78,7 @@ func (c *Chat) PreLoadNavigation() {
 
 /*
 one of the most important methods, pressing a functional option either changes the state of the current UI
-or sends a request to the server if it is a form submission
+or sends a request to the server
 */
 func (c *Chat) OptionEvent(item list.ListItem) {
 	key := list.Content{}
@@ -176,8 +176,11 @@ func (c *Chat) PaginationRoom(maintxt string) {
 
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
+	c.Lists[3].Items.GetFront().SetSecondaryText("Type The Text")
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	c.IsInputActive = false
+	c.Lists[3].Items.GetFront().SetSecondaryText("Press Enter Here To Type Text")
 	c.MainFlex.Clear()
 	for _, v := range prmtvs {
 		c.MainFlex.AddItem(v, 0, 2, true)

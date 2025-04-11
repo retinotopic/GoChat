@@ -26,13 +26,11 @@ func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	p.conn = conn
-	p.UserId = userid
-	err = WriteTimeout(time.Second*15, p.conn, b)
+	err = WriteTimeout(time.Second*15, conn, b)
 	if err != nil {
-		p.conn.CloseNow()
+		conn.CloseNow()
 	}
-	p.WsHandle()
+	p.WsHandle(userid, conn)
 }
 
 type Databaser interface {
@@ -48,47 +46,45 @@ type Publisher interface {
 
 // Publish||Subscribe Service
 type PubSub struct {
-	UserId uint64
-	Pb     Publisher
-	Db     Databaser
-	Log    logger.Logger
-	conn   *websocket.Conn
-	errch  chan bool
+	Pb  Publisher
+	Db  Databaser
+	Log logger.Logger
 }
 
-func (p *PubSub) WsHandle() {
-	p.errch = make(chan bool, 10)
+func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
+	errch := make(chan bool, 10)
 	defer func() {
-		p.conn.CloseNow()
-		p.errch <- true
+		conn.CloseNow()
+		errch <- true
 	}()
-	go p.ReadPubSub()
+	go p.ReadPubSub(userid, errch, conn)
 	startevent := &models.Event{Event: "GetAllRooms"}
-	p.ProcessEvent(startevent)
+	p.ProcessEvent(startevent, conn)
 	for {
-		_, b, err := p.conn.Read(context.TODO()) // incoming client user requests
+		_, b, err := conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
 			return
 		}
 		event := &models.Event{Data: b}
 		event.GetEventName()
-		go p.ProcessEvent(event)
+		go p.ProcessEvent(event, conn)
 	}
 }
 
-func (p *PubSub) ReadPubSub() {
+func (p *PubSub) ReadPubSub(userid uint64, errch <-chan bool, conn *websocket.Conn) {
+	userId := strconv.Itoa(int(userid))
 	closech := make(chan bool, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
-	chps := p.Pb.Channel(ctx, closech, strconv.Itoa(int(p.UserId)))
+	chps := p.Pb.Channel(ctx, closech, userId)
 	for {
 		select {
 		case b := <-chps: // incoming successful events from others users
-			err := WriteTimeout(time.Second*15, p.conn, b)
+			err := WriteTimeout(time.Second*15, conn, b)
 			if err != nil {
-				p.conn.CloseNow()
+				conn.CloseNow()
 			}
-		case <-p.errch:
+		case <-errch:
 			closech <- true
 		}
 	}
@@ -99,34 +95,33 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func (p *PubSub) ProcessEvent(event *models.Event) {
+func (p *PubSub) ProcessEvent(event *models.Event, conn *websocket.Conn) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 	err := p.Db.FuncApi(ctx, event)
-
 	event.ErrorMsg = err.Error()
 	for i := range event.OrderCmd {
 		switch event.OrderCmd[i] {
 		case 1:
 			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(event.Data))
 			if err != nil {
-				p.conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
+				conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
 			}
 		case 2:
 			err = p.Pb.PublishWithSubscriptions(ctx, event.PubForSub, event.SubForPub, event.Kind)
 			if err != nil {
-				p.conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
+				conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
 			}
 		}
 	}
 
 	bs, err := json.Marshal(event)
 	if err != nil {
-		p.conn.Close(websocket.StatusInternalError, "Marshal error")
+		conn.Close(websocket.StatusInternalError, "Marshal error")
 	}
-	err = WriteTimeout(time.Second*15, p.conn, bs)
+	err = WriteTimeout(time.Second*15, conn, bs)
 	if err != nil {
-		p.conn.CloseNow()
+		conn.CloseNow()
 	}
 }

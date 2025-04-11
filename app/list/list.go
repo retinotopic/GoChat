@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/bytedance/sonic/option"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -13,10 +14,11 @@ type Content struct {
 	SecondaryText string
 }
 
-func NewList() *List {
-
+func NewList(items ListItems, option func(ListItem)) *List {
 	return &List{
-		Box:         tview.NewBox(),
+		Option:      option,
+		Items:       items,
+		Box:         tview.NewBox().SetBorder(true),
 		lines:       make([]string, 0, 1000),
 		selectedBuf: make([]Content, 0, 100),
 	}
@@ -182,7 +184,6 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 		case tcell.KeyEnter:
 			if l.Option != nil {
 				l.Option(l.Current)
-				l.Current.
 			}
 		}
 	})
