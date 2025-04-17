@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"io"
 	"os"
 
 	// "github.com/jackc/pgx/v5/stdlib"
@@ -16,10 +15,10 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		token := scanner.Text()
-		io.WriteString(os.Stdout, token)
-		io.WriteString(bufstr, token)
+		bufstr.WriteString(token)
+		break
 	}
-	_, err := app.NewChat(bufstr.String(), os.Getenv("CHAT_CONNECT_ADDRESS"))
+	_, err := app.NewChat(bufstr.String(), os.Getenv("CHAT_CONNECT_ADDRESS"), 30, true)
 	if err != nil {
 		panic(err)
 	}

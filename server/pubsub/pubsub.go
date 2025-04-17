@@ -34,7 +34,7 @@ func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 }
 
 type Databaser interface {
-	FuncApi(ctx context.Context, event *models.Event) error
+	FuncApi(ctx context.Context, event *models.EventMetadata) error
 	GetUser(ctx context.Context, sub string) ([]byte, uint64, error)
 }
 
@@ -58,14 +58,14 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 		errch <- true
 	}()
 	go p.ReadPubSub(userid, errch, conn)
-	startevent := &models.Event{Event: "GetAllRooms"}
+	startevent := &models.EventMetadata{Event: "GetAllRooms"}
 	p.ProcessEvent(startevent, conn)
 	for {
 		_, b, err := conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
 			return
 		}
-		event := &models.Event{Data: b}
+		event := &models.EventMetadata{Data: b}
 		event.GetEventName()
 		go p.ProcessEvent(event, conn)
 	}
@@ -95,7 +95,7 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func (p *PubSub) ProcessEvent(event *models.Event, conn *websocket.Conn) {
+func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()

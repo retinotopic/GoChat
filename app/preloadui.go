@@ -123,23 +123,14 @@ func (c *Chat) ParseAndInitUI() {
 		}
 		laststr = v
 	}
+	options := []func(list.ListItem){c.OptionEvent, c.OptionRoom, c.OptionEvent, c.OptionInput,
+		OneOption, OneOption, MultOption, OneOption, MultOption, OneOption}
 
 	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList()
+		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i])
 		c.Lists[i].Items = list.NewArrayList(c.MaxMsgsOnPage)
 	}
 	c.Lists[1].Items = list.NewLinkedList(250)
-
-	c.Lists[0].Option = c.OptionEvent
-	c.Lists[1].Option = c.OptionRoom
-	c.Lists[2].Option = c.OptionEvent
-	c.Lists[3].Option = c.OptionInput
-	c.Lists[4].Option = OneOption
-	c.Lists[5].Option = OneOption
-	c.Lists[6].Option = MultOption
-	c.Lists[7].Option = OneOption
-	c.Lists[8].Option = MultOption
-	c.Lists[9].Option = OneOption
 
 	c.Lists[3].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Enter Text Here")
 	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", "")

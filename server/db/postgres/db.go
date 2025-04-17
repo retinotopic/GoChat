@@ -22,7 +22,7 @@ type Limiter interface {
 	Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error)
 }
 type FuncLimiter struct {
-	fn     func(context.Context, pgx.Tx, *models.Event) error
+	fn     func(context.Context, pgx.Tx, *models.EventMetadata) error
 	rate   int
 	burst  int
 	period time.Duration
@@ -65,7 +65,7 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 //		return err
 //	}
 
-func (p *PgClient) FuncApi(ctx context.Context, event *models.Event) error {
+func (p *PgClient) FuncApi(ctx context.Context, event *models.EventMetadata) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
 		err := p.Lm.Allow(ctx, event.Event, fn.rate, fn.burst, fn.period)

@@ -25,7 +25,8 @@
           packages = with pkgs; [
             # go (version is specified by overlay)
             go
-            air
+            postgresql
+            docker
             # goimports, godoc, etc.
             gotools
             gopls

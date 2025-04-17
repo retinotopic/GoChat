@@ -18,7 +18,7 @@ type Message struct {
 	UserId         uint64 `json:"UserId" `
 }
 
-func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	m := &Message{}
 	err := json.Unmarshal(event.Data, m)
 	if err != nil {
@@ -35,7 +35,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	event.SubForPub = []string{strconv.Itoa(int(m.RoomId))}
 	return err
 }
-func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	m := &Message{}
 	err := json.Unmarshal(event.Data, m)
 	if err != nil {

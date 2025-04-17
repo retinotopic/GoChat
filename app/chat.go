@@ -1,7 +1,6 @@
 package app
 
 import (
-	"image/color"
 	"strconv"
 
 	"github.com/coder/websocket"

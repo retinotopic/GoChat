@@ -17,7 +17,7 @@ type User struct {
 	RoomToggle bool   `json:"Bool" `
 }
 
-func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	u := &User{}
 	err := json.Unmarshal(event.Data, u)
 	if err != nil {
@@ -39,7 +39,7 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
-func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	u := &User{}
 	err := json.Unmarshal(event.Data, u)
 	if err != nil {
@@ -54,7 +54,7 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.Event) er
 	}
 	return err
 }
-func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	u := &User{}
 	err := json.Unmarshal(event.Data, u)
 	if err != nil {
@@ -69,7 +69,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.Event) err
 	}
 	return err
 }
-func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	u := &User{}
 	err := json.Unmarshal(event.Data, u)
 	if err != nil {
@@ -93,7 +93,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
-func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	rows, err := tx.Query(ctx,
 		`SELECT u.user_name,b.blocked_user_id FROM blocked_users b JOIN users u ON u.user_id = b.blocked_user_id WHERE blocked_by_user_id = $1`, event.UserId)
 	if err != nil {

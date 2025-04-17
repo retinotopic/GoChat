@@ -28,7 +28,7 @@ type RoomClient struct {
 	UserId          uint64 `json:"-" `
 }
 
-func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error) {
+func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (err error) {
 	rows, err := tx.Query(ctx,
 		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,r.created_by_user_id,u.user_name
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
@@ -54,7 +54,7 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.Event) (err error
 	event.Kind = "1"
 	return err
 }
-func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	first, second := r.UserIds[0], event.UserId
 	if event.UserId > r.RoomIds[0] {
 		first, second = event.UserId, r.UserIds[0]
@@ -70,7 +70,7 @@ func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *mode
 }
 
 // method for safely creating unique duo room
-func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 
 	err := json.Unmarshal(event.Data, r)
@@ -118,7 +118,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	return err
 }
 
-func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -152,7 +152,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error 
 	event.Kind = "1"
 	return err
 }
-func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -184,7 +184,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	event.Kind = "1"
 	return err
 }
-func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -223,7 +223,7 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.Event) er
 }
 
 // Blocking user and delete user from room_users_info
-func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -253,7 +253,7 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 }
 
 // Unblocking user
-func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {
@@ -272,7 +272,7 @@ func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.Event) error {
 	}
 	return err
 }
-func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.Event) error {
+func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r := &RoomRequest{}
 	err := json.Unmarshal(event.Data, r)
 	if err != nil {

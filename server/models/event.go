@@ -4,7 +4,7 @@ import (
 	"bytes"
 )
 
-type Event struct {
+type EventMetadata struct {
 	Event     string   `json:"Event"`
 	ErrorMsg  string   `json:"ErrorMsg"`
 	UserId    uint64   `json:"UserId"`
@@ -15,7 +15,7 @@ type Event struct {
 	Data      []byte   `json:"-"` // data to be sent over connection
 }
 
-func (e *Event) GetEventName() string {
+func (e *EventMetadata) GetEventName() string {
 	start := bytes.IndexByte(e.Data, '"')
 	if start == -1 {
 		return ""

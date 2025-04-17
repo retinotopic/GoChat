@@ -29,7 +29,7 @@ func Test_ArrayList(t *testing.T) {
 	l3 := arr.NewItem(clrs, "SampleText", "SampleText")
 	arr.MoveToFront(l3)
 
-	if arr.GetFront().(list.ArrayItem).GetId() == l3.GetId() {
+	if arr.GetFront().(list.ArrayItem).GetId() == l3.(list.ArrayItem).GetId() {
 		t.Errorf("Index mismatch")
 	}
 	if arr.Len() != 4 {
