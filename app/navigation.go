@@ -45,29 +45,33 @@ func (c *Chat) StartEventUILoop() {
 func (c *Chat) PreLoadNavigation() {
 	c.MainFlex = tview.NewFlex()
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyLeft:
-			c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
-			return event
-		case tcell.KeyRight:
-			c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
-			return event
-		case tcell.KeyRune: // write letter via buffer.WriteString
-			if c.IsInputActive {
+		if c.IsInputActive {
+			switch event.Key() {
+			case tcell.KeyRune: // write letter via buffer.WriteString
 				txt := c.Lists[3].Items.GetFront().GetMainText()
 				if len([]rune(txt)) <= 300 {
 					r := event.Rune()
 					c.Lists[3].Items.GetFront().SetMainText(string(r), 1)
 				}
-			}
-		case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
-			if c.IsInputActive {
+			case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
 				main := c.Lists[3].Items.GetFront().GetMainText()
 				mr := []rune(main)
 				if len(mr) != 0 {
 					mr = mr[:len(mr)-1]
 					c.Lists[3].Items.GetFront().SetMainText(string(mr), 2)
 				}
+			}
+
+		}
+		switch event.Key() {
+		case tcell.KeyLeft:
+			if c.NavState > 0 {
+				c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
+
+			}
+		case tcell.KeyRight:
+			if c.NavState < c.ListCount-1 {
+				c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
 			}
 		}
 		return event
@@ -179,6 +183,8 @@ func (c *Chat) OptionInput(item list.ListItem) {
 	c.Lists[3].Items.GetFront().SetSecondaryText("Type The Text")
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	c.NavState = 0
+	c.ListCount = len(prmtvs)
 	c.IsInputActive = false
 	c.Lists[3].Items.GetFront().SetSecondaryText("Press Enter Here To Type Text")
 	c.MainFlex.Clear()

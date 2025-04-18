@@ -59,6 +59,7 @@ type Chat struct {
 	CurrentText string    // current text for user search || set room name || message
 
 	NavState      int
+	ListCount     int // the number of lists on the main page at the moment
 	stopeventUI   bool
 	IsInputActive bool
 
@@ -77,14 +78,16 @@ func NewChat(username, url string, maxMsgsOnPage int, debug bool) (chat *Chat, e
 	}
 	return c, err
 }
+
 func (c *Chat) Run() error {
 	go c.StartEventUILoop()
-	c.App.Stop()
-	if err := c.App.SetRoot(c.MainFlex, true).Run(); err != nil {
+	defer func() {
+		c.App.Stop()
 		c.stopeventUI = true
-		return err
-	}
+	}()
+	return c.App.SetRoot(c.MainFlex, true).Run()
 }
+
 func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	if len(msgsv) == 0 {
 		return

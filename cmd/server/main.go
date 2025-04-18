@@ -19,9 +19,9 @@ import (
 
 func main() {
 	log := zerolog.NewZerologLogger(os.Stdout)
-	addr := flag.String("addr", "localhost:8080", "app address")
-	rdaddr := flag.String("rdaddr", "localhost:6379", "redis address")
-	pgaddr := flag.String("pgaddr", "localhost:5432", "postgres address")
+	addr := flag.String("addr", "0.0.0.0:8080", "app address")
+	rdaddr := flag.String("rdaddr", "redis:6379", "redis address")
+	pgaddr := flag.String("pgaddr", "postgres:5432", "postgres address")
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 

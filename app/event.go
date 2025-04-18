@@ -2,9 +2,10 @@ package app
 
 import (
 	"encoding/json"
-	"strconv"
-
+	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
+	"github.com/rivo/tview"
+	"strconv"
 )
 
 type SendEvent struct {
@@ -29,6 +30,29 @@ type Room struct {
 	RoomIds  []uint64 `json:"RoomIds" `
 	RoomName string   `json:"RoomName" `
 	IsGroup  bool     `json:"IsGroup" `
+}
+
+func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
+	lists := make([]tview.Primitive, 0, 5)
+	c.Lists[trg[0]].Items.Clear()
+	ll, ok := c.Lists[trg[0]].Items.(*list.ArrayList)
+	if ok {
+		for i := range cnt {
+			a := list.ArrayItem{}
+			a.ArrList = ll
+			a.Color = [2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}
+
+			a.MainText = cnt[i].MainText
+
+			a.SecondaryText = cnt[i].SecondaryText
+
+			c.Lists[trg[0]].Items.MoveToFront(a)
+		}
+	}
+	for i := range trg {
+		lists = append(lists, c.Lists[trg[i]])
+	}
+	c.AddItemMainFlex(lists...)
 }
 
 // Room SendEvents

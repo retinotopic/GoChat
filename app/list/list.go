@@ -4,7 +4,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bytedance/sonic/option"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )

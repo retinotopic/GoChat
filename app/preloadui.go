@@ -6,8 +6,6 @@ import (
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
-	// "github.com/mattn/go-isatty"
-	"github.com/rivo/tview"
 
 	"github.com/retinotopic/GoChat/app/list"
 )
@@ -136,29 +134,6 @@ func (c *Chat) ParseAndInitUI() {
 	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", "")
 	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", "")
 } //
-
-func (c *Chat) EventUI(cnt []list.Content, trgt ...int) {
-	lists := make([]tview.Primitive, 0, 5)
-	c.Lists[trgt[0]].Items.Clear()
-	ll, ok := c.Lists[trgt[0]].Items.(*list.ArrayList)
-	if ok {
-		for i := range cnt {
-			a := list.ArrayItem{}
-			a.ArrList = ll
-			a.Color = [2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}
-
-			a.MainText = cnt[i].MainText
-
-			a.SecondaryText = cnt[i].SecondaryText
-
-			c.Lists[trgt[0]].Items.MoveToFront(a)
-		}
-	}
-	for i := range trgt {
-		lists = append(lists, c.Lists[trgt[i]])
-	}
-	c.AddItemMainFlex(lists...)
-}
 
 type LoadingState struct {
 	message         string
