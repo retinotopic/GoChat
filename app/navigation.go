@@ -174,7 +174,6 @@ func (c *Chat) PaginationRoom(maintxt string) {
 			panic("json marshal fatal error")
 		}
 		go WriteTimeout(time.Second*15, c.Conn, b)
-
 	}
 }
 

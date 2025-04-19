@@ -3,10 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"net/http"
-	"os"
-	"time"
-
+	"fmt"
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -15,26 +12,37 @@ import (
 	"github.com/retinotopic/GoChat/server/logger/loggers/zerolog"
 	rd "github.com/retinotopic/GoChat/server/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/server/router"
+	"net/http"
+	"os"
+	"time"
 )
 
 func main() {
 	log := zerolog.NewZerologLogger(os.Stdout)
-	addr := flag.String("addr", "0.0.0.0:8080", "app address")
-	rdaddr := flag.String("rdaddr", "redis:6379", "redis address")
-	pgaddr := flag.String("pgaddr", "postgres:5432", "postgres address")
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
+	pgHost := os.Getenv("POSTGRES_HOST")
+	pgPort := os.Getenv("POSTGRES_PORT")
+	pgUser := os.Getenv("POSTGRES_USER")
+	pgPassword := os.Getenv("POSTGRES_PASSWORD")
+	pgDB := os.Getenv("POSTGRES_DB")
+	pgSSLMode := os.Getenv("POSTGRES_SSLMODE")
+
+	dsn := fmt.Sprintf(
+		"user=%s password=%s host=%s port=%s dbname=%s sslmode=%s",
+		pgUser, pgPassword, pgHost, pgPort, pgDB, pgSSLMode,
+	)
 	flag.Parse()
 	client := redis.NewClient(&redis.Options{
-		Addr: *rdaddr,
+		Addr: os.Getenv("REDIS_HOST") + os.Getenv("REDIS_PORT"),
 	})
 	rds := &rd.Redis{
 		Client:  client,
 		Log:     log,
 		Limiter: redis_rate.NewLimiter(client),
 	}
-	pgclient, err := db.NewPgClient(ctx, *pgaddr, rds)
+	pgclient, err := db.NewPgClient(ctx, dsn, rds)
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
@@ -57,7 +65,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(*addr, FetchUser, rds, pgclient, log)
+	srv := router.NewRouter(os.Getenv("SERVER_CONNECT_ADDR"), FetchUser, rds, pgclient, log)
 
 	err = srv.Run(ctx)
 	if err != nil {

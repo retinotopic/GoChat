@@ -1,0 +1,71 @@
+---
+services:
+  frontend_tui:
+    build: ./app
+    environment:
+      SERVER_CONNECT_ADDR=0.0.0.0:8080
+    networks:
+      - public
+    depends_on:
+      depends_on:
+        backend
+
+  backend:
+    build: ./server
+    env_file: ./secrets/var.dev
+    environment:
+      - PG_HOST=postgres
+      - PG_DATABASE=mydb
+      - PG_USER=myuser
+      - PG_PORT=5432
+      - PG_SSLMODE=verify-ca
+      - REDIS_HOST=redis
+      - REDIS_PORT=:6379
+      - APP_ADDR=0.0.0.0:8080
+    networks:
+      - public
+      - private
+    ports:
+      - "8080:8080"
+    depends_on:
+      depends_on:
+        redis:
+          condition: service_healthy
+        postgres:
+          condition: service_healthy
+
+  redis:
+    image: redis:7.4.2-alpine3.21
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+    networks:
+      - private
+
+  postgres:
+    user: user
+    image: postgres:17.4-alpine3.21
+    restart: always
+    environment:
+      POSTGRES_DB: db
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets:
+      - pg_password
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - private
+      
+secrets:
+  pg_password:
+    file: ./secrets/pg_password.txt
+    
+networks:
+  public
+  private
