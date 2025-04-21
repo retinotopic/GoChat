@@ -1,21 +1,20 @@
 FROM golang:1.24.2-alpine3.21 AS builder
-
-RUN apk add --no-cache mkcert ca-certificates && \
-    mkdir -p /ssl && \
-    mkcert -install && \
-    mkcert -cert-file /ssl/localhost.pem -key-file /ssl/localhost-key.pem 0.0.0.0 localhost 127.0.0.1 ::1
+RUN apk add --no-cache git
 
 WORKDIR /build
-COPY go.mod go.sum ./
+COPY --from=cmd_server . .
+COPY go.mod go.sum .
+COPY /server ./server/
+RUN go mod tidy
 RUN go mod download
-COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /main main.go
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /build/cmd .
+FROM alpine/mkcert AS certs
+RUN mkcert -install && \
+    mkcert -key-file key.pem -cert-file cert.pem 0.0.0.0 localhost 127.0.0.1 ::1
 
-FROM scratch
-
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /ssl /ssl
-COPY --from=builder /build/cmd /cmd
-
-ENTRYPOINT ["/cmd"]
+FROM alpine:3.21
+COPY --from=builder /build/server/db/postgres/migrations /bin/maindir/migrations
+COPY --from=builder main /bin/maindir
+COPY --from=certs /key.pem /cert.pem .
+ENTRYPOINT ["/bin/maindir/main"]

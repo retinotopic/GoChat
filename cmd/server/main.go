@@ -4,6 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -12,16 +16,12 @@ import (
 	"github.com/retinotopic/GoChat/server/logger/loggers/zerolog"
 	rd "github.com/retinotopic/GoChat/server/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/server/router"
-	"net/http"
-	"os"
-	"time"
 )
 
 func main() {
 	log := zerolog.NewZerologLogger(os.Stdout)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-
 	pgHost := os.Getenv("POSTGRES_HOST")
 	pgPort := os.Getenv("POSTGRES_PORT")
 	pgUser := os.Getenv("POSTGRES_USER")
@@ -35,7 +35,7 @@ func main() {
 	)
 	flag.Parse()
 	client := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("REDIS_HOST") + os.Getenv("REDIS_PORT"),
+		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
 	})
 	rds := &rd.Redis{
 		Client:  client,
@@ -59,7 +59,7 @@ func main() {
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal("goose set dialect:", err)
 	}
-	if err := goose.Up(dbs, "migrations"); err != nil {
+	if err := goose.Up(dbs, "/bin/maindir/migrations"); err != nil {
 		log.Fatal("goose up:", err)
 	}
 	if err := dbs.Close(); err != nil {

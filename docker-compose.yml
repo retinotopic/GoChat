@@ -1,26 +1,36 @@
 ---
 services:
   frontend_tui:
-    build: ./app
+    build:
+      network: host
+      context: .
+      additional_contexts:
+        cmd_app: ./cmd/app
+      dockerfile: ./cmd/app/Dockerfile
     environment:
-      SERVER_CONNECT_ADDR=0.0.0.0:8080
+      - CHAT_CONNECT_ADDR=0.0.0.0:8080
     networks:
       - public
     depends_on:
-      depends_on:
-        backend
+      - backend
+
 
   backend:
-    build: ./server
-    env_file: ./secrets/var.dev
+    build:
+      network: host
+      context: .
+      additional_contexts:
+        cmd_server: ./cmd/server
+      dockerfile: ./cmd/server/Dockerfile
+    env_file: ./cmd/secrets/var.dev
     environment:
       - PG_HOST=postgres
-      - PG_DATABASE=mydb
-      - PG_USER=myuser
+      - PG_DATABASE=postgres
+      - PG_USER=postgres
       - PG_PORT=5432
       - PG_SSLMODE=verify-ca
       - REDIS_HOST=redis
-      - REDIS_PORT=:6379
+      - REDIS_PORT=6379
       - APP_ADDR=0.0.0.0:8080
     networks:
       - public
@@ -28,17 +38,16 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      depends_on:
-        redis:
-          condition: service_healthy
-        postgres:
-          condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   redis:
     image: redis:7.4.2-alpine3.21
     restart: always
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 1s
       timeout: 2s
       retries: 10
@@ -46,12 +55,12 @@ services:
       - private
 
   postgres:
-    user: user
     image: postgres:17.4-alpine3.21
     restart: always
+    user: postgres
     environment:
-      POSTGRES_DB: db
-      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+      # POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: /run/secrets/pg_password
     secrets:
       - pg_password
     healthcheck:
@@ -64,8 +73,8 @@ services:
       
 secrets:
   pg_password:
-    file: ./secrets/pg_password.txt
+    file: ./cmd/secrets/pg_password.txt
     
 networks:
-  public
-  private
+  public:
+  private:
