@@ -7,9 +7,9 @@ CREATE TABLE public.users (
     allow_direct_messages boolean DEFAULT true NOT NULL,
     count_rooms integer DEFAULT 0 NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (user_id),
-    CONSTRAINT username_unique UNIQUE (username)
+    CONSTRAINT username_unique UNIQUE (user_name)
 );
-CREATE INDEX trgm_idx_users_username ON public.users USING gin (username public.gin_trgm_ops);
+CREATE INDEX trgm_idx_users_username ON public.users USING gin (user_name public.gin_trgm_ops);
 
 
 -- +goose Down

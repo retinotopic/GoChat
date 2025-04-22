@@ -8,7 +8,10 @@ services:
         cmd_app: ./cmd/app
       dockerfile: ./cmd/app/Dockerfile
     environment:
-      - CHAT_CONNECT_ADDR=0.0.0.0:8080
+      - APP_HOST=backend
+      - APP_PORT=8080
+    stdin_open: true
+    tty: true
     networks:
       - public
     depends_on:
@@ -16,6 +19,7 @@ services:
 
 
   backend:
+    image: backendimage
     build:
       network: host
       context: .
@@ -24,14 +28,16 @@ services:
       dockerfile: ./cmd/server/Dockerfile
     env_file: ./cmd/secrets/var.dev
     environment:
+      - MIGRATIONS_DIR=/bin/maindir/migrations
       - PG_HOST=postgres
       - PG_DATABASE=postgres
       - PG_USER=postgres
-      - PG_PORT=5432
-      - PG_SSLMODE=verify-ca
+      - PG_PORT=5433
+      - PG_SSLMODE=prefer
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - APP_ADDR=0.0.0.0:8080
+      # - APP_HOST=backend
+      - APP_PORT=8080
     networks:
       - public
       - private
@@ -59,8 +65,12 @@ services:
     restart: always
     user: postgres
     environment:
-      # POSTGRES_DB: postgres
-      POSTGRES_PASSWORD: /run/secrets/pg_password
+      PGSSLMODE: prefer
+      PGPORT: 5433
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      PG_TRUST_LOCALNET: true
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
     secrets:
       - pg_password
     healthcheck:

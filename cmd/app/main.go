@@ -3,11 +3,11 @@ package main
 import (
 	"bufio"
 	"bytes"
+
+	// "log"
 	"os"
 
-	// "github.com/jackc/pgx/v5/stdlib"
 	"github.com/retinotopic/GoChat/app"
-	// "github.com/rivo/tview"
 )
 
 func main() {
@@ -18,9 +18,9 @@ func main() {
 		bufstr.WriteString(token)
 		break
 	}
-	_, err := app.NewChat(bufstr.String(), os.Getenv("CHAT_CONNECT_ADDRESS"), 30, true)
+	wsUrl := "wss://" + os.Getenv("APP_HOST") + ":" + os.Getenv("APP_PORT") + "/connect"
+	_, err := app.NewChat(bufstr.String(), wsUrl, 30, true)
 	if err != nil {
 		panic(err)
 	}
-
 }

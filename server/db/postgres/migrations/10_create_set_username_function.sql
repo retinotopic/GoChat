@@ -3,8 +3,8 @@
 CREATE FUNCTION public.set_username() RETURNS trigger
     LANGUAGE plpgsql
     AS $$BEGIN
-    IF NEW.username IS NULL THEN
-        NEW.username := 'user' || NEW.user_id::text;
+    IF NEW.user_name IS NULL THEN
+        NEW.user_name := 'user' || NEW.user_id::text;
     END IF;
     RETURN NEW;
 END;$$;

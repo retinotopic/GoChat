@@ -57,43 +57,45 @@ var InitMapText = []string{
 	"Change Room Name", "false", "Room", "ChangeRoomName", "-1",
 	"Create Duo Room", "false", "Room", "CreateDuoRoom", "5",
 	"Create Group Room", "false", "Room", "CreateGroupRoom", "6",
-	"",
+	" ",
 }
 
 // parse InitMapText and fill c.EventMap
 func (c *Chat) ParseAndInitUI() {
 
-	SendEventKind := map[string]interface{}{
+	SendEventKind := map[string]any{
 		"Room":    &Room{UserIds: make([]uint64, 0, 100), RoomIds: make([]uint64, 0, 100), ToSend: c.ToSend},
 		"User":    &User{ToSend: c.ToSend},
 		"Message": &Message{ToSend: c.ToSend},
 	}
 
-	target := make([]int, 5)
-	targetStr := make([]string, 20)
+	target := make([]int, 0, 100)
+	targetStr := make([]string, 0, 100)
 	c.EventMap = make(map[list.Content]Event)
-	laststr := ""
+	laststr := " "
 	for _, v := range InitMapText {
 		if !unicode.IsNumber([]rune(v)[0]) && unicode.IsNumber([]rune(laststr)[0]) {
-
+			if len(targetStr) < 3 {
+				break
+			}
 			mode := targetStr[:2]
-			targetStr = targetStr[2:]
+			targetstr := targetStr[2:]
 			ev := Event{}
 			key := list.Content{}
 
 			if mode[1] == "true" {
 				key.MainText = mode[0]
-				for i, _ := range targetStr {
+				for i, _ := range targetstr {
 					if i%2 == 0 {
 						evv := list.Content{}
-						b, err := strconv.ParseBool(targetStr[i+1])
+						b, err := strconv.ParseBool(targetstr[i+1])
 						if err != nil {
 							panic("Parse Bool Error")
 						}
 						if b {
-							evv.MainText = targetStr[i]
+							evv.MainText = targetstr[i]
 						} else {
-							evv.SecondaryText = targetStr[i]
+							evv.SecondaryText = targetstr[i]
 						}
 						ev.content = append(ev.content, evv)
 					}
@@ -102,22 +104,19 @@ func (c *Chat) ParseAndInitUI() {
 				ev.Kind = c.EventUI
 			} else {
 				key.SecondaryText = mode[0]
-				val := SendEventKind[targetStr[0]]
-				raw := reflect.ValueOf(val).MethodByName(targetStr[1]).Interface()
+				val := SendEventKind[targetstr[0]]
+				raw := reflect.ValueOf(val).MethodByName(targetstr[1]).Interface()
 				fn := raw.(func([]list.Content, ...int))
 				ev.Kind = fn
 				ev.targets = append(ev.targets, target...)
 			}
 			c.EventMap[key] = ev
+			targetStr = targetStr[:0]
+			target = target[:0]
+			c.isNumber(v, target, targetStr)
 
-		} else if unicode.IsNumber([]rune(v)[0]) {
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				panic("strconv Atoi error")
-			}
-			target = append(target, n)
 		} else {
-			targetStr = append(targetStr, v)
+			c.isNumber(v, target, targetStr)
 		}
 		laststr = v
 	}
@@ -134,6 +133,18 @@ func (c *Chat) ParseAndInitUI() {
 	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", "")
 	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", "")
 } //
+
+func (c *Chat) isNumber(v string, target []int, targetStr []string) {
+	if unicode.IsNumber([]rune(v)[0]) {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			panic("strconv Atoi error")
+		}
+		target = append(target, n)
+	} else {
+		targetStr = append(targetStr, v)
+	}
+}
 
 type LoadingState struct {
 	message         string

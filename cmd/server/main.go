@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,18 +21,17 @@ func main() {
 	log := zerolog.NewZerologLogger(os.Stdout)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	pgHost := os.Getenv("POSTGRES_HOST")
-	pgPort := os.Getenv("POSTGRES_PORT")
-	pgUser := os.Getenv("POSTGRES_USER")
-	pgPassword := os.Getenv("POSTGRES_PASSWORD")
-	pgDB := os.Getenv("POSTGRES_DB")
-	pgSSLMode := os.Getenv("POSTGRES_SSLMODE")
+	pgHost := os.Getenv("PG_HOST")
+	pgPort := os.Getenv("PG_PORT")
+	pgUser := os.Getenv("PG_USER")
+	pgPassword := os.Getenv("PG_PASSWORD")
+	pgDB := os.Getenv("PG_DATABASE")
+	pgSSL := os.Getenv("PG_SSLMODE")
 
 	dsn := fmt.Sprintf(
-		"user=%s password=%s host=%s port=%s dbname=%s sslmode=%s",
-		pgUser, pgPassword, pgHost, pgPort, pgDB, pgSSLMode,
+		"user=%s password=%s host=%s port=%s dbname=%s sslmode=%s ",
+		pgUser, pgPassword, pgHost, pgPort, pgDB, pgSSL,
 	)
-	flag.Parse()
 	client := redis.NewClient(&redis.Options{
 		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
 	})
@@ -47,7 +45,6 @@ func main() {
 		log.Fatal("db new pool:", err)
 	}
 
-	//FetchUser(http.ResponseWriter, *http.Request) (string, error)
 	FetchUser := func(w http.ResponseWriter, r *http.Request) (string, error) {
 		c, err := r.Cookie("username")
 		if err != nil {
@@ -59,14 +56,13 @@ func main() {
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal("goose set dialect:", err)
 	}
-	if err := goose.Up(dbs, "/bin/maindir/migrations"); err != nil {
+	if err := goose.Up(dbs, os.Getenv("MIGRATIONS_DIR")); err != nil {
 		log.Fatal("goose up:", err)
 	}
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter(os.Getenv("SERVER_CONNECT_ADDR"), FetchUser, rds, pgclient, log)
-
+	srv := router.NewRouter("0.0.0.0:"+os.Getenv("APP_PORT"), FetchUser, rds, pgclient, log)
 	err = srv.Run(ctx)
 	if err != nil {
 		log.Fatal("server run:", err)

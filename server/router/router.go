@@ -33,5 +33,5 @@ func (r *router) Run(ctx context.Context) error {
 
 	mux.Handle("/connect", middleware.GetUserMW(connect))
 
-	return http.ListenAndServeTLS(r.Addr, "cert.pem", "key.pem", mux)
+	return http.ListenAndServeTLS(r.Addr, "/etc/ssl/certs/cert.pem", "/etc/ssl/private/key.pem", mux)
 }

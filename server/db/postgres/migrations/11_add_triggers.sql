@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE OR REPLACE TRIGGER check_room_limit_trigger BEFORE INSERT OR DELETE ON public.room_users_info FOR EACH ROW EXECUTE FUNCTION public.check_room_limit();
 
-CREATE TRIGGER update_room_last_activity_trigger AFTER INSERT ON public.messagesFOR EACH ROW EXECUTE FUNCTION public.update_room_last_activity();
+CREATE TRIGGER update_room_last_activity_trigger AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_room_last_activity();
 
 CREATE TRIGGER default_username BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_username();
 

@@ -51,7 +51,7 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists [11]*list.List /* menu[0],rooms[1],events menu[2]
+	Lists [10]*list.List /* menu[0],rooms[1],events menu[2]
 	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
