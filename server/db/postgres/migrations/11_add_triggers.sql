@@ -3,7 +3,7 @@ CREATE OR REPLACE TRIGGER check_room_limit_trigger BEFORE INSERT OR DELETE ON pu
 
 CREATE TRIGGER update_room_last_activity_trigger AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_room_last_activity();
 
-CREATE TRIGGER default_username BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_username();
+CREATE TRIGGER default_user_name BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_user_name();
 
 -- +goose Down
 DROP TRIGGER IF EXISTS check_room_limit_trigger ON public.room_users_info;

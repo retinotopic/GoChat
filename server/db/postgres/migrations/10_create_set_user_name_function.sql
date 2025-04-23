@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE FUNCTION public.set_username() RETURNS trigger
+CREATE FUNCTION public.set_user_name() RETURNS trigger
     LANGUAGE plpgsql
     AS $$BEGIN
     IF NEW.user_name IS NULL THEN
@@ -11,4 +11,4 @@ END;$$;
 -- +goose StatementEnd
 
 -- +goose Down
-DROP FUNCTION IF EXISTS public.set_username();
+DROP FUNCTION IF EXISTS public.set_user_name();

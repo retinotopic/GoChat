@@ -46,12 +46,11 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 	if err != nil {
 		return err
 	}
-	event.OrderCmd[0] = 2
+	event.OrderCmd[0] = 1
 	event.PubForSub = []string{strconv.Itoa(int(event.UserId))} //1
 	for _, room := range resp {
 		event.SubForPub = append(event.SubForPub, "room"+strconv.Itoa(int(room.RoomId))) //2
 	}
-	event.Kind = "1"
 	return err
 }
 func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {

@@ -58,7 +58,7 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 		errch <- true
 	}()
 	go p.ReadPubSub(userid, errch, conn)
-	startevent := &models.EventMetadata{Event: "GetAllRooms"}
+	startevent := &models.EventMetadata{Event: "Get All Rooms"}
 	p.ProcessEvent(startevent, conn)
 	for {
 		_, b, err := conn.Read(context.TODO()) // incoming client user requests
@@ -100,7 +100,9 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 	err := p.Db.FuncApi(ctx, event)
-	event.ErrorMsg = err.Error()
+	if err != nil {
+		event.ErrorMsg = err.Error()
+	}
 	for i := range event.OrderCmd {
 		switch event.OrderCmd[i] {
 		case 1:

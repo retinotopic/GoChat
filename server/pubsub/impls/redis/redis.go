@@ -69,9 +69,9 @@ func (r *Redis) Channel(ctx context.Context, closech <-chan bool, user string) <
 		case msg, ok := <-ch:
 			if ok {
 				switch v := msg.(type) {
-				case redis.Message:
+				case *redis.Message:
 					resultCh <- []byte(v.Payload)
-				case redis.Subscription:
+				case *redis.Subscription:
 					if len(v.Kind) == 0 {
 						err := PubSub.Unsubscribe(context.TODO(), v.Channel)
 						if err != nil {

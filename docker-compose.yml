@@ -10,6 +10,7 @@ services:
     environment:
       - APP_HOST=backend
       - APP_PORT=8080
+      - SSL_ENABLE=${SSL_ENABLE}
     stdin_open: true
     tty: true
     networks:
@@ -36,7 +37,7 @@ services:
       - PG_SSLMODE=prefer
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      # - APP_HOST=backend
+      - SSL_ENABLE=${SSL_ENABLE}
       - APP_PORT=8080
     networks:
       - public

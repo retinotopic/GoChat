@@ -18,8 +18,16 @@ func main() {
 		bufstr.WriteString(token)
 		break
 	}
-	wsUrl := "wss://" + os.Getenv("APP_HOST") + ":" + os.Getenv("APP_PORT") + "/connect"
-	_, err := app.NewChat(bufstr.String(), wsUrl, 30, true)
+	wsstr := "ws"
+	if os.Getenv("SSL_ENABLE") == "true" {
+		wsstr = "wss"
+	}
+	wsUrl := wsstr + "://" + os.Getenv("APP_HOST") + ":" + os.Getenv("APP_PORT") + "/connect"
+	chat, err := app.NewChat(bufstr.String(), wsUrl, 30, true)
+	if err != nil {
+		panic(err)
+	}
+	err = chat.Run()
 	if err != nil {
 		panic(err)
 	}

@@ -9,7 +9,7 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (user_id),
     CONSTRAINT username_unique UNIQUE (user_name)
 );
-CREATE INDEX trgm_idx_users_username ON public.users USING gin (user_name public.gin_trgm_ops);
+CREATE INDEX trgm_idx_users_user_name ON public.users USING gin (user_name public.gin_trgm_ops);
 
 
 -- +goose Down

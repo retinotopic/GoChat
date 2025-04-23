@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/retinotopic/GoChat/server/logger"
 	"github.com/retinotopic/GoChat/server/middleware"
@@ -32,6 +33,10 @@ func (r *router) Run(ctx context.Context) error {
 	connect := http.HandlerFunc(pubsub.Connect)
 
 	mux.Handle("/connect", middleware.GetUserMW(connect))
-
-	return http.ListenAndServeTLS(r.Addr, "/etc/ssl/certs/cert.pem", "/etc/ssl/private/key.pem", mux)
+	switch os.Getenv("SSL_ENABLE") {
+	case "true":
+		return http.ListenAndServeTLS(r.Addr, "/etc/ssl/certs/cert.pem", "/etc/ssl/private/key.pem", mux)
+	default:
+		return http.ListenAndServe(r.Addr, mux)
+	}
 }
