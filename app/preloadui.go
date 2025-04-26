@@ -24,7 +24,7 @@ var InitMapText = []string{
 	"Events", "true", "4",
 	"Menu", "true", "Create Duo Room", "true", "Create Group Room", "true",
 	"Unblock Users", "true", "Change Username", "true", "Change Privacy", "true",
-	"Find User", "true", "2",
+	"Find Users", "true", "2",
 	"This Group Room(Admin)", "true", "Delete Users From Room", "true",
 	"Add Users To Room", "true", "Change Room Name", "true", "Show Users", "true",
 	"Leave Room", "true", "2",

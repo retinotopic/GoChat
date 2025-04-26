@@ -1,7 +1,7 @@
 package app
 
 import (
-	"log"
+	// "log"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
@@ -9,16 +9,35 @@ import (
 	"github.com/rivo/tview"
 )
 
+type ListInfo struct {
+	f     func(list.ListItem)
+	title string
+}
+
 func (c *Chat) PreLoadNavigation() {
 
-	options := []func(list.ListItem){c.OptionEvent, c.OptionRoom, c.OptionEvent, c.OptionInput,
-		OneOption, OneOption, MultOption, OneOption, MultOption, OneOption}
+	// options := []func(list.ListItem){c.OptionEvent, c.OptionRoom, c.OptionEvent, c.OptionInput,
+	// 	OneOption, OneOption, MultOption, OneOption, MultOption, OneOption}
+	options := []ListInfo{
+		{f: c.OptionEvent, title: "Sidebar"},
+		{f: c.OptionRoom, title: "Rooms"},
+		{f: c.OptionEvent, title: "Menu"},
+		{f: c.OptionInput, title: "Input"},
+		{f: OneOption, title: "Events"},
+		{f: OneOption, title: "FoundUsers"},
+		{f: MultOption, title: "DuoUsers"},
+		{f: OneOption, title: "BlockedUsers"},
+		{f: MultOption, title: "RoomUsers"},
+		{f: OneOption, title: "Allow or not"},
+	}
 
 	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i])
+		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title)
 	}
 
 	c.Lists[1].Items = list.NewLinkedList(250)
+	c.Lists[3].Items = list.NewLinkedList(3)
+
 	c.MainFlex = tview.NewFlex()
 
 	ll := c.Lists[0].Items.(*list.ArrayList)
@@ -26,20 +45,15 @@ func (c *Chat) PreLoadNavigation() {
 	ll = c.Lists[0].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Menu", ""))
 
-	ll = c.Lists[3].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Enter Text Here"))
+	ll = c.Lists[0].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "This Room (Not Selected)", ""))
+
+	l2 := c.Lists[3].Items.(*list.LinkedList)
+	l2.MoveToBack(l2.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Press Enter Here To Type Text"))
 	ll = c.Lists[9].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", ""))
 	ll = c.Lists[9].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", ""))
-	c.AddItemMainFlex()
-
-	log.Println(c.Lists[0].Items.Len(), "WTF IS THIS GAME AOBUT")
-	item := c.Lists[0].Items.GetBack()
-	for item != nil && !item.IsNil() {
-		log.Println(item.GetMainText(), item.GetSecondaryText(), item.GetColor(0))
-		item = item.Next()
-	}
 
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if c.IsInputActive {
@@ -48,14 +62,20 @@ func (c *Chat) PreLoadNavigation() {
 				txt := c.Lists[3].Items.GetBack().GetMainText()
 				if len([]rune(txt)) <= 300 {
 					r := event.Rune()
+					// c.App.QueueUpdateDraw(func() {
 					c.Lists[3].Items.GetBack().SetMainText(string(r), 1)
+
+					// })
 				}
 			case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
 				main := c.Lists[3].Items.GetBack().GetMainText()
 				mr := []rune(main)
 				if len(mr) != 0 {
 					mr = mr[:len(mr)-1]
+					// c.App.QueueUpdateDraw(func() {
 					c.Lists[3].Items.GetBack().SetMainText(string(mr), 2)
+
+					// })
 				}
 			}
 		}
@@ -63,18 +83,26 @@ func (c *Chat) PreLoadNavigation() {
 		case tcell.KeyLeft:
 			if c.NavState > 0 && c.MainFlex.GetItemCount() > 0 {
 				c.NavState -= 1
-				c.App.SetFocus(c.MainFlex.GetItem(c.NavState))
+				prm := c.MainFlex.GetItem(c.NavState)
+				c.App.SetFocus(prm)
+				l := prm.(*list.List)
+				l.Current = l.Items.GetBack()
 
 			}
 		case tcell.KeyRight:
 			if c.NavState < c.MainFlex.GetItemCount()-1 {
 				c.NavState += 1
-				c.App.SetFocus(c.MainFlex.GetItem(c.NavState))
+				prm := c.MainFlex.GetItem(c.NavState)
+				c.App.SetFocus(prm)
+				l := prm.(*list.List)
+				l.Current = l.Items.GetBack()
+
 			}
 		}
 		return event
 	})
 	c.App = tview.NewApplication()
+	c.AddItemMainFlex()
 }
 
 /*
@@ -82,6 +110,9 @@ one of the most important methods, pressing a functional option either changes t
 or sends a request to the server
 */
 func (c *Chat) OptionEvent(item list.ListItem) {
+	if item == nil {
+		return
+	}
 	key := list.Content{}
 	key.MainText = item.GetMainText()
 	key.SecondaryText = item.GetSecondaryText()
@@ -136,12 +167,12 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 
 			if c.CurrentRoom.IsGroup {
 				if c.CurrentRoom.IsAdmin {
-					c.Lists[0].Items.GetBack().SetMainText("This Group Room(Admin)", 0)
+					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
 				} else {
-					c.Lists[0].Items.GetBack().SetMainText("This Group Room", 0)
+					c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
 				}
 			} else {
-				c.Lists[0].Items.GetBack().SetMainText("This Duo Room", 0)
+				c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
 			}
 			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
@@ -169,23 +200,26 @@ func (c *Chat) PaginationRoom(maintxt string) {
 }
 
 func (c *Chat) OptionInput(item list.ListItem) {
+	if item == nil {
+		return
+	}
 	c.IsInputActive = true
 	c.Lists[3].Items.GetBack().SetSecondaryText("Type The Text")
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
-	log.Println(len(prmtvs))
-	c.NavState = 0
-	c.IsInputActive = false
+
 	itemio := c.Lists[3].Items.GetBack()
 	if itemio != nil && !itemio.IsNil() {
 		itemio.SetSecondaryText("Press Enter Here To Type Text")
 
 		c.MainFlex.Clear()
-		c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
-		c.MainFlex.AddItem(c.Lists[1], 0, 2, true)
+		c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
+		c.MainFlex.AddItem(c.Lists[1], 0, 1, false)
 		for _, v := range prmtvs {
-			c.MainFlex.AddItem(v, 0, 2, true)
+			c.MainFlex.AddItem(v, 0, 2, false)
 		}
+		// c.NavState = 0
+		c.IsInputActive = false
 	} else {
 		panic("this shouldnt happen")
 	}

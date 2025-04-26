@@ -6,6 +6,9 @@ import (
 )
 
 func MultOption(item list.ListItem) {
+	if item == nil {
+		return
+	}
 	color := item.GetColor(0)
 
 	if color == tcell.ColorYellow {
@@ -16,6 +19,9 @@ func MultOption(item list.ListItem) {
 }
 
 func OneOption(item list.ListItem) {
+	if item == nil {
+		return
+	}
 	item.SetColor(tcell.ColorYellow, 0)
 	bi := item
 	fi := item

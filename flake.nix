@@ -27,6 +27,7 @@
             go
             postgresql
             docker
+            delve
             # goimports, godoc, etc.
             gotools
             gopls

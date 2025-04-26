@@ -13,11 +13,13 @@ type Content struct {
 	SecondaryText string
 }
 
-func NewList(items ListItems, option func(ListItem)) *List {
+func NewList(items ListItems, option func(ListItem), title string) *List {
+	box := tview.NewBox().SetBorder(true)
+	box.SetTitle(title)
 	return &List{
 		Option:      option,
 		Items:       items,
-		Box:         tview.NewBox().SetBorder(true),
+		Box:         box,
 		lines:       make([]string, 0, 1000),
 		selectedBuf: make([]Content, 0, 100),
 		Current:     nil,
@@ -73,9 +75,7 @@ func (l *List) GetSelected() []Content {
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
-	if l.Current == nil && l.Items.Len() > 0 {
-		l.Current = l.Items.GetBack()
-	}
+
 	element := l.Items.GetBack()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
@@ -89,10 +89,11 @@ func (l *List) Draw(screen tcell.Screen) {
 			if row+lineIndex >= height {
 				break
 			}
-			tview.Print(screen, line, x+2, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
-
+			tview.Print(screen, line, x, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
 			if element == l.Current {
-				screen.SetContent(x, y+row+lineIndex, '|', nil, tcell.StyleDefault)
+				for i, r := range []rune(line) {
+					screen.SetContent(x+i, y+row+lineIndex, r, nil, tcell.Style{}.Background(tcell.ColorBrown))
+				}
 			}
 		}
 
@@ -103,10 +104,12 @@ func (l *List) Draw(screen tcell.Screen) {
 				if startY+lineIndex >= height {
 					break
 				}
-				tview.Print(screen, line, x+2, y+startY+lineIndex,
+				tview.Print(screen, line, x, y+startY+lineIndex,
 					width, tview.AlignLeft, element.GetColor(1))
 				if element == l.Current {
-					screen.SetContent(x, y+startY+lineIndex, '|', nil, tcell.StyleDefault)
+					for i, r := range []rune(line) {
+						screen.SetContent(x+i, y+startY+lineIndex, r, nil, tcell.Style{}.Background(tcell.ColorBrown))
+					}
 				}
 			}
 			row += len(lines) + len(secondaryLines)
@@ -119,6 +122,9 @@ func (l *List) Draw(screen tcell.Screen) {
 func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
 		return []string{text}
+	}
+	if l.Current == nil && l.Items.Len() > 0 {
+		l.Current = l.Items.GetBack()
 	}
 	l.lines = l.lines[:0]
 	words := strings.Fields(text)
@@ -169,6 +175,9 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 
+		if l.Current == nil && l.Items.Len() > 0 {
+			l.Current = l.Items.GetBack()
+		}
 		switch event.Key() {
 		case tcell.KeyUp:
 			if l.Current != nil && !l.Current.IsNil() && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {

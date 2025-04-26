@@ -54,7 +54,7 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists [10]*list.List /* mainbar[0],rooms[1],menu[2]
+	Lists [10]*list.List /* sidebar[0],rooms[1],menu[2]
 	input[3],Events[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
@@ -159,7 +159,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 			)
 
 			ll.MoveToBack(nextpgn)
-			l := list.NewList(ll, c.OptionRoom)
+			l := list.NewList(ll, c.OptionRoom, strconv.Itoa(rm.MsgPageIdBack))
 			rm.Messages[rm.MsgPageIdBack] = l
 		})
 	}
@@ -190,7 +190,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					)
 					ll.MoveToBack(prevpgn)
 
-					lst := list.NewList(ll, c.OptionRoom)
+					lst := list.NewList(ll, c.OptionRoom, strconv.Itoa(rm.MsgPageIdFront))
 					rm.Messages[rm.MsgPageIdFront] = lst
 
 				} else {
@@ -210,7 +210,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 					"Prev Page: "+strconv.Itoa(rm.MsgPageIdFront),
 				)
 				ll.MoveToBack(prevpgn)
-				lst := list.NewList(ll, c.OptionRoom)
+				lst := list.NewList(ll, c.OptionRoom, strconv.Itoa(rm.MsgPageIdFront))
 				rm.Messages[rm.MsgPageIdFront] = lst
 			}
 		})

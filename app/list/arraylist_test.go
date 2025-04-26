@@ -1,7 +1,6 @@
 package list_test
 
 import (
-	// "log"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -19,15 +18,19 @@ func Test_ArrayList(t *testing.T) {
 
 	l0 := arr.NewItem(clrs, "SampleText", "SampleText")
 	arr.MoveToBack(l0)
+	l0 = arr.GetFront()
 
 	l1 := arr.NewItem(clrs, "SampleText", "SampleText")
 	arr.MoveToBack(l1)
+	l1 = arr.GetFront()
 
 	l2 := arr.NewItem(clrs, "SampleText", "SampleText")
 	arr.MoveToBack(l2)
+	l2 = arr.GetFront()
 
 	l3 := arr.NewItem(clrs, "SampleText", "SampleText")
 	arr.MoveToBack(l3)
+	l3 = arr.GetFront()
 
 	arrcheck := []list.ListItem{l0, l1, l2, l3}
 	item := arr.GetBack()
@@ -35,7 +38,6 @@ func Test_ArrayList(t *testing.T) {
 	for item != nil && !item.IsNil() {
 		if item != arrcheck[i] {
 			t.Errorf("consistency list validation failed")
-
 		}
 		item = item.Next()
 		i += 1

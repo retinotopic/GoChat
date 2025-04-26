@@ -12,7 +12,6 @@ func NewArrayList(length int) *ArrayList {
 
 type ArrayList struct {
 	Items  []ArrayItem
-	idx    int
 	Length int
 }
 
@@ -23,7 +22,7 @@ func (a *ArrayList) MoveToFront(e ListItem) {
 	uitem, ok := e.(ArrayItem)
 	uitem.ArrList = a
 	if ok {
-		uitem.idx = len(a.Items)
+		uitem.Idx = len(a.Items)
 		a.Items = append(a.Items, uitem)
 	}
 }
@@ -40,9 +39,15 @@ func (a *ArrayList) GetBack() ListItem {
 	return a.Items[0]
 }
 func (a *ArrayList) Remove(e ListItem) {
-	a.Items = a.Items[:len(a.Items)-1] // removing the last element. argument is unused, only to satisfy the interface
+	if len(a.Items) != 0 {
+		a.Items[len(a.Items)-1].ArrList = nil
+		a.Items = a.Items[:len(a.Items)-1] // removing the last element. argument is unused, only to satisfy the interface
+	}
 }
 func (a *ArrayList) Clear() {
+	for i := range a.Items {
+		a.Items[i].ArrList = nil
+	}
 	a.Items = a.Items[:0]
 }
 func (a *ArrayList) Len() int {
@@ -51,7 +56,7 @@ func (a *ArrayList) Len() int {
 
 type ArrayItem struct {
 	ArrList       *ArrayList
-	idx           int
+	Idx           int
 	Color         [2]tcell.Color
 	MainText      string
 	MainTextBuf   *bytes.Buffer
@@ -60,8 +65,6 @@ type ArrayItem struct {
 
 func (a *ArrayList) NewItem(clr [2]tcell.Color, main string, sec string) ListItem {
 	return ArrayItem{
-		ArrList:       a,
-		idx:           len(a.Items),
 		Color:         clr,
 		MainText:      main,
 		MainTextBuf:   nil,
@@ -80,49 +83,34 @@ func (a ArrayItem) GetMainText() string {
 func (a ArrayItem) GetSecondaryText() string {
 	return a.SecondaryText
 }
-func (a ArrayItem) GetColor(idx int) tcell.Color {
-	if idx < 2 && idx >= 0 {
-		return a.ArrList.Items[a.idx].Color[idx]
+func (a ArrayItem) GetColor(Idx int) tcell.Color {
+	if Idx < 2 && Idx >= 0 {
+		return a.ArrList.Items[a.Idx].Color[Idx]
 
 	}
 	return tcell.ColorWhite
 }
 func (a ArrayItem) SetMainText(str string, mode uint8) {
-	switch mode {
-	case 0:
-		a.ArrList.Items[a.idx].MainText = str
-	case 1:
-		if a.MainTextBuf != nil {
-			a.MainTextBuf.WriteString(str)
-			return
-		}
-		a.MainTextBuf = bytes.NewBufferString(str)
-	case 2:
-		if a.MainTextBuf != nil {
-			a.MainTextBuf.Truncate(len(a.MainTextBuf.String()) - len(str))
-		}
-	}
+	a.ArrList.Items[a.Idx].MainText = str
 }
 func (a ArrayItem) SetSecondaryText(str string) {
-	a.ArrList.Items[a.idx].SecondaryText = str
+	a.ArrList.Items[a.Idx].SecondaryText = str
 }
-func (a ArrayItem) SetColor(clr tcell.Color, idx int) {
-	if idx < 2 && idx >= 0 {
-		a.ArrList.Items[a.idx].Color[idx] = clr
+func (a ArrayItem) SetColor(clr tcell.Color, Idx int) {
+	if Idx < 2 && Idx >= 0 {
+		a.ArrList.Items[a.Idx].Color[Idx] = clr
 	}
 }
 func (a ArrayItem) Next() ListItem {
-	if a.ArrList.idx+1 < len(a.ArrList.Items) {
-		a.ArrList.idx += 1
-		return a.ArrList.Items[a.ArrList.idx]
+	if a.Idx+1 < len(a.ArrList.Items) {
+		return a.ArrList.Items[a.Idx+1]
 	}
 	return nil
 }
 
 func (a ArrayItem) Prev() ListItem {
-	if a.ArrList.idx-1 >= 0 {
-		a.ArrList.idx -= 1
-		return a.ArrList.Items[a.ArrList.idx]
+	if a.Idx-1 >= 0 && a.Idx-1 < len(a.ArrList.Items) {
+		return a.ArrList.Items[a.Idx-1]
 	}
 	return nil
 }

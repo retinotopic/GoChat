@@ -1,7 +1,7 @@
 package app
 
 import (
-	"log"
+	// "log"
 	"strconv"
 
 	json "github.com/bytedance/sonic"
@@ -28,27 +28,19 @@ type Room struct {
 
 func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 	lists := make([]tview.Primitive, 0, 5)
-	log.Println(len(cnt), trg)
 	c.Lists[trg[0]].Items.Clear()
 	ll, ok := c.Lists[trg[0]].Items.(*list.ArrayList)
-	log.Println(ok, "DFIJMIODFJOISDJGFIOSDOIFJOIS")
 	if ok {
 		for i := range cnt {
-			a := list.ArrayItem{}
-			a.ArrList = ll
-			a.Color = [2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}
-
-			a.MainText = cnt[i].MainText
-
-			a.SecondaryText = cnt[i].SecondaryText
-
+			a := ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+				cnt[i].MainText, cnt[i].SecondaryText)
 			c.Lists[trg[0]].Items.MoveToBack(a)
 		}
+		for i := range trg {
+			lists = append(lists, c.Lists[trg[i]])
+		}
+		c.AddItemMainFlex(lists...)
 	}
-	for i := range trg {
-		lists = append(lists, c.Lists[trg[i]])
-	}
-	c.AddItemMainFlex(lists...)
 }
 
 // Room SendEvents

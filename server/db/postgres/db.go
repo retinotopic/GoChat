@@ -98,8 +98,6 @@ func (p *PgClient) GetUser(ctx context.Context, sub string) (b []byte, userid ui
 		if err != nil {
 			return nil, userid, fmt.Errorf("failed to create new user: %v", err)
 		}
-	} else {
-		return nil, userid, fmt.Errorf("failed to query user: %v", err)
 	}
 	u := User{UserId: userid, Username: username}
 	b, err = json.Marshal(u)
