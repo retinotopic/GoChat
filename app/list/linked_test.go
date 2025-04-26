@@ -65,6 +65,35 @@ func Test_LinkedList(t *testing.T) {
 		t.Errorf("Length mismatch")
 	}
 
+	lp1 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp1)
+	lp2 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp2)
+	lp3 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp3)
+	lp4 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp4)
+	lp5 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp5)
+	lp6 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp6)
+	lp7 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp7)
+	lp8 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp8)
+	lp9 := arr.NewItem(clrs, "SampleText", "SampleText")
+	arr.MoveToBack(lp9)
+	arrcheck := []list.ListItem{lp9, lp8, lp7, lp6, lp5, lp4, lp3, lp2, lp1}
+	item := arr.GetBack()
+	i := 0
+	for item != nil && !item.IsNil() {
+		if item != arrcheck[i] {
+			t.Errorf("consistency list validation failed")
+		}
+		item = item.Next()
+		i += 1
+	}
+
 }
 
 func AssertItems(got list.ListItem, want list.ListItem, t *testing.T) {

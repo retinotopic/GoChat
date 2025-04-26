@@ -1,12 +1,15 @@
 package app
 
 import (
-	"strconv"
-
+	"errors"
+	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
+	"golang.org/x/sync/errgroup"
+	"strconv"
+	"time"
 )
 
 type RoomServer struct {
@@ -51,41 +54,74 @@ type Chat struct {
 	BlockedUsers map[uint64]User // user id to blocked
 	FoundUsers   map[uint64]User // user id to found users
 
-	Lists [10]*list.List /* menu[0],rooms[1],events menu[2]
-	input[3],recentEvents[4],FoundUsers[5],DuoUsers[6]
+	Lists [10]*list.List /* mainbar[0],rooms[1],menu[2]
+	input[3],Events[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
 	CurrentRoom *RoomInfo // current selected Room
 	CurrentText string    // current text for user search || set room name || message
 
 	NavState      int
-	ListCount     int // the number of lists on the main page at the moment
-	stopeventUI   bool
 	IsInputActive bool
 
-	ToSend *SendEvent
+	errgroup    errgroup.Group
+	errch       chan error
+	SendEventCh chan SendEvent
 }
 
-func NewChat(username, url string, maxMsgsOnPage int, debug bool) (chat *Chat, err error) {
+func NewChat(username, url string, maxMsgsOnPage int, debug bool) (chat *Chat, err <-chan error) {
 	c := &Chat{}
 	c.MaxMsgsOnPage = maxMsgsOnPage
-	c.ToSend = &SendEvent{}
 	c.ParseAndInitUI()
 	c.PreLoadNavigation()
 	err = c.TryConnect(username, url)
-	if err != nil {
-		return nil, err
-	}
 	return c, err
 }
 
-func (c *Chat) Run() error {
-	go c.StartEventUILoop()
-	defer func() {
-		c.App.Stop()
-		c.stopeventUI = true
-	}()
-	return c.App.SetRoot(c.MainFlex, true).Run()
+func (c *Chat) Run() {
+	go c.ProcessEvents()
+	defer func(err error) {
+		c.errch <- errors.New("UI is crashed")
+	}(c.App.SetRoot(c.MainFlex, true).Run())
+}
+
+func (c *Chat) ProcessEvents() {
+	i := 0
+	var NotIdle bool
+	for {
+		select {
+		case e := <-c.SendEventCh:
+			b, err := json.Marshal(e)
+			if err == nil {
+				c.errgroup.Go(func() error {
+					return WriteTimeout(time.Second*15, c.Conn, b)
+				})
+			}
+		case <-c.errch:
+			return
+		}
+		if state.InProgressCount > 0 {
+			c.App.QueueUpdateDraw(func() {
+				spinChar := state.spinner[i%len(state.spinner)]
+				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
+				item := c.Lists[0].Items.GetBack()
+				item.SetSecondaryText(text)
+				item.SetColor(tcell.ColorRed, 1)
+			})
+			i++
+			if i == len(state.spinner) {
+				i = 0
+			}
+			NotIdle = true
+		} else if NotIdle {
+			c.App.QueueUpdateDraw(func() {
+				item := c.Lists[0].Items.GetBack()
+				item.SetSecondaryText(strconv.Itoa(state.InProgressCount) + " " + state.message)
+				item.SetColor(tcell.ColorGrey, 1)
+			})
+			NotIdle = false
+		}
+	}
 }
 
 func (c *Chat) LoadMessagesEvent(msgsv []Message) {
@@ -113,7 +149,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 					rm.Users[msgsv[i].UserId].Username+": "+msgsv[i].MessagePayload,
 					"UserId: "+strconv.FormatUint(msgsv[i].UserId, 10),
 				)
-				ll.MoveToFront(e)
+				ll.MoveToBack(e)
 			}
 
 			nextpgn := ll.NewItem(
@@ -122,7 +158,7 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 				"Next Page: "+strconv.Itoa(rm.MsgPageIdBack+1),
 			)
 
-			ll.MoveToFront(nextpgn)
+			ll.MoveToBack(nextpgn)
 			l := list.NewList(ll, c.OptionRoom)
 			rm.Messages[rm.MsgPageIdBack] = l
 		})
@@ -144,7 +180,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 						"",
 						"Next Page: "+strconv.Itoa(rm.MsgPageIdFront),
 					)
-					l.Items.MoveToFront(nextpgn)
+					l.Items.MoveToBack(nextpgn)
 
 					ll := list.NewArrayList(c.MaxMsgsOnPage)
 					prevpgn := ll.NewItem(
@@ -163,7 +199,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 						rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
 						"UserId: "+strconv.FormatUint(msg.UserId, 10),
 					)
-					l.Items.MoveToFront(msg)
+					l.Items.MoveToBack(msg)
 
 				}
 			} else {
@@ -221,7 +257,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 		// set new room at the top
 		rmitem := c.Lists[1].Items.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 			rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
-		c.Lists[1].Items.MoveToFront(rmitem)
+		c.Lists[1].Items.MoveToBack(rmitem)
 		rm.RoomItem = rmitem
 
 		if rmsv.CreatedByUserId == c.UserId {

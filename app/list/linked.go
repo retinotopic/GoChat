@@ -55,6 +55,9 @@ func (l *LinkedList) MoveToBack(e ListItem) {
 func (l *LinkedList) GetFront() ListItem {
 	return l.front
 }
+func (l *LinkedList) GetBack() ListItem {
+	return l.back
+}
 
 func (l *LinkedList) Remove(e ListItem) {
 	uitem, ok := e.(*LinkedItem)

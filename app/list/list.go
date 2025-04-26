@@ -20,6 +20,7 @@ func NewList(items ListItems, option func(ListItem)) *List {
 		Box:         tview.NewBox().SetBorder(true),
 		lines:       make([]string, 0, 1000),
 		selectedBuf: make([]Content, 0, 100),
+		Current:     nil,
 	}
 }
 
@@ -52,13 +53,15 @@ type ListItems interface {
 	MoveToFront(ListItem)
 	MoveToBack(ListItem)
 	GetFront() ListItem
+	GetBack() ListItem
 	Remove(ListItem)
 	Clear()
 	Len() int
 }
 
 func (l *List) GetSelected() []Content {
-	front := l.Items.GetFront()
+	front := l.Items.GetBack()
+
 	l.selectedBuf = l.selectedBuf[:0]
 	for front != nil && front.IsNil() {
 		cnt := Content{MainText: front.GetMainText(), SecondaryText: front.GetSecondaryText()}
@@ -71,15 +74,15 @@ func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
 	if l.Current == nil && l.Items.Len() > 0 {
-		l.Current = l.Items.GetFront()
+		l.Current = l.Items.GetBack()
 	}
-	element := l.Items.GetFront()
+	element := l.Items.GetBack()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
 	}
-
 	row := 0
 	for element != nil && !element.IsNil() && row < height {
+
 		mainText := element.GetMainText()
 		lines := l.splitTextIntoLines(mainText, width)
 		for lineIndex, line := range lines {
@@ -87,6 +90,7 @@ func (l *List) Draw(screen tcell.Screen) {
 				break
 			}
 			tview.Print(screen, line, x+2, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
+
 			if element == l.Current {
 				screen.SetContent(x, y+row+lineIndex, '|', nil, tcell.StyleDefault)
 			}
@@ -167,14 +171,14 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 
 		switch event.Key() {
 		case tcell.KeyUp:
-			if l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
+			if l.Current != nil && !l.Current.IsNil() && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
 				if l.Current == l.getFirstVisibleElement() {
 					l.offset--
 				}
 				l.Current = l.Current.Prev()
 			}
 		case tcell.KeyDown:
-			if l.Current.Next() != nil && !l.Current.Next().IsNil() {
+			if l.Current != nil && !l.Current.IsNil() && l.Current.Next() != nil && !l.Current.Next().IsNil() {
 				if l.isLastVisibleElement(l.Current) {
 					l.offset++
 				}
@@ -185,10 +189,11 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Option(l.Current)
 			}
 		}
+		return
 	})
 }
 func (l *List) getFirstVisibleElement() ListItem {
-	element := l.Items.GetFront()
+	element := l.Items.GetBack()
 	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
 	}

@@ -22,13 +22,18 @@ func main() {
 	if os.Getenv("SSL_ENABLE") == "true" {
 		wsstr = "wss"
 	}
-	wsUrl := wsstr + "://" + os.Getenv("APP_HOST") + ":" + os.Getenv("APP_PORT") + "/connect"
-	chat, err := app.NewChat(bufstr.String(), wsUrl, 30, true)
-	if err != nil {
-		panic(err)
+	apphost := os.Getenv("APP_HOST")
+	if len(apphost) == 0 {
+		apphost = "localhost"
 	}
-	err = chat.Run()
-	if err != nil {
+	appport := os.Getenv("APP_PORT")
+	if len(appport) == 0 {
+		appport = "8080"
+	}
+	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
+	chat, errch := app.NewChat(bufstr.String(), wsUrl, 30, true)
+	go chat.Run()
+	for err := range errch {
 		panic(err)
 	}
 }

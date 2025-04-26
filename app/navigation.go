@@ -1,83 +1,80 @@
 package app
 
 import (
-	// "encoding/json"
+	"log"
 	"strconv"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
 )
 
-// animation for in progress events
-func (c *Chat) StartEventUILoop() {
-	i := 0
-	var NotIdle bool
-	for {
-		if state.InProgressCount > 0 {
-			c.App.QueueUpdateDraw(func() {
-				spinChar := state.spinner[i%len(state.spinner)]
-				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
-				item := c.Lists[0].Items.GetFront()
-				item.SetSecondaryText(text)
-				item.SetColor(tcell.ColorRed, 1)
-			})
-			i++
-			if i == len(state.spinner) {
-				i = 0
-			}
-			NotIdle = true
-		} else if NotIdle {
-			c.App.QueueUpdateDraw(func() {
-				item := c.Lists[0].Items.GetFront()
-				item.SetSecondaryText(" ")
-				item.SetColor(tcell.ColorGrey, 1)
-			})
-			NotIdle = false
-		} else if c.stopeventUI {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
 func (c *Chat) PreLoadNavigation() {
+
+	options := []func(list.ListItem){c.OptionEvent, c.OptionRoom, c.OptionEvent, c.OptionInput,
+		OneOption, OneOption, MultOption, OneOption, MultOption, OneOption}
+
+	for i := range len(c.Lists) {
+		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i])
+	}
+
+	c.Lists[1].Items = list.NewLinkedList(250)
 	c.MainFlex = tview.NewFlex()
+
+	ll := c.Lists[0].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Events", ""))
+	ll = c.Lists[0].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Menu", ""))
+
+	ll = c.Lists[3].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Enter Text Here"))
+	ll = c.Lists[9].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", ""))
+	ll = c.Lists[9].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", ""))
+	c.AddItemMainFlex()
+
+	log.Println(c.Lists[0].Items.Len(), "WTF IS THIS GAME AOBUT")
+	item := c.Lists[0].Items.GetBack()
+	for item != nil && !item.IsNil() {
+		log.Println(item.GetMainText(), item.GetSecondaryText(), item.GetColor(0))
+		item = item.Next()
+	}
+
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if c.IsInputActive {
 			switch event.Key() {
 			case tcell.KeyRune: // write letter via buffer.WriteString
-				txt := c.Lists[3].Items.GetFront().GetMainText()
+				txt := c.Lists[3].Items.GetBack().GetMainText()
 				if len([]rune(txt)) <= 300 {
 					r := event.Rune()
-					c.Lists[3].Items.GetFront().SetMainText(string(r), 1)
+					c.Lists[3].Items.GetBack().SetMainText(string(r), 1)
 				}
 			case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
-				main := c.Lists[3].Items.GetFront().GetMainText()
+				main := c.Lists[3].Items.GetBack().GetMainText()
 				mr := []rune(main)
 				if len(mr) != 0 {
 					mr = mr[:len(mr)-1]
-					c.Lists[3].Items.GetFront().SetMainText(string(mr), 2)
+					c.Lists[3].Items.GetBack().SetMainText(string(mr), 2)
 				}
 			}
-
 		}
 		switch event.Key() {
 		case tcell.KeyLeft:
-			if c.NavState > 0 {
-				c.App.SetFocus(c.MainFlex.GetItem(c.NavState - 1))
+			if c.NavState > 0 && c.MainFlex.GetItemCount() > 0 {
+				c.NavState -= 1
+				c.App.SetFocus(c.MainFlex.GetItem(c.NavState))
 
 			}
 		case tcell.KeyRight:
-			if c.NavState < c.ListCount-1 {
-				c.App.SetFocus(c.MainFlex.GetItem(c.NavState + 1))
+			if c.NavState < c.MainFlex.GetItemCount()-1 {
+				c.NavState += 1
+				c.App.SetFocus(c.MainFlex.GetItem(c.NavState))
 			}
 		}
 		return event
 	})
 	c.App = tview.NewApplication()
-	c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
 }
 
 /*
@@ -88,33 +85,32 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 	key := list.Content{}
 	key.MainText = item.GetMainText()
 	key.SecondaryText = item.GetSecondaryText()
-	ev := c.EventMap[key]
-	if len(key.MainText) == 0 {
-		l := ev.targets[0]
-		sel := []list.Content{}
-		if l >= 0 {
-			sel = c.Lists[l].GetSelected()
-			if len(sel) < 1 {
-				return
+	ev, ok := c.EventMap[key]
+	if ok {
+		if len(key.MainText) == 0 {
+			l := ev.targets[0]
+			sel := []list.Content{}
+			if l >= 0 {
+				sel = c.Lists[l].GetSelected()
+				if len(sel) < 1 {
+					return
+				}
 			}
+			str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
+			str2 := c.Lists[3].Items.GetBack().GetMainText()
+			sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
+			the current room's id and input area text*/
+			ev.Kind(sel, ev.targets[1:]...)
+			return
 		}
-		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
-		str2 := c.Lists[3].Items.GetFront().GetMainText()
-
-		sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
-		the current room's id and input area text*/
-		ev.Kind(sel, ev.targets[1:]...)
-		b, err := c.ToSend.Copy()
-		if err != nil {
-			panic("json marshal fatal error")
-		}
-		go WriteTimeout(time.Second*15, c.Conn, b)
-		return
+		ev.Kind(ev.content, ev.targets...)
 	}
-	ev.Kind(ev.content, ev.targets...)
 }
 
 func (c *Chat) OptionRoom(item list.ListItem) {
+	if item == nil {
+		return
+	}
 	sec := item.GetSecondaryText()
 	main := item.GetMainText()
 	if sec[:9] == "Room Id: " {
@@ -135,17 +131,17 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 					v.Username,
 					strconv.FormatUint(v.UserId, 10),
 				)
-				c.Lists[8].Items.MoveToFront(navitem)
+				c.Lists[8].Items.MoveToBack(navitem)
 			}
 
 			if c.CurrentRoom.IsGroup {
 				if c.CurrentRoom.IsAdmin {
-					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
+					c.Lists[0].Items.GetBack().SetMainText("This Group Room(Admin)", 0)
 				} else {
-					c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
+					c.Lists[0].Items.GetBack().SetMainText("This Group Room", 0)
 				}
 			} else {
-				c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
+				c.Lists[0].Items.GetBack().SetMainText("This Duo Room", 0)
 			}
 			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		}
@@ -166,28 +162,31 @@ func (c *Chat) PaginationRoom(maintxt string) {
 		ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
 
 		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
-		str2 := c.Lists[3].Items.GetFront().GetMainText()
+		str2 := c.Lists[3].Items.GetBack().GetMainText()
 		ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.CurrentRoom.LastMessageID, 10)},
 			{MainText: str1}, {MainText: str2}})
-		b, err := c.ToSend.Copy()
-		if err != nil {
-			panic("json marshal fatal error")
-		}
-		go WriteTimeout(time.Second*15, c.Conn, b)
 	}
 }
 
 func (c *Chat) OptionInput(item list.ListItem) {
 	c.IsInputActive = true
-	c.Lists[3].Items.GetFront().SetSecondaryText("Type The Text")
+	c.Lists[3].Items.GetBack().SetSecondaryText("Type The Text")
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
+	log.Println(len(prmtvs))
 	c.NavState = 0
-	c.ListCount = len(prmtvs)
 	c.IsInputActive = false
-	c.Lists[3].Items.GetFront().SetSecondaryText("Press Enter Here To Type Text")
-	c.MainFlex.Clear()
-	for _, v := range prmtvs {
-		c.MainFlex.AddItem(v, 0, 2, true)
+	itemio := c.Lists[3].Items.GetBack()
+	if itemio != nil && !itemio.IsNil() {
+		itemio.SetSecondaryText("Press Enter Here To Type Text")
+
+		c.MainFlex.Clear()
+		c.MainFlex.AddItem(c.Lists[0], 0, 2, true)
+		c.MainFlex.AddItem(c.Lists[1], 0, 2, true)
+		for _, v := range prmtvs {
+			c.MainFlex.AddItem(v, 0, 2, true)
+		}
+	} else {
+		panic("this shouldnt happen")
 	}
 }

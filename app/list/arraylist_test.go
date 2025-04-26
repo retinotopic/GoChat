@@ -21,16 +21,24 @@ func Test_ArrayList(t *testing.T) {
 	arr.MoveToBack(l0)
 
 	l1 := arr.NewItem(clrs, "SampleText", "SampleText")
-	arr.MoveToFront(l1)
+	arr.MoveToBack(l1)
 
 	l2 := arr.NewItem(clrs, "SampleText", "SampleText")
-	arr.MoveToFront(l2)
+	arr.MoveToBack(l2)
 
 	l3 := arr.NewItem(clrs, "SampleText", "SampleText")
-	arr.MoveToFront(l3)
+	arr.MoveToBack(l3)
 
-	if arr.GetFront().(list.ArrayItem).GetId() == l3.(list.ArrayItem).GetId() {
-		t.Errorf("Index mismatch")
+	arrcheck := []list.ListItem{l0, l1, l2, l3}
+	item := arr.GetBack()
+	i := 0
+	for item != nil && !item.IsNil() {
+		if item != arrcheck[i] {
+			t.Errorf("consistency list validation failed")
+
+		}
+		item = item.Next()
+		i += 1
 	}
 	if arr.Len() != 4 {
 		t.Errorf("Length mismatch")
@@ -41,7 +49,6 @@ func Test_ArrayList(t *testing.T) {
 	if arr.Len() != 0 {
 		t.Errorf("Length mismatch")
 	}
-	// log.Println(arr.GetFront())
 	AssertItems(arr.GetFront(), nil, t)
 
 	AssertItems(l0.Next(), nil, t)

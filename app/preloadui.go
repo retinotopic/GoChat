@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/gdamore/tcell/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/retinotopic/GoChat/app/list"
 )
@@ -57,16 +57,20 @@ var InitMapText = []string{
 	"Change Room Name", "false", "Room", "ChangeRoomName", "-1",
 	"Create Duo Room", "false", "Room", "CreateDuoRoom", "5",
 	"Create Group Room", "false", "Room", "CreateGroupRoom", "6",
-	" ",
+	"end",
 }
 
 // parse InitMapText and fill c.EventMap
 func (c *Chat) ParseAndInitUI() {
+	c.SendEventCh = make(chan SendEvent, 100)
+	c.errch = make(chan error, 2)
+	c.errgroup = errgroup.Group{}
+	c.errgroup.SetLimit(15)
 
 	SendEventKind := map[string]any{
-		"Room":    &Room{UserIds: make([]uint64, 0, 100), RoomIds: make([]uint64, 0, 100), ToSend: c.ToSend},
-		"User":    &User{ToSend: c.ToSend},
-		"Message": &Message{ToSend: c.ToSend},
+		"Room":    &Room{ToSend: c.SendEventCh},
+		"User":    &User{ToSend: c.SendEventCh},
+		"Message": &Message{ToSend: c.SendEventCh},
 	}
 
 	target := make([]int, 0, 100)
@@ -74,10 +78,9 @@ func (c *Chat) ParseAndInitUI() {
 	c.EventMap = make(map[list.Content]Event)
 	laststr := " "
 	for _, v := range InitMapText {
-		if !unicode.IsNumber([]rune(v)[0]) && unicode.IsNumber([]rune(laststr)[0]) {
-			if len(targetStr) < 3 {
-				break
-			}
+		vch := []rune(v)
+		laststrch := []rune(laststr)
+		if !unicode.IsNumber(vch[len(vch)-1]) && unicode.IsNumber(laststrch[len(laststrch)-1]) {
 			mode := targetStr[:2]
 			targetstr := targetStr[2:]
 			ev := Event{}
@@ -100,11 +103,14 @@ func (c *Chat) ParseAndInitUI() {
 						ev.content = append(ev.content, evv)
 					}
 				}
-				ev.targets = target
+				ev.targets = append(ev.targets, target...)
 				ev.Kind = c.EventUI
 			} else {
 				key.SecondaryText = mode[0]
-				val := SendEventKind[targetstr[0]]
+				val, ok := SendEventKind[targetstr[0]]
+				if !ok {
+					panic("this shouldnt happen")
+				}
 				raw := reflect.ValueOf(val).MethodByName(targetstr[1]).Interface()
 				fn := raw.(func([]list.Content, ...int))
 				ev.Kind = fn
@@ -113,29 +119,18 @@ func (c *Chat) ParseAndInitUI() {
 			c.EventMap[key] = ev
 			targetStr = targetStr[:0]
 			target = target[:0]
-			c.isNumber(v, target, targetStr)
+			target, targetStr = c.isNumber(v, target, targetStr)
 
 		} else {
-			c.isNumber(v, target, targetStr)
+			target, targetStr = c.isNumber(v, target, targetStr)
 		}
 		laststr = v
 	}
-	options := []func(list.ListItem){c.OptionEvent, c.OptionRoom, c.OptionEvent, c.OptionInput,
-		OneOption, OneOption, MultOption, OneOption, MultOption, OneOption}
+}
 
-	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i])
-		c.Lists[i].Items = list.NewArrayList(c.MaxMsgsOnPage)
-	}
-	c.Lists[1].Items = list.NewLinkedList(250)
-
-	c.Lists[3].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Enter Text Here")
-	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", "")
-	c.Lists[9].Items.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", "")
-} //
-
-func (c *Chat) isNumber(v string, target []int, targetStr []string) {
-	if unicode.IsNumber([]rune(v)[0]) {
+func (c *Chat) isNumber(v string, target []int, targetStr []string) ([]int, []string) {
+	vlen := len([]rune(v))
+	if unicode.IsNumber([]rune(v)[vlen-1]) {
 		n, err := strconv.Atoi(v)
 		if err != nil {
 			panic("strconv Atoi error")
@@ -144,6 +139,7 @@ func (c *Chat) isNumber(v string, target []int, targetStr []string) {
 	} else {
 		targetStr = append(targetStr, v)
 	}
+	return target, targetStr
 }
 
 type LoadingState struct {

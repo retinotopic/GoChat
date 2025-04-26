@@ -12,20 +12,12 @@ func NewArrayList(length int) *ArrayList {
 
 type ArrayList struct {
 	Items  []ArrayItem
+	idx    int
 	Length int
 }
 
-func (a *ArrayList) MoveToBack(e ListItem) {
-	uitem, ok := e.(ArrayItem)
-	uitem.ArrList = a
-	if ok {
-		uitem.idx = 0
-		if len(a.Items) == 0 {
-			a.Items = append(a.Items, uitem)
-			return
-		}
-		a.Items[0] = uitem
-	}
+func (a *ArrayList) MoveToBack(e ListItem) { // for arrays is the same as movetofront
+	a.MoveToFront(e)
 }
 func (a *ArrayList) MoveToFront(e ListItem) {
 	uitem, ok := e.(ArrayItem)
@@ -40,6 +32,12 @@ func (a *ArrayList) GetFront() ListItem {
 		return nil
 	}
 	return a.Items[len(a.Items)-1]
+}
+func (a *ArrayList) GetBack() ListItem {
+	if len(a.Items) == 0 {
+		return nil
+	}
+	return a.Items[0]
 }
 func (a *ArrayList) Remove(e ListItem) {
 	a.Items = a.Items[:len(a.Items)-1] // removing the last element. argument is unused, only to satisfy the interface
@@ -63,6 +61,7 @@ type ArrayItem struct {
 func (a *ArrayList) NewItem(clr [2]tcell.Color, main string, sec string) ListItem {
 	return ArrayItem{
 		ArrList:       a,
+		idx:           len(a.Items),
 		Color:         clr,
 		MainText:      main,
 		MainTextBuf:   nil,
@@ -113,21 +112,20 @@ func (a ArrayItem) SetColor(clr tcell.Color, idx int) {
 	}
 }
 func (a ArrayItem) Next() ListItem {
-	if a.idx+1 > len(a.ArrList.Items)-1 || a.idx+1 < 0 {
-		return nil
+	if a.ArrList.idx+1 < len(a.ArrList.Items) {
+		a.ArrList.idx += 1
+		return a.ArrList.Items[a.ArrList.idx]
 	}
-	return a.ArrList.Items[a.idx+1]
+	return nil
 }
 
 func (a ArrayItem) Prev() ListItem {
-	if a.idx-1 < 0 || a.idx-1 > len(a.ArrList.Items)-1 {
-		return nil
+	if a.ArrList.idx-1 >= 0 {
+		a.ArrList.idx -= 1
+		return a.ArrList.Items[a.ArrList.idx]
 	}
-	return a.ArrList.Items[a.idx-1]
+	return nil
 }
 func (a ArrayItem) IsNil() bool {
 	return false
-}
-func (a ArrayItem) GetId() int {
-	return a.idx
 }
