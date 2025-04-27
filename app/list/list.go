@@ -65,7 +65,7 @@ func (l *List) GetSelected() []Content {
 	front := l.Items.GetBack()
 
 	l.selectedBuf = l.selectedBuf[:0]
-	for front != nil && front.IsNil() {
+	for front != nil && !front.IsNil() {
 		cnt := Content{MainText: front.GetMainText(), SecondaryText: front.GetSecondaryText()}
 		l.selectedBuf = append(l.selectedBuf, cnt)
 		front = front.Next()

@@ -3,3 +3,4 @@ go.mod
 /.*  
 /.*/ 
 !/.gitignore 
+/cmd/app/logs

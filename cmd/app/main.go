@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"log"
 
 	// "log"
 	"os"
@@ -11,6 +12,10 @@ import (
 )
 
 func main() {
+	f, err := os.Create("logs")
+	if err != nil {
+		panic(err)
+	}
 	bufstr := bytes.NewBuffer(make([]byte, 0, 50))
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -31,7 +36,7 @@ func main() {
 		appport = "8080"
 	}
 	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
-	chat, errch := app.NewChat(bufstr.String(), wsUrl, 30, true)
+	chat, errch := app.NewChat(bufstr.String(), wsUrl, 30, true, log.New(f, "app log: ", log.LstdFlags))
 	go chat.Run()
 	for err := range errch {
 		panic(err)

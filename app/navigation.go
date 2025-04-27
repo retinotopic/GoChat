@@ -2,6 +2,7 @@ package app
 
 import (
 	// "log"
+	"log"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
@@ -111,6 +112,7 @@ or sends a request to the server
 */
 func (c *Chat) OptionEvent(item list.ListItem) {
 	if item == nil {
+		log.Fatalln(item)
 		return
 	}
 	key := list.Content{}
@@ -118,6 +120,7 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 	key.SecondaryText = item.GetSecondaryText()
 	ev, ok := c.EventMap[key]
 	if ok {
+		c.Logger.Println(ev, "option event start")
 		if len(key.MainText) == 0 {
 			l := ev.targets[0]
 			sel := []list.Content{}
@@ -127,14 +130,23 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 					return
 				}
 			}
-			str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
-			str2 := c.Lists[3].Items.GetBack().GetMainText()
+			str1 := ""
+			if c.CurrentRoom != nil {
+				str1 = strconv.FormatUint(c.CurrentRoom.RoomId, 10)
+			}
+			it := c.Lists[3].Items.GetBack()
+			if it == nil || it.IsNil() {
+				return
+			}
+			str2 := it.GetMainText()
 			sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
 			the current room's id and input area text*/
 			ev.Kind(sel, ev.targets[1:]...)
+			c.Logger.Println(sel, ev.targets[1:], "option event func")
 			return
 		}
 		ev.Kind(ev.content, ev.targets...)
+		c.Logger.Println(ev.content, ev.targets, "option event UI")
 	}
 }
 
@@ -215,7 +227,9 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 		c.MainFlex.Clear()
 		c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
 		c.MainFlex.AddItem(c.Lists[1], 0, 1, false)
+
 		for _, v := range prmtvs {
+			c.Logger.Println(v, "in prmtvs additemmainflex")
 			c.MainFlex.AddItem(v, 0, 2, false)
 		}
 		// c.NavState = 0

@@ -62,15 +62,15 @@ var InitMapText = []string{
 
 // parse InitMapText and fill c.EventMap
 func (c *Chat) ParseAndInitUI() {
-	c.SendEventCh = make(chan SendEvent, 100)
+	c.SendEventCh = make(chan []byte, 100)
 	c.errch = make(chan error, 2)
 	c.errgroup = errgroup.Group{}
 	c.errgroup.SetLimit(15)
 
 	SendEventKind := map[string]any{
-		"Room":    &Room{ToSend: c.SendEventCh},
-		"User":    &User{ToSend: c.SendEventCh},
-		"Message": &Message{ToSend: c.SendEventCh},
+		"Room":    &Room{SendCh: c.SendEventCh},
+		"User":    &User{SendCh: c.SendEventCh},
+		"Message": &Message{SendCh: c.SendEventCh},
 	}
 
 	target := make([]int, 0, 100)

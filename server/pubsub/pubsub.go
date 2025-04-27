@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -65,7 +66,8 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 		if err != nil {
 			return
 		}
-		event := &models.EventMetadata{Data: b}
+
+		event := &models.EventMetadata{Data: b, UserId: userid}
 		event.GetEventName()
 		go p.ProcessEvent(event, conn)
 	}
@@ -102,6 +104,8 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 	err := p.Db.FuncApi(ctx, event)
 	if err != nil {
 		event.ErrorMsg = err.Error()
+
+		log.Println("Process Event Func Api", err)
 	}
 	for i := range event.OrderCmd {
 		switch event.OrderCmd[i] {
@@ -109,21 +113,24 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(event.Data))
 			if err != nil {
 				conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
+				p.Log.Error("Process Event: switch event.OrderCmd 1", err)
 			}
 		case 2:
 			err = p.Pb.PublishWithSubscriptions(ctx, event.PubForSub, event.SubForPub, event.Kind)
 			if err != nil {
 				conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
+				p.Log.Error("Process Event: switch event.OrderCmd 2", err)
 			}
 		}
 	}
 
-	bs, err := json.Marshal(event)
+	b, err := json.Marshal(event)
 	if err != nil {
 		conn.Close(websocket.StatusInternalError, "Marshal error")
 	}
-	err = WriteTimeout(time.Second*15, conn, bs)
+	err = WriteTimeout(time.Second*15, conn, b)
 	if err != nil {
 		conn.CloseNow()
 	}
+	log.Println(string(event.Data), "+", event.Event, event.UserId, event.ErrorMsg)
 }

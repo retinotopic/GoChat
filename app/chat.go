@@ -2,14 +2,16 @@ package app
 
 import (
 	"errors"
-	json "github.com/bytedance/sonic"
+	"log"
+	// "log"
+	"strconv"
+	"time"
+
 	"github.com/coder/websocket"
 	"github.com/gdamore/tcell/v2"
 	"github.com/retinotopic/GoChat/app/list"
 	"github.com/rivo/tview"
 	"golang.org/x/sync/errgroup"
-	"strconv"
-	"time"
 )
 
 type RoomServer struct {
@@ -64,13 +66,14 @@ type Chat struct {
 	NavState      int
 	IsInputActive bool
 
+	Logger      *log.Logger
 	errgroup    errgroup.Group
 	errch       chan error
-	SendEventCh chan SendEvent
+	SendEventCh chan []byte
 }
 
-func NewChat(username, url string, maxMsgsOnPage int, debug bool) (chat *Chat, err <-chan error) {
-	c := &Chat{}
+func NewChat(username, url string, maxMsgsOnPage int, debug bool, logger *log.Logger) (chat *Chat, err <-chan error) {
+	c := &Chat{Logger: logger}
 	c.MaxMsgsOnPage = maxMsgsOnPage
 	c.ParseAndInitUI()
 	c.PreLoadNavigation()
@@ -90,13 +93,10 @@ func (c *Chat) ProcessEvents() {
 	var NotIdle bool
 	for {
 		select {
-		case e := <-c.SendEventCh:
-			b, err := json.Marshal(e)
-			if err == nil {
-				c.errgroup.Go(func() error {
-					return WriteTimeout(time.Second*15, c.Conn, b)
-				})
-			}
+		case b := <-c.SendEventCh:
+			c.errgroup.Go(func() error {
+				return WriteTimeout(time.Second*15, c.Conn, b)
+			})
 		case <-c.errch:
 			return
 		}

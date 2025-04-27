@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	json "github.com/bytedance/sonic"
@@ -83,12 +84,13 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.EventMetadata) err
 		if err != nil {
 			return err
 		}
+	} else {
+		log.Println("i hate this")
 
 	}
-
 	return nil
-
 }
+
 func (p *PgClient) GetUser(ctx context.Context, sub string) (b []byte, userid uint64, err error) {
 	var username string
 	row := p.QueryRow(ctx, "SELECT user_id,user_name FROM users WHERE user_subject=$1", sub)
