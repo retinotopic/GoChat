@@ -13,19 +13,26 @@ import (
 )
 
 type RoomRequest struct {
+	Event    string   `json:"Event" `
 	UserIds  []uint64 `json:"UserIds" `
 	RoomIds  []uint64 `json:"RoomIds" `
 	RoomName string   `json:"RoomName" `
 	IsGroup  bool     `json:"IsGroup" `
+	Type     int      `json:"Type" `
 }
+
+func (r RoomRequest) GetName() string {
+	return r.Event
+}
+
 type RoomClient struct {
-	RoomId          uint64 `json:"RoomId" `
-	RoomName        string `json:"RoomName" `
-	IsGroup         bool   `json:"IsGroup" `
-	CreatedByUserId uint64 `json:"CreatedByUserId" `
-	Users           []User `json:"Users" `
-	Username        string `json:"-" `
-	UserId          uint64 `json:"-" `
+	RoomId          uint64        `json:"RoomId" `
+	RoomName        string        `json:"RoomName" `
+	IsGroup         bool          `json:"IsGroup" `
+	CreatedByUserId uint64        `json:"CreatedByUserId" `
+	Users           []models.User `json:"Users" `
+	Username        string        `json:"-" `
+	UserId          uint64        `json:"-" `
 }
 
 func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (err error) {
@@ -47,32 +54,18 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 		return err
 	}
 	event.OrderCmd[0] = 1
-	event.PubForSub = []string{strconv.Itoa(int(event.UserId))} //1
+	event.OrderCmd[1] = 2
+	event.Kind = "1"
+	event.PubForSub = []string{strconv.Itoa(int(event.UserId))}
 	for _, room := range resp {
-		event.SubForPub = append(event.SubForPub, "room"+strconv.Itoa(int(room.RoomId))) //2
+		event.SubForPub = append(event.SubForPub, "room"+strconv.Itoa(int(room.RoomId)))
 	}
 	return err
-}
-func (r *RoomRequest) IsDuoRoomExist(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	first, second := r.UserIds[0], event.UserId
-	if event.UserId > r.RoomIds[0] {
-		first, second = event.UserId, r.UserIds[0]
-	}
-	row := tx.QueryRow(ctx, `SELECT room_id
-		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) ;`, first, second)
-	err := row.Scan(r.RoomIds[0])
-	if err != nil && err != pgx.ErrNoRows {
-		return err
-	}
-	return nil
 }
 
 // method for safely creating unique duo room
 func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -80,10 +73,18 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	if len(r.UserIds) == 0 {
 		return errors.New("malformed json")
 	}
-	err = r.IsDuoRoomExist(ctx, tx, event)
-	if err != nil {
+	first, second := r.UserIds[0], event.UserId
+	if event.UserId > r.RoomIds[0] {
+		first, second = event.UserId, r.UserIds[0]
+	}
+	row := tx.QueryRow(ctx, `SELECT room_id
+		FROM duo_rooms
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2)`, first, second)
+	err = row.Scan(r.RoomIds[0])
+	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
+
 	var rows pgx.Rows
 	is_group := false
 	if r.RoomIds[0] == 0 {
@@ -118,8 +119,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 }
 
 func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -152,8 +152,7 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 	return err
 }
 func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -184,8 +183,7 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	return err
 }
 func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -223,8 +221,7 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 
 // Blocking user and delete user from room_users_info
 func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -253,8 +250,7 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 
 // Unblocking user
 func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -267,13 +263,12 @@ func UnblockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("internal database error, no blocked users found")
+		return errors.New("no blocked users found")
 	}
 	return err
 }
-func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	r := &RoomRequest{}
-	err := json.Unmarshal(event.Data, r)
+func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (err error) {
+	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
 		return err
 	}
@@ -324,12 +319,12 @@ func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 
 		if r.RoomId == currentroom {
 			last := len(rms) - 1
-			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
+			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
 		} else {
 			rms = append(rms, r)
 			last := len(rms) - 1
-			rms[last].Users = make([]User, 0, 3)
-			rms[last].Users = append(rms[last].Users, User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
+			rms[last].Users = make([]models.User, 0, 3)
+			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
 			currentroom = r.RoomId
 		}
 	}

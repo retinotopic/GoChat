@@ -11,15 +11,8 @@ import (
 	"github.com/retinotopic/GoChat/server/models"
 )
 
-type User struct {
-	UserId     uint64 `json:"UserId"`
-	Username   string `json:"Username" `
-	RoomToggle bool   `json:"Bool" `
-}
-
 func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	u := &User{}
-	err := json.Unmarshal(event.Data, u)
+	u, err := models.UnmarshalEvent[models.User](event.Data)
 	if err != nil {
 		return err
 	}
@@ -40,8 +33,7 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	return err
 }
 func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	u := &User{}
-	err := json.Unmarshal(event.Data, u)
+	u, err := models.UnmarshalEvent[models.User](event.Data)
 	if err != nil {
 		return err
 	}
@@ -55,14 +47,13 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	return err
 }
 func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	u := &User{}
-	err := json.Unmarshal(event.Data, u)
+	u, err := models.UnmarshalEvent[models.User](event.Data)
 	if err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, "UPDATE users SET allow_group_invites = $1 WHERE user_id = $2", u.RoomToggle, event.UserId)
 	if tag.RowsAffected() == 0 {
-		return errors.New("internal database error, 'allow group invites' hasn't changed")
+		return errors.New(" 'allow group invites' hasn't changed")
 	}
 	if err != nil {
 		return err
@@ -70,8 +61,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetad
 	return err
 }
 func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	u := &User{}
-	err := json.Unmarshal(event.Data, u)
+	u, err := models.UnmarshalEvent[models.User](event.Data)
 	if err != nil {
 		return err
 	}
@@ -83,7 +73,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[User])
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[models.User])
 	if err != nil {
 		return err
 	}
@@ -99,7 +89,7 @@ func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[User])
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[models.User])
 	if err != nil {
 		return err
 	}

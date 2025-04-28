@@ -11,16 +11,8 @@ import (
 	"github.com/retinotopic/GoChat/server/models"
 )
 
-type Message struct {
-	MessagePayload string `json:"MessagePayload"`
-	MessageId      uint64 `json:"MessageId" `
-	RoomId         uint64 `json:"RoomId" `
-	UserId         uint64 `json:"UserId" `
-}
-
 func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	m := &Message{}
-	err := json.Unmarshal(event.Data, m)
+	m, err := models.UnmarshalEvent[models.Message](event.Data)
 	if err != nil {
 		return err
 	}
@@ -36,8 +28,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 	return err
 }
 func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
-	m := &Message{}
-	err := json.Unmarshal(event.Data, m)
+	m, err := models.UnmarshalEvent[models.Message](event.Data)
 	if err != nil {
 		return err
 	}
@@ -56,7 +47,7 @@ func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	if err != nil {
 		return err
 	}
-	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[Message])
+	resp, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[models.Message])
 	if err != nil {
 		return err
 	}

@@ -101,7 +101,7 @@ func (p *PgClient) GetUser(ctx context.Context, sub string) (b []byte, userid ui
 			return nil, userid, fmt.Errorf("failed to create new user: %v", err)
 		}
 	}
-	u := User{UserId: userid, Username: username}
+	u := models.User{UserId: userid, Username: username}
 	b, err = json.Marshal(u)
 	if err != nil {
 		return nil, userid, err

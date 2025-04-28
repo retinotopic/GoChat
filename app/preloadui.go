@@ -3,6 +3,7 @@ package app
 import (
 	"reflect"
 	"strconv"
+	"sync/atomic"
 	"unicode"
 
 	"golang.org/x/sync/errgroup"
@@ -62,10 +63,9 @@ var InitMapText = []string{
 
 // parse InitMapText and fill c.EventMap
 func (c *Chat) ParseAndInitUI() {
-	c.SendEventCh = make(chan []byte, 100)
+	c.SendEventCh = make(chan EventInfo, 100)
 	c.errch = make(chan error, 2)
 	c.errgroup = errgroup.Group{}
-	c.errgroup.SetLimit(15)
 
 	SendEventKind := map[string]any{
 		"Room":    &Room{SendCh: c.SendEventCh},
@@ -126,6 +126,12 @@ func (c *Chat) ParseAndInitUI() {
 		}
 		laststr = v
 	}
+	c.state = LoadingState{
+		message: "In Progress",
+		spinner: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+		color:   "yellow",
+	}
+	c.state.InProgressCount.Store(0)
 }
 
 func (c *Chat) isNumber(v string, target []int, targetStr []string) ([]int, []string) {
@@ -146,12 +152,5 @@ type LoadingState struct {
 	message         string
 	spinner         []string
 	color           string
-	InProgressCount int
-}
-
-var state = LoadingState{
-	message:         "In Progress",
-	spinner:         []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-	color:           "yellow",
-	InProgressCount: 0,
+	InProgressCount atomic.Int32
 }

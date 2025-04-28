@@ -20,10 +20,11 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	return c.Write(ctx, websocket.MessageText, msg)
 }
 
-type IncomingEvent struct {
+type EventInfo struct {
 	Event    string `json:"Event"`
 	ErrorMsg string `json:"ErrorMsg"`
 	UserId   uint64 `json:"UserId"`
+	Type     int    `json:"Type"`
 	Data     []byte `json:"Data"`
 }
 
@@ -60,40 +61,52 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 			if msgType == websocket.MessageText && len(b) > 0 {
 
 				c.Logger.Println(b, "CONN READ")
-				msg := Message{}
-				err = json.Unmarshal(b, &msg)
-				if err == nil && msg.RoomId != 0 {
-					c.NewMessageEvent(msg)
+				e := EventInfo{}
+				err := json.Unmarshal(b, &e)
+				if err != nil {
 					continue
 				}
-				rm := []RoomServer{}
-				err = json.Unmarshal(b, &rm)
-				if err == nil && len(rm) != 0 {
-					c.ProcessRoom(rm)
+
+				isErr := c.NewEventNotification(e)
+				if isErr {
 					continue
 				}
-				e := IncomingEvent{}
-				err = json.Unmarshal(b, &e)
-				if err == nil && e.UserId != 0 {
-					c.Logger.Println(e, "conn SendEvent")
-					if c.NewEventNotification(e) {
+
+				switch e.Event {
+				case "Get Messages From Room":
+					var msgs []Message
+					err = json.Unmarshal(e.Data, &msgs)
+					if err != nil {
 						continue
 					}
-					switch e.Event {
-					case "Get Messages From Room":
-						var msgs []Message
-						err = json.Unmarshal(e.Data, &msgs)
-						if err != nil {
-							continue
-						}
-						c.LoadMessagesEvent(msgs)
-					case "Find Users":
-						c.Logger.Println(e, "Find Users")
-						c.FillUsers(e.Data, 3, c.FoundUsers)
-					case "Get Blocked Users":
-						c.Logger.Println(e, "Get Blocked Users")
-						c.FillUsers(e.Data, 1, c.BlockedUsers)
+					c.LoadMessagesEvent(msgs)
+					continue
+				case "Find Users":
+					c.Logger.Println(e, "Find Users")
+					c.FillUsers(e.Data, 3, c.FoundUsers)
+					continue
+				case "Get Blocked Users":
+					c.Logger.Println(e, "Get Blocked Users")
+					c.FillUsers(e.Data, 1, c.BlockedUsers)
+					continue
+				}
+
+				switch e.Type {
+				case 1:
+					msg := Message{}
+					err := json.Unmarshal(e.Data, &msg)
+					if err != nil {
+						continue
 					}
+					c.NewMessageEvent(msg)
+					continue
+				case 2:
+					rm := []RoomServer{}
+					err := json.Unmarshal(e.Data, &rm)
+					if err != nil {
+						continue
+					}
+					c.ProcessRoom(rm)
 				}
 			}
 		}
@@ -119,7 +132,7 @@ func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 	})
 
 }
-func (c *Chat) NewEventNotification(e IncomingEvent) (isErr bool) {
+func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
 	ll := c.Lists[4].Items.(*list.ArrayList)
 	errstr := "Success"
 	if len(e.ErrorMsg) != 0 {

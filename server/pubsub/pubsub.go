@@ -62,14 +62,20 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 	startevent := &models.EventMetadata{Event: "Get All Rooms"}
 	p.ProcessEvent(startevent, conn)
 	for {
-		_, b, err := conn.Read(context.TODO()) // incoming client user requests
+		msgType, b, err := conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
 			return
 		}
+		if msgType == websocket.MessageText && len(b) > 0 {
+			event := &models.EventMetadata{}
+			err := json.Unmarshal(b, &event)
+			if err != nil {
+				continue
+			}
+			event.UserId = userid
+			go p.ProcessEvent(event, conn)
 
-		event := &models.EventMetadata{Data: b, UserId: userid}
-		event.GetEventName()
-		go p.ProcessEvent(event, conn)
+		}
 	}
 }
 
@@ -98,25 +104,33 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	return c.Write(ctx, websocket.MessageText, msg)
 }
 func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
+
 	err := p.Db.FuncApi(ctx, event)
 	if err != nil {
 		event.ErrorMsg = err.Error()
 
 		log.Println("Process Event Func Api", err)
 	}
+
+	b, err := json.Marshal(event)
+	if err != nil {
+		conn.Close(websocket.StatusInternalError, "Marshal error")
+	}
+
 	for i := range event.OrderCmd {
 		switch event.OrderCmd[i] {
 		case 1:
-			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(event.Data))
+			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(b))
+			log.Println("publish with message")
 			if err != nil {
 				conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
 				p.Log.Error("Process Event: switch event.OrderCmd 1", err)
 			}
 		case 2:
 			err = p.Pb.PublishWithSubscriptions(ctx, event.PubForSub, event.SubForPub, event.Kind)
+			log.Println("publish with sub")
 			if err != nil {
 				conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
 				p.Log.Error("Process Event: switch event.OrderCmd 2", err)
@@ -124,13 +138,11 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 		}
 	}
 
-	b, err := json.Marshal(event)
-	if err != nil {
-		conn.Close(websocket.StatusInternalError, "Marshal error")
-	}
 	err = WriteTimeout(time.Second*15, conn, b)
 	if err != nil {
 		conn.CloseNow()
 	}
+
 	log.Println(string(event.Data), "+", event.Event, event.UserId, event.ErrorMsg)
+
 }

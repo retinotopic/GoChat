@@ -1,8 +1,10 @@
 package app
 
 import (
-	"errors"
 	"log"
+
+	json "github.com/bytedance/sonic"
+
 	// "log"
 	"strconv"
 	"time"
@@ -66,10 +68,11 @@ type Chat struct {
 	NavState      int
 	IsInputActive bool
 
+	state       LoadingState
 	Logger      *log.Logger
 	errgroup    errgroup.Group
 	errch       chan error
-	SendEventCh chan []byte
+	SendEventCh chan EventInfo
 }
 
 func NewChat(username, url string, maxMsgsOnPage int, debug bool, logger *log.Logger) (chat *Chat, err <-chan error) {
@@ -83,9 +86,7 @@ func NewChat(username, url string, maxMsgsOnPage int, debug bool, logger *log.Lo
 
 func (c *Chat) Run() {
 	go c.ProcessEvents()
-	defer func(err error) {
-		c.errch <- errors.New("UI is crashed")
-	}(c.App.SetRoot(c.MainFlex, true).Run())
+	c.errch <- c.App.SetRoot(c.MainFlex, true).Run()
 }
 
 func (c *Chat) ProcessEvents() {
@@ -93,30 +94,41 @@ func (c *Chat) ProcessEvents() {
 	var NotIdle bool
 	for {
 		select {
-		case b := <-c.SendEventCh:
-			c.errgroup.Go(func() error {
-				return WriteTimeout(time.Second*15, c.Conn, b)
-			})
+		case e := <-c.SendEventCh:
+			b, err := json.Marshal(e)
+			if err != nil {
+				c.Logger.Println(err, "process events marshal")
+				continue
+
+			} else if c.state.InProgressCount.Load() < 15 {
+				c.state.InProgressCount.Add(1)
+				go func() {
+					err := WriteTimeout(time.Second*15, c.Conn, b)
+					if err != nil {
+						c.state.InProgressCount.Add(-1)
+					}
+				}()
+			}
 		case <-c.errch:
 			return
 		}
-		if state.InProgressCount > 0 {
+		if c.state.InProgressCount.Load() > 0 {
 			c.App.QueueUpdateDraw(func() {
-				spinChar := state.spinner[i%len(state.spinner)]
-				text := spinChar + " " + strconv.Itoa(state.InProgressCount) + " " + state.message
+				spinChar := c.state.spinner[i%len(c.state.spinner)]
+				text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
 				item := c.Lists[0].Items.GetBack()
 				item.SetSecondaryText(text)
 				item.SetColor(tcell.ColorRed, 1)
 			})
 			i++
-			if i == len(state.spinner) {
+			if i == len(c.state.spinner) {
 				i = 0
 			}
 			NotIdle = true
 		} else if NotIdle {
 			c.App.QueueUpdateDraw(func() {
 				item := c.Lists[0].Items.GetBack()
-				item.SetSecondaryText(strconv.Itoa(state.InProgressCount) + " " + state.message)
+				item.SetSecondaryText(strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message)
 				item.SetColor(tcell.ColorGrey, 1)
 			})
 			NotIdle = false

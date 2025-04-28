@@ -2,8 +2,6 @@ package db
 
 import "fmt"
 
-//there can be only two prepared cached statements for addUsersToRoom: allowGroupInvites and allowDirectMessages
-
 var allowGroupInvites = "u.allow_group_invites = true"
 var allowDirectMessages = "u.allow_direct_messages = true"
 
@@ -20,6 +18,7 @@ WHERE bu.blocked_by_user_id IS NULL RETURNING user_id,room_id)
 
 SELECT ad.user_id,u.user_name,ad.room_id,r.room_name,r.is_group,r.created_by_user_id FROM addusers ad JOIN users u ON ad.user_id = u.user_id JOIN rooms r ON ad.room_id = r.room_id`
 
+// there can be only two prepared cached statements for addUsersToRoom: allowGroupInvites and allowDirectMessages
 var addUsersToRoomGroup = fmt.Sprintf(addUsersToRoom, allowGroupInvites)
 var addUsersToRoomDirect = fmt.Sprintf(addUsersToRoom, allowDirectMessages)
 

@@ -10,12 +10,11 @@ import (
 )
 
 type Room struct {
-	SendCh   chan []byte `json:"-"`
-	Event    string      `json:"Event" `
-	UserIds  []uint64    `json:"UserIds" `
-	RoomIds  []uint64    `json:"RoomIds" `
-	RoomName string      `json:"RoomName" `
-	IsGroup  bool        `json:"IsGroup" `
+	SendCh   chan EventInfo `json:"-"`
+	UserIds  []uint64       `json:"UserIds" `
+	RoomIds  []uint64       `json:"RoomIds" `
+	RoomName string         `json:"RoomName" `
+	IsGroup  bool           `json:"IsGroup" `
 }
 
 func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
@@ -52,9 +51,8 @@ func (r Room) AddDeleteUsersInRoom(args []list.Content, trg ...int) {
 		}
 		r.UserIds = append(r.UserIds, n)
 	}
-	r.Event = SendEventNames[trg[0]] // "add users to room" or "delete users from room"
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- data
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: SendEventNames[trg[0]]} // "add users to room" or "delete users from room"
 	}
 }
 
@@ -65,9 +63,8 @@ func (r Room) BlockUnblockUser(args []list.Content, trg ...int) {
 		return
 	}
 	r.UserIds = append(r.UserIds, n)
-	r.Event = SendEventNames[trg[0]] // "block user" or "unblock user"
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- data
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: SendEventNames[trg[0]]} // "block user" or "unblock user"
 	}
 }
 
@@ -79,9 +76,8 @@ func (r Room) CreateDuoRoom(args []list.Content, trg ...int) {
 		return
 	}
 	r.UserIds = append(r.UserIds, n)
-	r.Event = "Create Duo Room"
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- data
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Create Duo Room"}
 	}
 }
 
@@ -97,10 +93,8 @@ func (r Room) CreateGroupRoom(args []list.Content, trg ...int) {
 		}
 		r.UserIds = append(r.UserIds, n)
 	}
-	r.Event = "Create Group Room"
-
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- data
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Create Group Room"}
 	}
 }
 
@@ -108,19 +102,17 @@ func (r Room) ChangeRoomName(args []list.Content, trg ...int) {
 	// should be:  len(r.RoomIds) == 0 || len(r.RoomName) == 0
 	//r.RoomIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
 	r.RoomName = args[len(args)-1].MainText
-	r.Event = "Change Room Name"
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- data
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Create Group Room"}
 	}
 }
 
 type Message struct {
-	SendCh         chan []byte `json:"-"`
-	Event          string      `json:"Event" `
-	MessagePayload string      `json:"MessagePayload"`
-	MessageId      uint64      `json:"MessageId" `
-	RoomId         uint64      `json:"RoomId" `
-	UserId         uint64      `json:"UserId" `
+	SendCh         chan EventInfo `json:"-"`
+	MessagePayload string         `json:"MessagePayload"`
+	MessageId      uint64         `json:"MessageId" `
+	RoomId         uint64         `json:"RoomId" `
+	UserId         uint64         `json:"UserId" `
 }
 
 func (m Message) SendMessage(args []list.Content, trg ...int) {
@@ -131,9 +123,8 @@ func (m Message) SendMessage(args []list.Content, trg ...int) {
 		return
 	}
 	m.MessagePayload = args[len(args)-1].MainText
-	m.Event = "Send Message"
 	if data, err := json.Marshal(m); err == nil {
-		m.SendCh <- data
+		m.SendCh <- EventInfo{Data: data, Type: 1, Event: "Send Message"}
 	}
 }
 
@@ -148,41 +139,36 @@ func (m Message) GetMessagesFromRoom(args []list.Content, trg ...int) {
 	if err != nil {
 		return
 	}
-	m.Event = "Get Messages From Room"
 	if data, err := json.Marshal(m); err == nil {
-		m.SendCh <- data
+		m.SendCh <- EventInfo{Data: data, Type: 1, Event: "Get Messages From Room"}
 	}
 }
 
 type User struct {
-	SendCh     chan []byte `json:"-"`
-	Event      string      `json:"Event" `
-	UserId     uint64      `json:"UserId"`
-	Username   string      `json:"Username" `
-	RoomToggle bool        `json:"RoomToggle" `
+	SendCh     chan EventInfo `json:"-"`
+	UserId     uint64         `json:"UserId"`
+	Username   string         `json:"Username" `
+	RoomToggle bool           `json:"RoomToggle" `
 }
 
 // User SendEvents
 func (u User) ChangePrivacy(args []list.Content, trg ...int) {
 	// should be: ChangePrivacyDirect , ChangePrivacyGroup
 	u.RoomToggle = args[0].MainText == "true"
-	u.Event = SendEventNames[trg[0]] // "change privacy direct" or "change privacy group"
 	if data, err := json.Marshal(u); err == nil {
-		u.SendCh <- data
+		u.SendCh <- EventInfo{Data: data, Type: 3, Event: SendEventNames[trg[0]]} // "change privacy direct" or "change privacy group"
 	}
 }
 
 func (u User) ChangeUsernameFindUsers(args []list.Content, trg ...int) {
 	// should be: len(u.Username) == 0
 	u.Username = args[len(args)-1].MainText
-	u.Event = SendEventNames[trg[0]] // "change username" or "find users"
 	if data, err := json.Marshal(u); err == nil {
-		u.SendCh <- data
+		u.SendCh <- EventInfo{Data: data, Type: 3, Event: SendEventNames[trg[0]]} // "change username" or "find users"
 	}
 }
 func (u User) GetBlockedUsers(args []list.Content, trg ...int) {
-	u.Event = "Get Blocked Users"
 	if data, err := json.Marshal(u); err == nil {
-		u.SendCh <- data
+		u.SendCh <- EventInfo{Data: data, Type: 3, Event: "Get Blocked Users"}
 	}
 }
