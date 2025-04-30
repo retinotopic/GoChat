@@ -11,10 +11,10 @@ func MultOption(item list.ListItem) {
 	}
 	color := item.GetColor(0)
 
-	if color == tcell.ColorYellow {
+	if color == tcell.ColorRed {
 		item.SetColor(tcell.ColorWhite, 0)
 	} else {
-		item.SetColor(tcell.ColorYellow, 0)
+		item.SetColor(tcell.ColorRed, 0)
 	}
 }
 
@@ -22,7 +22,7 @@ func OneOption(item list.ListItem) {
 	if item == nil {
 		return
 	}
-	item.SetColor(tcell.ColorYellow, 0)
+	item.SetColor(tcell.ColorRed, 0)
 	bi := item
 	fi := item
 	back := true

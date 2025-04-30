@@ -21,11 +21,12 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 }
 
 type EventInfo struct {
-	Event    string `json:"Event"`
-	ErrorMsg string `json:"ErrorMsg"`
-	UserId   uint64 `json:"UserId"`
-	Type     int    `json:"Type"`
-	Data     []byte `json:"Data"`
+	Event    string                `json:"Event"`
+	ErrorMsg string                `json:"ErrorMsg"`
+	UserId   uint64                `json:"UserId"`
+	Username string                `json:"Username"`
+	Type     int                   `json:"Type"`
+	Data     json.NoCopyRawMessage `json:"Data"`
 }
 
 func (c *Chat) TryConnect(username, url string) <-chan error {
@@ -48,7 +49,7 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 	opts := &websocket.DialOptions{HTTPHeader: hd}
 	c.Conn, _, err = websocket.Dial(ctx, url, opts)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	go func() {
@@ -59,14 +60,22 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 				c.Conn.CloseNow()
 			}
 			if msgType == websocket.MessageText && len(b) > 0 {
-
+				if c.UserId == 0 {
+					u := User{}
+					err := json.Unmarshal(b, &u)
+					if err != nil {
+						c.errch <- err
+					}
+					c.Username = u.Username
+					c.UserId = u.UserId
+				}
 				c.Logger.Println(b, "CONN READ")
 				e := EventInfo{}
 				err := json.Unmarshal(b, &e)
 				if err != nil {
 					continue
 				}
-
+				c.state.InProgressCount.Add(-1)
 				isErr := c.NewEventNotification(e)
 				if isErr {
 					continue
@@ -83,11 +92,19 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 					continue
 				case "Find Users":
 					c.Logger.Println(e, "Find Users")
-					c.FillUsers(e.Data, 3, c.FoundUsers)
+					c.FillUsers(e.Data, 5, c.FoundUsers)
 					continue
 				case "Get Blocked Users":
 					c.Logger.Println(e, "Get Blocked Users")
-					c.FillUsers(e.Data, 1, c.BlockedUsers)
+					c.FillUsers(e.Data, 7, c.BlockedUsers)
+					continue
+				case "Change Username":
+					u := User{}
+					err := json.Unmarshal(e.Data, &u)
+					if err != nil {
+						continue
+					}
+					c.Username = u.Username
 					continue
 				}
 
@@ -117,7 +134,6 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 }
 func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 	c.App.QueueUpdateDraw(func() {
-		log.Fatalln("fill users")
 		var usrs []User
 		err := json.Unmarshal(data, &usrs)
 		if err != nil {
@@ -126,13 +142,18 @@ func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 		c.Lists[idx].Items.Clear()
 		for _, v := range usrs {
 			m[v.UserId] = v
-			c.Lists[idx].Items.MoveToBack(list.ArrayItem{MainText: v.Username,
-				SecondaryText: strconv.FormatUint(v.UserId, 10)})
+			c.Lists[idx].Items.MoveToBack(list.ArrayItem{MainText: strconv.FormatUint(v.UserId, 10),
+				SecondaryText: v.Username})
 		}
 	})
 
 }
 func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
+	addinfo := " "
+	if e.UserId == c.UserId {
+		c.state.InProgressCount.Add(-1)
+		addinfo = " by me: " + c.Username
+	}
 	ll := c.Lists[4].Items.(*list.ArrayList)
 	errstr := "Success"
 	if len(e.ErrorMsg) != 0 {
@@ -142,7 +163,7 @@ func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
 	}
 	en := ll.NewItem(
 		[2]tcell.Color{tcell.ColorBlue, tcell.ColorRed},
-		e.Event,
+		e.Event+addinfo,
 		errstr,
 	)
 	c.Lists[4].Items.MoveToBack(en)

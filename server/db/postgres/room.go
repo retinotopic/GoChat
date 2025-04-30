@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 
 	json "github.com/bytedance/sonic"
@@ -39,9 +40,7 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 	rows, err := tx.Query(ctx,
 		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,r.created_by_user_id,u.user_name
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
-		WHERE ru.user_id = $1 
-		ORDER BY r.last_activity DESC, r.room_id;
-		`, event.UserId)
+		WHERE ru.user_id = $1 ORDER BY r.last_activity DESC, r.room_id;`, event.UserId)
 	if err != nil {
 		return err
 	}
@@ -49,12 +48,16 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 	if err != nil {
 		return err
 	}
+	if len(resp) == 0 {
+		return errors.New("no rooms found")
+	}
+
+	log.Println(resp, "CHECK RESP GET ALL R")
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
-	event.OrderCmd[0] = 1
-	event.OrderCmd[1] = 2
+	event.OrderCmd[0] = 2
 	event.Kind = "1"
 	event.PubForSub = []string{strconv.Itoa(int(event.UserId))}
 	for _, room := range resp {
@@ -63,7 +66,7 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 	return err
 }
 
-// method for safely creating unique duo room
+// method for creating unique duo room
 func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	r, err := models.UnmarshalEvent[models.RoomRequest](event.Data)
 	if err != nil {
@@ -74,17 +77,19 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 		return errors.New("malformed json")
 	}
 	first, second := r.UserIds[0], event.UserId
-	if event.UserId > r.RoomIds[0] {
+	if event.UserId > r.UserIds[0] {
 		first, second = event.UserId, r.UserIds[0]
 	}
 	row := tx.QueryRow(ctx, `SELECT room_id
 		FROM duo_rooms
 		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2)`, first, second)
-	err = row.Scan(r.RoomIds[0])
+
+	err = row.Scan(&r.RoomIds[0])
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
 
+	log.Println("CHECK 0", r.RoomIds[0])
 	var rows pgx.Rows
 	is_group := false
 	if r.RoomIds[0] == 0 {
@@ -92,26 +97,35 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
+		t, err := tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
+		if t.RowsAffected() == 0 {
+			return errors.New("no rows affected")
+		}
 		if err != nil {
 			return err
 		}
 	}
-	rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, false, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
+	log.Println(err, "add users to room direct", r.UserIds)
 
 	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
 	}
+	if len(resp) == 0 {
+		return errors.New("no users added")
+	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
+	log.Println(resp, "CHECK 1")
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
+	r.UserIds = append(r.UserIds, event.UserId)
 	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
@@ -140,12 +154,16 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 	if err != nil {
 		return err
 	}
+	if len(resp) == 0 {
+		return errors.New("no users added")
+	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
+	r.UserIds = append(r.UserIds, event.UserId)
 	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
@@ -170,6 +188,9 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
+	}
+	if len(resp) == 0 {
+		return errors.New("no users added")
 	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
@@ -207,6 +228,9 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	if err != nil {
 		return err
 	}
+	if len(resp) == 0 {
+		return errors.New("no users deleted")
+	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
@@ -230,20 +254,27 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 		return fmt.Errorf("malformed json")
 	}
 
-	_, err = tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
+	t, err := tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
 	if err != nil {
 		return err
 	}
+	if t.RowsAffected() == 0 {
+		return errors.New("no users blocked")
+	}
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
+	r.UserIds = append(r.UserIds, event.UserId)
 	event.PubForSub = ConvertUint64ToString(r.UserIds)
 	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
 
-	_, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
+	t, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
 		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
 	if err != nil {
 		return err
+	}
+	if t.RowsAffected() == 0 {
+		return errors.New("no users blocked")
 	}
 	return err
 }
@@ -285,7 +316,7 @@ func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("internal database error, 'change room name' hasn't changed")
+		return errors.New("'change room name' hasn't changed")
 	}
 	event.Data, err = json.Marshal(r)
 	if err != nil {
@@ -312,6 +343,7 @@ func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 	var currentroom uint64
 	defer rows.Close()
 	for rows.Next() {
+		log.Println("yep")
 		r, err := pgx.RowToStructByNameLax[RoomClient](rows)
 		if err != nil {
 			return nil, err

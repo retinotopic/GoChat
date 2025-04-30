@@ -67,7 +67,9 @@ func (l *List) GetSelected() []Content {
 	l.selectedBuf = l.selectedBuf[:0]
 	for front != nil && !front.IsNil() {
 		cnt := Content{MainText: front.GetMainText(), SecondaryText: front.GetSecondaryText()}
-		l.selectedBuf = append(l.selectedBuf, cnt)
+		if front.GetColor(0) == tcell.ColorRed {
+			l.selectedBuf = append(l.selectedBuf, cnt)
+		}
 		front = front.Next()
 	}
 	return l.selectedBuf

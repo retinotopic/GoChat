@@ -63,20 +63,14 @@ func (c *Chat) PreLoadNavigation() {
 				txt := c.Lists[3].Items.GetBack().GetMainText()
 				if len([]rune(txt)) <= 300 {
 					r := event.Rune()
-					// c.App.QueueUpdateDraw(func() {
 					c.Lists[3].Items.GetBack().SetMainText(string(r), 1)
-
-					// })
 				}
 			case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
 				main := c.Lists[3].Items.GetBack().GetMainText()
 				mr := []rune(main)
 				if len(mr) != 0 {
-					mr = mr[:len(mr)-1]
-					// c.App.QueueUpdateDraw(func() {
+					mr = mr[:len(mr)]
 					c.Lists[3].Items.GetBack().SetMainText(string(mr), 2)
-
-					// })
 				}
 			}
 		}
@@ -171,12 +165,11 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 			for _, v := range c.CurrentRoom.Users {
 				navitem := c.Lists[8].Items.NewItem(
 					[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-					v.Username,
 					strconv.FormatUint(v.UserId, 10),
+					v.Username,
 				)
 				c.Lists[8].Items.MoveToBack(navitem)
 			}
-
 			if c.CurrentRoom.IsGroup {
 				if c.CurrentRoom.IsAdmin {
 					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)

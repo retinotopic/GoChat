@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/retinotopic/GoChat/server/logger"
@@ -14,6 +15,10 @@ type Redis struct {
 	Client  *redis.Client
 	Log     logger.Logger
 	Limiter *redis_rate.Limiter
+}
+type Action struct {
+	SubKind string `json:"SubKind"`
+	Ch      string `json:"Ch"`
 }
 
 func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error) {
@@ -34,8 +39,12 @@ func (r *Redis) PublishWithSubscriptions(ctx context.Context, PubForSub []string
 
 	for i := range PubForSub {
 		for j := range SubForPub {
-			msg := redis.Subscription{Kind: kind, Channel: SubForPub[j]}
-			err := r.Client.Publish(ctx, PubForSub[i], msg).Err()
+			act := Action{SubKind: kind, Ch: SubForPub[j]}
+			b, err := json.Marshal(act)
+			if err != nil {
+				return err
+			}
+			err = r.Client.Publish(ctx, PubForSub[i], b).Err()
 			if err != nil {
 				return err
 			}
@@ -43,52 +52,61 @@ func (r *Redis) PublishWithSubscriptions(ctx context.Context, PubForSub []string
 	}
 	return
 }
-func (r *Redis) PublishWithMessage(ctx context.Context, SubForPub []string, message string) (err error) {
-	msg := redis.Message{Payload: message}
 
+func (r *Redis) PublishWithMessage(ctx context.Context, SubForPub []string, message string) (err error) {
 	for i := range SubForPub {
-		msg.Channel = SubForPub[i]
-		err := r.Client.Publish(ctx, msg.Channel, msg).Err()
+		err := r.Client.Publish(ctx, SubForPub[i], message).Err()
 		if err != nil {
 			return err
 		}
 	}
 	return
 }
+
 func (r *Redis) Channel(ctx context.Context, closech <-chan bool, user string) <-chan []byte {
 	PubSub := r.Client.Subscribe(ctx, user)
-	ch := PubSub.ChannelWithSubscriptions()
-	resultCh := make(chan []byte, 500)
+	ch := PubSub.Channel()
+	resultCh := make(chan []byte, 50)
 	go func() {
 		defer func() {
 			close(resultCh)
 			PubSub.Unsubscribe(context.TODO())
 			PubSub.Close()
 		}()
-		select {
-		case msg, ok := <-ch:
-			if ok {
-				switch v := msg.(type) {
-				case *redis.Message:
-					resultCh <- []byte(v.Payload)
-				case *redis.Subscription:
-					if len(v.Kind) == 0 {
-						err := PubSub.Unsubscribe(context.TODO(), v.Channel)
-						if err != nil {
-							return
+		for {
+			select {
+			case msg, ok := <-ch:
+				if ok {
+					a := Action{}
+					err := json.Unmarshal([]byte(msg.Payload), &a)
+					if err != nil {
+						r.Log.Error("redis unmarshal", err)
+						return
+					}
+					r.Log.Error(msg.Payload+" user: "+user, errors.New("sdsosijdfgpoisfjgoidfo AAA"))
+					if len(a.SubKind) != 0 {
+						if a.SubKind == "0" {
+							err := PubSub.Unsubscribe(context.TODO(), a.Ch)
+							if err != nil {
+								r.Log.Error("redis unmarshal", err)
+								return
+							}
+						} else {
+							err := PubSub.Subscribe(context.TODO(), a.Ch)
+							if err != nil {
+								r.Log.Error("redis unmarshal", err)
+								return
+							}
 						}
 					} else {
-						err := PubSub.Subscribe(context.TODO(), v.Channel)
-						if err != nil {
-							return
-						}
+						resultCh <- []byte(msg.Payload)
 					}
-				default:
-					r.Log.Error("Message from redis msg channel", errors.New("undefined message"))
+				} else {
+					r.Log.Error("wtf ?????", errors.New(">????????????????????????????????<"))
 				}
+			case <-closech:
+				return
 			}
-		case <-closech:
-			return
 		}
 
 	}()

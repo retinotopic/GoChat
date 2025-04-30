@@ -19,7 +19,9 @@ type Room struct {
 
 func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 	lists := make([]tview.Primitive, 0, 5)
-	c.Lists[trg[0]].Items.Clear()
+	if len(cnt) > 0 {
+		c.Lists[trg[0]].Items.Clear()
+	}
 	ll, ok := c.Lists[trg[0]].Items.(*list.ArrayList)
 	if ok {
 		for i := range cnt {
@@ -58,7 +60,7 @@ func (r Room) AddDeleteUsersInRoom(args []list.Content, trg ...int) {
 
 func (r Room) BlockUnblockUser(args []list.Content, trg ...int) {
 	// should be: len(r.UserIds) == 0
-	n, err := strconv.ParseUint(args[1].MainText, 10, 64)
+	n, err := strconv.ParseUint(args[0].MainText, 10, 64)
 	if err != nil {
 		return
 	}
@@ -71,7 +73,7 @@ func (r Room) BlockUnblockUser(args []list.Content, trg ...int) {
 func (r Room) CreateDuoRoom(args []list.Content, trg ...int) {
 	// should be: CreateDuoRoom
 	// len(r.UserIds) == 0
-	n, err := strconv.ParseUint(args[1].MainText, 10, 64)
+	n, err := strconv.ParseUint(args[0].MainText, 10, 64)
 	if err != nil {
 		return
 	}

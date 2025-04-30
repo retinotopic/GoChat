@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"unicode"
 
@@ -25,7 +26,7 @@ func ChangeUsername(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	}
 	tag, err := tx.Exec(ctx, "UPDATE users SET user_name = $1 WHERE user_id = $2", username, event.UserId)
 	if tag.RowsAffected() == 0 {
-		return errors.New("internal database error, username hasn't changed")
+		return errors.New("database error: username hasn't changed")
 	}
 	if err != nil {
 		return err
@@ -62,6 +63,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetad
 }
 func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	u, err := models.UnmarshalEvent[models.User](event.Data)
+	log.Println(u, "uesers")
 	if err != nil {
 		return err
 	}
@@ -81,6 +83,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 	if err != nil {
 		return err
 	}
+	log.Println(resp, "actually uesers")
 	return err
 }
 func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {

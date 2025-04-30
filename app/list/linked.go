@@ -2,8 +2,8 @@ package list
 
 import (
 	"bytes"
-
 	"github.com/gdamore/tcell/v2"
+	"unicode/utf8"
 )
 
 func NewLinkedList(lenl int) *LinkedList {
@@ -153,7 +153,8 @@ func (l *LinkedItem) SetMainText(str string, mode uint8) {
 		l.MainTextBuf = bytes.NewBufferString(str)
 	case 2:
 		if l.MainTextBuf != nil {
-			l.MainTextBuf.Truncate(len(l.MainTextBuf.String()) - len(str))
+			_, size := utf8.DecodeLastRuneInString(l.MainTextBuf.String())
+			l.MainTextBuf.Truncate(len(l.MainTextBuf.String()) - size)
 		}
 	}
 }

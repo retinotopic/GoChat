@@ -72,7 +72,9 @@ func (c *Chat) ParseAndInitUI() {
 		"User":    &User{SendCh: c.SendEventCh},
 		"Message": &Message{SendCh: c.SendEventCh},
 	}
-
+	c.BlockedUsers = make(map[uint64]User)
+	c.DuoUsers = make(map[uint64]User)
+	c.FoundUsers = make(map[uint64]User)
 	target := make([]int, 0, 100)
 	targetStr := make([]string, 0, 100)
 	c.EventMap = make(map[list.Content]Event)

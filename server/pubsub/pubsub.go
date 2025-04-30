@@ -21,7 +21,6 @@ func (p *PubSub) Connect(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -73,6 +72,7 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 				continue
 			}
 			event.UserId = userid
+			log.Println(event)
 			go p.ProcessEvent(event, conn)
 
 		}
@@ -87,7 +87,11 @@ func (p *PubSub) ReadPubSub(userid uint64, errch <-chan bool, conn *websocket.Co
 	chps := p.Pb.Channel(ctx, closech, userId)
 	for {
 		select {
-		case b := <-chps: // incoming successful events from others users
+		case b, ok := <-chps: // incoming successful events from others users
+			if !ok {
+				conn.CloseNow()
+				return
+			}
 			err := WriteTimeout(time.Second*15, conn, b)
 			if err != nil {
 				conn.CloseNow()
@@ -110,16 +114,22 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 	err := p.Db.FuncApi(ctx, event)
 	if err != nil {
 		event.ErrorMsg = err.Error()
-
+		event.OrderCmd[0] = 0
 		log.Println("Process Event Func Api", err)
 	}
-
 	b, err := json.Marshal(event)
 	if err != nil {
 		conn.Close(websocket.StatusInternalError, "Marshal error")
 	}
 
 	for i := range event.OrderCmd {
+		if event.OrderCmd[0] == 0 {
+			err = WriteTimeout(time.Second*15, conn, b)
+			if err != nil {
+				conn.CloseNow()
+			}
+			break
+		}
 		switch event.OrderCmd[i] {
 		case 1:
 			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(b))
@@ -138,11 +148,6 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 		}
 	}
 
-	err = WriteTimeout(time.Second*15, conn, b)
-	if err != nil {
-		conn.CloseNow()
-	}
-
-	log.Println(string(event.Data), "+", event.Event, event.UserId, event.ErrorMsg)
+	log.Println(string(b), "+", event.Event, event.UserId, event.ErrorMsg)
 
 }

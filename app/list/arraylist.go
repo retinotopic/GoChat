@@ -83,9 +83,9 @@ func (a ArrayItem) GetMainText() string {
 func (a ArrayItem) GetSecondaryText() string {
 	return a.SecondaryText
 }
-func (a ArrayItem) GetColor(Idx int) tcell.Color {
-	if Idx < 2 && Idx >= 0 {
-		return a.ArrList.Items[a.Idx].Color[Idx]
+func (a ArrayItem) GetColor(idx int) tcell.Color {
+	if idx < 2 && idx >= 0 {
+		return a.ArrList.Items[a.Idx].Color[idx]
 
 	}
 	return tcell.ColorWhite

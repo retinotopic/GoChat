@@ -45,6 +45,7 @@ type RoomInfo struct {
 type Chat struct {
 	App      *tview.Application
 	UserId   uint64
+	Username string
 	UrlConn  string
 	Conn     *websocket.Conn
 	MainFlex *tview.Flex
@@ -101,6 +102,7 @@ func (c *Chat) ProcessEvents() {
 				continue
 
 			} else if c.state.InProgressCount.Load() < 15 {
+
 				c.state.InProgressCount.Add(1)
 				go func() {
 					err := WriteTimeout(time.Second*15, c.Conn, b)
@@ -113,6 +115,7 @@ func (c *Chat) ProcessEvents() {
 			return
 		}
 		if c.state.InProgressCount.Load() > 0 {
+
 			c.App.QueueUpdateDraw(func() {
 				spinChar := c.state.spinner[i%len(c.state.spinner)]
 				text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
