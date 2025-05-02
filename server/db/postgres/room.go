@@ -59,9 +59,9 @@ func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (e
 	}
 	event.OrderCmd[0] = 2
 	event.Kind = "1"
-	event.PubForSub = []string{strconv.Itoa(int(event.UserId))}
+	event.UserChs = []string{strconv.Itoa(int(event.UserId))}
 	for _, room := range resp {
-		event.SubForPub = append(event.SubForPub, "room"+strconv.Itoa(int(room.RoomId)))
+		event.PublishChs = append(event.PublishChs, "room"+strconv.Itoa(int(room.RoomId)))
 	}
 	return err
 }
@@ -80,6 +80,9 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	if event.UserId > r.UserIds[0] {
 		first, second = event.UserId, r.UserIds[0]
 	}
+	r.UserIds = append(r.UserIds, event.UserId)
+	userstr := ConvertUint64ToString(r.UserIds)
+
 	row := tx.QueryRow(ctx, `SELECT room_id
 		FROM duo_rooms
 		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2)`, first, second)
@@ -88,8 +91,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
-
-	log.Println("CHECK 0", r.RoomIds[0])
+	r.RoomName = "Duo Room with users: " + userstr[0] + " and " + userstr[1]
 	var rows pgx.Rows
 	is_group := false
 	if r.RoomIds[0] == 0 {
@@ -97,7 +99,7 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 		if err != nil {
 			return err
 		}
-		t, err := tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, event.UserId, r.UserIds[0], r.RoomIds[0])
+		t, err := tx.Exec(ctx, `INSERT INTO duo_rooms (user_id1,user_id2,room_id) VALUES ($1,$2,$3)`, r.UserIds[1], r.UserIds[0], r.RoomIds[0])
 		if t.RowsAffected() == 0 {
 			return errors.New("no rows affected")
 		}
@@ -109,8 +111,6 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	if err != nil {
 		return err
 	}
-	log.Println(err, "add users to room direct", r.UserIds)
-
 	resp, err := NormalizeRoom(rows, false)
 	if err != nil {
 		return err
@@ -122,12 +122,11 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	if err != nil {
 		return err
 	}
-	log.Println(resp, "CHECK 1")
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	r.UserIds = append(r.UserIds, event.UserId)
-	event.PubForSub = ConvertUint64ToString(r.UserIds)
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.UserChs = userstr
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	log.Println(event.UserChs, event.PublishChs, "here we are")
 	event.Kind = "1"
 	return err
 }
@@ -164,8 +163,8 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
 	r.UserIds = append(r.UserIds, event.UserId)
-	event.PubForSub = ConvertUint64ToString(r.UserIds)
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.UserChs = ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
 	return err
 }
@@ -198,8 +197,8 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	event.PubForSub = ConvertUint64ToString(r.UserIds)
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.UserChs = ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "1"
 	return err
 }
@@ -237,8 +236,8 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	}
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
-	event.PubForSub = ConvertUint64ToString(r.UserIds)
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.UserChs = ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
 	return err
 }
@@ -264,8 +263,8 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
 	r.UserIds = append(r.UserIds, event.UserId)
-	event.PubForSub = ConvertUint64ToString(r.UserIds)
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.UserChs = ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
 
 	t, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
@@ -323,7 +322,7 @@ func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 		return err
 	}
 	event.OrderCmd[0] = 1
-	event.SubForPub = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	return err
 }
 func ConvertUint64ToString(ids []uint64) []string {

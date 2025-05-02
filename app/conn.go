@@ -75,7 +75,6 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 				if err != nil {
 					continue
 				}
-				c.state.InProgressCount.Add(-1)
 				isErr := c.NewEventNotification(e)
 				if isErr {
 					continue
@@ -121,6 +120,7 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 					rm := []RoomServer{}
 					err := json.Unmarshal(e.Data, &rm)
 					if err != nil {
+						log.Fatalln(err)
 						continue
 					}
 					c.ProcessRoom(rm)
@@ -149,6 +149,7 @@ func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
 
 }
 func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
+	c.Logger.Println("NEW DONE PUK")
 	addinfo := " "
 	if e.UserId == c.UserId {
 		c.state.InProgressCount.Add(-1)

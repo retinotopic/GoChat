@@ -19,6 +19,7 @@ type Redis struct {
 type Action struct {
 	SubKind string `json:"SubKind"`
 	Ch      string `json:"Ch"`
+	Id      string `json:"Id"`
 }
 
 func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error) {
@@ -35,16 +36,28 @@ func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, peri
 	}
 	return errors.New("limit exceeded, retry after " + res.RetryAfter.String())
 }
-func (r *Redis) PublishWithSubscriptions(ctx context.Context, PubForSub []string, SubForPub []string, kind string) (err error) {
-
-	for i := range PubForSub {
-		for j := range SubForPub {
-			act := Action{SubKind: kind, Ch: SubForPub[j]}
-			b, err := json.Marshal(act)
+func (r *Redis) PublishWithSubscriptions(ctx context.Context, UserChs []string, PublishChs []string, kind string) (err error) {
+	for i := range UserChs {
+		for j := range PublishChs {
+			id := "$"
+			info, err := r.Client.XInfoStream(ctx, PublishChs[j]).Result()
+			if err != nil {
+				if err.Error() != "ERR no such key" {
+					return err
+				}
+			} else {
+				id = info.LastGeneratedID
+			}
+			act := Action{SubKind: kind, Ch: PublishChs[j], Id: id}
+			b, err := json.MarshalString(act)
 			if err != nil {
 				return err
 			}
-			err = r.Client.Publish(ctx, PubForSub[i], b).Err()
+			err = r.Client.XAdd(ctx, &redis.XAddArgs{
+				Stream: UserChs[i],
+				Values: []string{"Action", b},
+				ID:     "*",
+			}).Err()
 			if err != nil {
 				return err
 			}
@@ -53,9 +66,13 @@ func (r *Redis) PublishWithSubscriptions(ctx context.Context, PubForSub []string
 	return
 }
 
-func (r *Redis) PublishWithMessage(ctx context.Context, SubForPub []string, message string) (err error) {
-	for i := range SubForPub {
-		err := r.Client.Publish(ctx, SubForPub[i], message).Err()
+func (r *Redis) PublishWithMessage(ctx context.Context, PublishChs []string, message string) (err error) {
+	for i := range PublishChs {
+		err := r.Client.XAdd(ctx, &redis.XAddArgs{
+			Stream: PublishChs[i],
+			Values: []string{"Data", message},
+			ID:     "*",
+		}).Err()
 		if err != nil {
 			return err
 		}
@@ -63,53 +80,73 @@ func (r *Redis) PublishWithMessage(ctx context.Context, SubForPub []string, mess
 	return
 }
 
-func (r *Redis) Channel(ctx context.Context, closech <-chan bool, user string) <-chan []byte {
-	PubSub := r.Client.Subscribe(ctx, user)
-	ch := PubSub.Channel()
-	resultCh := make(chan []byte, 50)
-	go func() {
+func (r *Redis) Channel(user string) <-chan []byte {
+	m := map[string]string{user: "$"}
+	resultCh := make(chan []byte, 10)
+	strmnids := make([]string, 0, 100)
+	r.Log.Error("here we are chan", errors.New(user))
+	go func() (err error) {
 		defer func() {
 			close(resultCh)
-			PubSub.Unsubscribe(context.TODO())
-			PubSub.Close()
+			r.Log.Error("here we are::::::", err)
 		}()
 		for {
-			select {
-			case msg, ok := <-ch:
-				if ok {
-					a := Action{}
-					err := json.Unmarshal([]byte(msg.Payload), &a)
-					if err != nil {
-						r.Log.Error("redis unmarshal", err)
-						return
-					}
-					r.Log.Error(msg.Payload+" user: "+user, errors.New("sdsosijdfgpoisfjgoidfo AAA"))
-					if len(a.SubKind) != 0 {
-						if a.SubKind == "0" {
-							err := PubSub.Unsubscribe(context.TODO(), a.Ch)
-							if err != nil {
-								r.Log.Error("redis unmarshal", err)
-								return
+			strmnids = strmnids[:0]
+			for ch := range m {
+				strmnids = append(strmnids, ch)
+			}
+			slen := len(strmnids)
+			for i := range slen {
+				strmnids = append(strmnids, m[strmnids[i]])
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*25)
+			res, err := r.Client.XRead(ctx, &redis.XReadArgs{
+				Streams: strmnids,
+				Block:   time.Millisecond * 100,
+				Count:   10,
+			}).Result()
+			cancel()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			if len(res) != 0 {
+				r.Log.Error("something is here", errors.New("WAT"))
+				for i := range res {
+					for _, v := range res[i].Messages {
+						switch res[i].Stream {
+						case user:
+							i, ok := v.Values["Action"]
+							if ok {
+								b, ok := i.(string)
+								if ok {
+									a := Action{}
+									err = json.UnmarshalString(b, &a)
+									if err != nil {
+										r.Log.Error("redis unmarshal", err)
+										return err
+									}
+									switch a.SubKind {
+									case "0":
+										delete(m, a.Ch)
+									case "1":
+										m[a.Ch] = a.Id
+									}
+								}
 							}
-						} else {
-							err := PubSub.Subscribe(context.TODO(), a.Ch)
-							if err != nil {
-								r.Log.Error("redis unmarshal", err)
-								return
+						default:
+							i, ok := v.Values["Data"]
+							if ok {
+								b, ok := i.(string)
+								if ok {
+									resultCh <- []byte(b)
+								}
 							}
 						}
-					} else {
-						resultCh <- []byte(msg.Payload)
+						m[res[i].Stream] = v.ID
 					}
-				} else {
-					r.Log.Error("wtf ?????", errors.New(">????????????????????????????????<"))
 				}
-			case <-closech:
-				return
 			}
 		}
-
 	}()
-
 	return resultCh
 }

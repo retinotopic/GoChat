@@ -24,7 +24,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 		return err
 	}
 	event.OrderCmd[0] = 1
-	event.SubForPub = []string{strconv.Itoa(int(m.RoomId))}
+	event.PublishChs = []string{strconv.Itoa(int(m.RoomId))}
 	return err
 }
 func GetMessagesFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {

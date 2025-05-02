@@ -15,15 +15,16 @@ func UnmarshalEvent[T EventConstr](src []byte) (T, error) {
 }
 
 type EventMetadata struct {
-	Event     string                `json:"Event"`
-	ErrorMsg  string                `json:"ErrorMsg"`
-	UserId    uint64                `json:"UserId"`
-	Type      int                   `json:"Type"`
-	Data      json.NoCopyRawMessage `json:"Data"` // data to be sent over connection
-	Kind      string                `json:"-"`    // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
-	SubForPub []string              `json:"-"`    // a channels to publish to
-	PubForSub []string              `json:"-"`    // publish in "user" channels for subscribe/unsubscribe only
-	OrderCmd  [2]int                `json:"-"`    // value 1 means PublishWithMessage, value 2 means PublishWithSubscriptions, 0 means nothing
+	Event      string                `json:"Event"`
+	ErrorMsg   string                `json:"ErrorMsg"`
+	UserId     uint64                `json:"UserId"`
+	Type       int                   `json:"Type"`
+	Data       json.NoCopyRawMessage `json:"Data"` // data to be sent over connection
+	Kind       string                `json:"-"`    // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
+	PublishChs []string              `json:"-"`    // a rooms channels to publish to
+	UserChs    []string              `json:"-"`    /* a user channels to publish to, publish in user channels
+	most of the time means subscribe/unsubscribe to other rooms */
+	OrderCmd [2]int `json:"-"` // value 1 means PublishWithMessage, value 2 means PublishWithSubscriptions, 0 means nothing
 }
 
 type RoomRequest struct {

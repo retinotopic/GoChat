@@ -41,10 +41,9 @@ type Databaser interface {
 type Publisher interface {
 	PublishWithSubscriptions(ctx context.Context, pubChannels []string, subChannels []string, kind string) error
 	PublishWithMessage(ctx context.Context, channel []string, message string) error
-	Channel(ctx context.Context, closech <-chan bool, user string) <-chan []byte
+	Channel(user string) <-chan []byte
 }
 
-// Publish||Subscribe Service
 type PubSub struct {
 	Pb  Publisher
 	Db  Databaser
@@ -63,9 +62,12 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 	for {
 		msgType, b, err := conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
+			log.Println("HUH?", err)
 			return
 		}
 		if msgType == websocket.MessageText && len(b) > 0 {
+			log.Println("new", err)
+
 			event := &models.EventMetadata{}
 			err := json.Unmarshal(b, &event)
 			if err != nil {
@@ -74,17 +76,13 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 			event.UserId = userid
 			log.Println(event)
 			go p.ProcessEvent(event, conn)
-
 		}
 	}
 }
 
 func (p *PubSub) ReadPubSub(userid uint64, errch <-chan bool, conn *websocket.Conn) {
 	userId := strconv.Itoa(int(userid))
-	closech := make(chan bool, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-	chps := p.Pb.Channel(ctx, closech, userId)
+	chps := p.Pb.Channel(userId)
 	for {
 		select {
 		case b, ok := <-chps: // incoming successful events from others users
@@ -97,7 +95,7 @@ func (p *PubSub) ReadPubSub(userid uint64, errch <-chan bool, conn *websocket.Co
 				conn.CloseNow()
 			}
 		case <-errch:
-			closech <- true
+			return
 		}
 	}
 }
@@ -123,7 +121,7 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 	}
 
 	for i := range event.OrderCmd {
-		if event.OrderCmd[0] == 0 {
+		if event.OrderCmd[i] == 0 {
 			err = WriteTimeout(time.Second*15, conn, b)
 			if err != nil {
 				conn.CloseNow()
@@ -132,17 +130,17 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 		}
 		switch event.OrderCmd[i] {
 		case 1:
-			err = p.Pb.PublishWithMessage(ctx, event.SubForPub, string(b))
+			err = p.Pb.PublishWithMessage(ctx, event.PublishChs, string(b))
 			log.Println("publish with message")
 			if err != nil {
-				conn.Close(websocket.StatusInternalError, "PublishWithMessage error")
+				conn.Close(websocket.StatusInternalError, err.Error())
 				p.Log.Error("Process Event: switch event.OrderCmd 1", err)
 			}
 		case 2:
-			err = p.Pb.PublishWithSubscriptions(ctx, event.PubForSub, event.SubForPub, event.Kind)
+			err = p.Pb.PublishWithSubscriptions(ctx, event.UserChs, event.PublishChs, event.Kind)
 			log.Println("publish with sub")
 			if err != nil {
-				conn.Close(websocket.StatusInternalError, "PublishWithSubscriptions error")
+				conn.Close(websocket.StatusInternalError, err.Error())
 				p.Log.Error("Process Event: switch event.OrderCmd 2", err)
 			}
 		}

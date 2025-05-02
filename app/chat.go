@@ -92,7 +92,6 @@ func (c *Chat) Run() {
 
 func (c *Chat) ProcessEvents() {
 	i := 0
-	var NotIdle bool
 	for {
 		select {
 		case e := <-c.SendEventCh:
@@ -113,28 +112,26 @@ func (c *Chat) ProcessEvents() {
 			}
 		case <-c.errch:
 			return
-		}
-		if c.state.InProgressCount.Load() > 0 {
-
-			c.App.QueueUpdateDraw(func() {
-				spinChar := c.state.spinner[i%len(c.state.spinner)]
-				text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
-				item := c.Lists[0].Items.GetBack()
-				item.SetSecondaryText(text)
-				item.SetColor(tcell.ColorRed, 1)
-			})
-			i++
-			if i == len(c.state.spinner) {
-				i = 0
+		default:
+			if c.state.InProgressCount.Load() > 0 {
+				c.App.QueueUpdateDraw(func() {
+					spinChar := c.state.spinner[i%len(c.state.spinner)]
+					text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
+					item := c.Lists[0].Items.GetBack()
+					item.SetSecondaryText(text)
+					item.SetColor(tcell.ColorRed, 1)
+				})
+				i++
+				if i == len(c.state.spinner) {
+					i = 0
+				}
+			} else {
+				c.App.QueueUpdateDraw(func() {
+					item := c.Lists[0].Items.GetBack()
+					item.SetSecondaryText("")
+					item.SetColor(tcell.ColorGrey, 1)
+				})
 			}
-			NotIdle = true
-		} else if NotIdle {
-			c.App.QueueUpdateDraw(func() {
-				item := c.Lists[0].Items.GetBack()
-				item.SetSecondaryText(strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message)
-				item.SetColor(tcell.ColorGrey, 1)
-			})
-			NotIdle = false
 		}
 	}
 }
