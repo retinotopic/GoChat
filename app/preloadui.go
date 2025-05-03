@@ -6,8 +6,6 @@ import (
 	"sync/atomic"
 	"unicode"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/retinotopic/GoChat/app/list"
 )
 
@@ -37,7 +35,7 @@ var InitMapText = []string{
 	"Unblock Users", "true", "Unblock User", "false", "Get Blocked Users", "false", "2", "7",
 	"Block Users", "true", "Block User", "false", "2", "6",
 	"Add Users To Room", "true", "Add Users", "false", "2", "6",
-	"Delete Users From Room", "true", "Delete Users", "false", "2", "6",
+	"Delete Users From Room", "true", "Delete Users", "false", "2", "8",
 	"Change Room Name", "true", "Change Roomname", "false", "2", "3",
 	"Change Username", "true", "Change Username", "false", "2", "3",
 	"Find Users", "true", "Find Users", "false", "2", "5", "3",
@@ -65,17 +63,15 @@ var InitMapText = []string{
 func (c *Chat) ParseAndInitUI() {
 	c.SendEventCh = make(chan EventInfo, 100)
 	c.errch = make(chan error, 2)
-	c.errgroup = errgroup.Group{}
 
 	SendEventKind := map[string]any{
 		"Room":    &Room{SendCh: c.SendEventCh},
 		"User":    &User{SendCh: c.SendEventCh},
 		"Message": &Message{SendCh: c.SendEventCh},
 	}
-	c.BlockedUsers = make(map[uint64]User)
-	c.DuoUsers = make(map[uint64]User)
-	c.FoundUsers = make(map[uint64]User)
 	c.RoomMsgs = make(map[uint64]*RoomInfo)
+	c.DuoUsers = make(map[uint64]User)
+	c.UserBuf = make([]User, 10)
 	target := make([]int, 0, 100)
 	targetStr := make([]string, 0, 100)
 	c.EventMap = make(map[list.Content]Event)

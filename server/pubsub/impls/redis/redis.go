@@ -46,7 +46,7 @@ func (r *Redis) PublishWithSubscriptions(ctx context.Context, UserChs []string, 
 					return err
 				}
 			} else {
-				id = info.LastGeneratedID
+				id = info.LastEntry.ID
 			}
 			act := Action{SubKind: kind, Ch: PublishChs[j], Id: id}
 			b, err := json.MarshalString(act)
@@ -110,15 +110,17 @@ func (r *Redis) Channel(user string) <-chan []byte {
 				return err
 			}
 			if len(res) != 0 {
-				r.Log.Error("something is here", errors.New("WAT"))
+				r.Log.Error(user, errors.New("WAT"))
 				for i := range res {
 					for _, v := range res[i].Messages {
 						switch res[i].Stream {
 						case user:
 							i, ok := v.Values["Action"]
+							r.Log.Error("val"+user, errors.New("333"))
 							if ok {
 								b, ok := i.(string)
 								if ok {
+									r.Log.Error("val indeed"+user, errors.New("333"))
 									a := Action{}
 									err = json.UnmarshalString(b, &a)
 									if err != nil {
@@ -135,7 +137,9 @@ func (r *Redis) Channel(user string) <-chan []byte {
 							}
 						default:
 							i, ok := v.Values["Data"]
+							r.Log.Error("val"+user, errors.New("123"))
 							if ok {
+								r.Log.Error("val indeed"+user, errors.New("123"))
 								b, ok := i.(string)
 								if ok {
 									resultCh <- []byte(b)

@@ -252,22 +252,29 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 	if len(r.UserIds) == 0 {
 		return fmt.Errorf("malformed json")
 	}
-
-	t, err := tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
+	r.UserIds = append(r.UserIds, event.UserId)
+	rows, err := tx.Query(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	if t.RowsAffected() == 0 {
+	resp, err := NormalizeRoom(rows, true)
+	if err != nil {
+		return err
+	}
+	if len(resp) == 0 {
 		return errors.New("no users blocked")
+	}
+	event.Data, err = json.Marshal(resp)
+	if err != nil {
+		return err
 	}
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
-	r.UserIds = append(r.UserIds, event.UserId)
 	event.UserChs = ConvertUint64ToString(r.UserIds)
 	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
 	event.Kind = "0"
 
-	t, err = tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
+	t, err := tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
 		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
 	if err != nil {
 		return err

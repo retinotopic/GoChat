@@ -57,7 +57,7 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 		errch <- true
 	}()
 	go p.ReadPubSub(userid, errch, conn)
-	startevent := &models.EventMetadata{Event: "Get All Rooms"}
+	startevent := &models.EventMetadata{Event: "Get All Rooms", UserId: userid, Type: 2}
 	p.ProcessEvent(startevent, conn)
 	for {
 		msgType, b, err := conn.Read(context.TODO()) // incoming client user requests

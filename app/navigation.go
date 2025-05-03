@@ -38,6 +38,7 @@ func (c *Chat) PreLoadNavigation() {
 
 	c.Lists[1].Items = list.NewLinkedList(250)
 	c.Lists[3].Items = list.NewLinkedList(3)
+	c.Lists[6].Items = list.NewLinkedList(250)
 
 	c.MainFlex = tview.NewFlex()
 
@@ -133,7 +134,8 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 				return
 			}
 			str2 := it.GetMainText()
-			sel = append(sel, list.Content{MainText: str1}, list.Content{MainText: str2}) /* by default always adds-
+			sel = append(sel, list.Content{MainText: str1, SecondaryText: str2})
+			/* by default always adds-
 			the current room's id and input area text*/
 			ev.Kind(sel, ev.targets[1:]...)
 			c.Logger.Println(sel, ev.targets[1:], "option event func")
@@ -148,46 +150,45 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 	if item == nil {
 		return
 	}
-	sec := item.GetSecondaryText()
-	main := item.GetMainText()
-	if sec[:9] == "Room Id: " {
-		/*When changing a room, add current users to the list for current users of
-		the room of the selected room (it does not allocate anything, just copies it).*/
-		v, err := strconv.ParseUint(sec[9:], 10, 64)
-		if err != nil {
-			return
-		}
-		rm, ok := c.RoomMsgs[v]
-		if ok {
-			c.CurrentRoom = rm
-			c.Lists[8].Items.Clear()
+	main := item.GetSecondaryText()
+	/*When changing a room, add current users to the list for current users of
+	the room of the selected room (it does not allocate anything, just copies it).*/
+	v, err := strconv.ParseUint(main, 10, 64)
+	if err != nil {
+		return
+	}
+	rm, ok := c.RoomMsgs[v]
+	c.Logger.Println("LOGOPT1")
+	if ok {
+		c.CurrentRoom = rm
+		c.Lists[8].Items.Clear()
 
-			for _, v := range c.CurrentRoom.Users {
-				navitem := c.Lists[8].Items.NewItem(
-					[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-					strconv.FormatUint(v.UserId, 10),
-					v.Username,
-				)
-				c.Lists[8].Items.MoveToBack(navitem)
-			}
-			if c.CurrentRoom.IsGroup {
-				if c.CurrentRoom.IsAdmin {
-					c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
-				} else {
-					c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
-				}
-			} else {
-				c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
-			}
-			c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
+		c.Logger.Println("LOGOPT2")
+		for _, v := range c.CurrentRoom.Users {
+			navitem := c.Lists[8].Items.NewItem(
+				[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+				strconv.FormatUint(v.UserId, 10),
+				v.Username,
+			)
+			c.Lists[8].Items.MoveToBack(navitem)
 		}
-	} else {
-		c.PaginationRoom(main)
+		c.Logger.Println("LOGOPT3")
+		if c.CurrentRoom.IsGroup {
+			if c.CurrentRoom.IsAdmin {
+				c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
+			} else {
+				c.Lists[0].Items.GetFront().SetMainText("This Group Room", 0)
+			}
+		} else {
+			c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
+		}
+		c.Logger.Println("LOGOPT4")
+		c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 	}
 }
 
-func (c *Chat) PaginationRoom(maintxt string) {
-	v, err := strconv.Atoi(maintxt[11:])
+func (c *Chat) OptionPagination(item list.ListItem) {
+	v, err := strconv.Atoi(item.GetSecondaryText())
 	if err != nil {
 		return
 	}
@@ -200,7 +201,7 @@ func (c *Chat) PaginationRoom(maintxt string) {
 		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
 		str2 := c.Lists[3].Items.GetBack().GetMainText()
 		ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.CurrentRoom.LastMessageID, 10)},
-			{MainText: str1}, {MainText: str2}})
+			{MainText: str1, SecondaryText: str2}})
 	}
 }
 

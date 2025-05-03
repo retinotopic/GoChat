@@ -30,7 +30,6 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 			c.Lists[trg[0]].Items.MoveToBack(a)
 		}
 		for i := range trg {
-
 			lists = append(lists, c.Lists[trg[i]])
 			c.Logger.Println(c.Lists[trg[i]], "event ui")
 		}
@@ -41,7 +40,7 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 // Room SendEvents
 func (r Room) AddDeleteUsersInRoom(args []list.Content, trg ...int) {
 	// should be: len(r.RoomIds) == 0 || len(r.UserIds) == 0
-	n, err := strconv.ParseUint(args[len(args)-2].MainText, 10, 64)
+	n, err := strconv.ParseUint(args[len(args)-1].MainText, 10, 64)
 	if err != nil {
 		return
 	}
@@ -60,7 +59,7 @@ func (r Room) AddDeleteUsersInRoom(args []list.Content, trg ...int) {
 
 func (r Room) BlockUnblockUser(args []list.Content, trg ...int) {
 	// should be: len(r.UserIds) == 0
-	n, err := strconv.ParseUint(args[0].MainText, 10, 64)
+	n, err := strconv.ParseUint(args[0].SecondaryText, 10, 64)
 	if err != nil {
 		return
 	}
@@ -73,7 +72,7 @@ func (r Room) BlockUnblockUser(args []list.Content, trg ...int) {
 func (r Room) CreateDuoRoom(args []list.Content, trg ...int) {
 	// should be: CreateDuoRoom
 	// len(r.UserIds) == 0
-	n, err := strconv.ParseUint(args[0].MainText, 10, 64)
+	n, err := strconv.ParseUint(args[0].SecondaryText, 10, 64)
 	if err != nil {
 		return
 	}
@@ -86,7 +85,7 @@ func (r Room) CreateDuoRoom(args []list.Content, trg ...int) {
 func (r Room) CreateGroupRoom(args []list.Content, trg ...int) {
 	// should be: len(r.RoomName) == 0 || len(r.UserIds) == 0
 	var err error
-	r.RoomName = args[len(args)-1].MainText
+	r.RoomName = args[len(args)-1].SecondaryText
 	for i := range args {
 		var n uint64
 		n, err = strconv.ParseUint(args[i].SecondaryText, 10, 64)
@@ -103,9 +102,9 @@ func (r Room) CreateGroupRoom(args []list.Content, trg ...int) {
 func (r Room) ChangeRoomName(args []list.Content, trg ...int) {
 	// should be:  len(r.RoomIds) == 0 || len(r.RoomName) == 0
 	//r.RoomIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
-	r.RoomName = args[len(args)-1].MainText
+	r.RoomName = args[len(args)-1].SecondaryText
 	if data, err := json.Marshal(r); err == nil {
-		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Create Group Room"}
+		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Change Room Name"}
 	}
 }
 
@@ -120,11 +119,11 @@ type Message struct {
 func (m Message) SendMessage(args []list.Content, trg ...int) {
 	// should be: len(m.MessagePayload) == 0 || m.RoomId == 0
 	var err error
-	m.RoomId, err = strconv.ParseUint(args[len(args)-2].MainText, 10, 64)
+	m.RoomId, err = strconv.ParseUint(args[len(args)-1].MainText, 10, 64)
 	if err != nil {
 		return
 	}
-	m.MessagePayload = args[len(args)-1].MainText
+	m.MessagePayload = args[len(args)-1].SecondaryText
 	if data, err := json.Marshal(m); err == nil {
 		m.SendCh <- EventInfo{Data: data, Type: 1, Event: "Send Message"}
 	}
@@ -133,11 +132,11 @@ func (m Message) SendMessage(args []list.Content, trg ...int) {
 func (m Message) GetMessagesFromRoom(args []list.Content, trg ...int) {
 	// should be: m.RoomId == 0
 	var err error
-	m.RoomId, err = strconv.ParseUint(args[len(args)-2].MainText, 10, 64)
+	m.RoomId, err = strconv.ParseUint(args[len(args)-1].MainText, 10, 64)
 	if err != nil {
 		return
 	}
-	m.MessageId, err = strconv.ParseUint(args[0].MainText, 10, 64)
+	m.MessageId, err = strconv.ParseUint(args[0].MainText, 10, 64) //lastmessageid in room
 	if err != nil {
 		return
 	}
@@ -164,7 +163,7 @@ func (u User) ChangePrivacy(args []list.Content, trg ...int) {
 
 func (u User) ChangeUsernameFindUsers(args []list.Content, trg ...int) {
 	// should be: len(u.Username) == 0
-	u.Username = args[len(args)-1].MainText
+	u.Username = args[len(args)-1].SecondaryText
 	if data, err := json.Marshal(u); err == nil {
 		u.SendCh <- EventInfo{Data: data, Type: 3, Event: SendEventNames[trg[0]]} // "change username" or "find users"
 	}

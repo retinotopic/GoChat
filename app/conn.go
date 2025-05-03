@@ -90,12 +90,22 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 					c.LoadMessagesEvent(msgs)
 					continue
 				case "Find Users":
+					var usrs []User
+					err := json.Unmarshal(e.Data, &usrs)
+					if err != nil {
+						continue
+					}
 					c.Logger.Println(e, "Find Users")
-					c.FillUsers(e.Data, 5, c.FoundUsers)
+					c.FillUsers(usrs, 5)
 					continue
 				case "Get Blocked Users":
+					var usrs []User
+					err := json.Unmarshal(e.Data, &usrs)
+					if err != nil {
+						continue
+					}
 					c.Logger.Println(e, "Get Blocked Users")
-					c.FillUsers(e.Data, 7, c.BlockedUsers)
+					c.FillUsers(usrs, 7)
 					continue
 				case "Change Username":
 					u := User{}
@@ -132,24 +142,18 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 	return c.errch
 
 }
-func (c *Chat) FillUsers(data []byte, idx int, m map[uint64]User) {
+func (c *Chat) FillUsers(usrs []User, idx int) {
 	c.App.QueueUpdateDraw(func() {
-		var usrs []User
-		err := json.Unmarshal(data, &usrs)
-		if err != nil {
-			return
-		}
 		c.Lists[idx].Items.Clear()
 		for _, v := range usrs {
-			m[v.UserId] = v
-			c.Lists[idx].Items.MoveToBack(list.ArrayItem{MainText: strconv.FormatUint(v.UserId, 10),
-				SecondaryText: v.Username})
+			c.Lists[idx].Items.MoveToBack(list.ArrayItem{MainText: v.Username,
+				SecondaryText: strconv.FormatUint(v.UserId, 10)})
 		}
 	})
-
 }
+
 func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
-	c.Logger.Println("NEW DONE PUK")
+	c.Logger.Println("NEW DONE")
 	addinfo := " "
 	if e.UserId == c.UserId {
 		c.state.InProgressCount.Add(-1)
