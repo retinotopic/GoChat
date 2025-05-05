@@ -2,8 +2,9 @@ package list
 
 import (
 	"bytes"
-	"github.com/gdamore/tcell/v2"
 	"unicode/utf8"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 func NewLinkedList(lenl int) *LinkedList {
@@ -28,8 +29,21 @@ type LinkedList struct {
 
 func (l *LinkedList) MoveToFront(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
-	if ok && uitem != nil && uitem.parent == l {
+	if ok && uitem != nil && uitem.parent == l && uitem != l.front {
+
+		if uitem.prev != nil {
+			uitem.prev.next = uitem.next
+		}
+		if uitem.next != nil {
+			uitem.next.prev = uitem.prev
+		}
+
+		if uitem == l.back {
+			l.back = uitem.next
+		}
+
 		uitem.prev = l.front
+		uitem.next = nil
 		if l.front != nil {
 			l.front.next = uitem
 		} else {
@@ -41,8 +55,21 @@ func (l *LinkedList) MoveToFront(e ListItem) {
 
 func (l *LinkedList) MoveToBack(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
-	if ok && uitem != nil && uitem.parent == l {
+	if ok && uitem != nil && uitem.parent == l && uitem != l.back {
+
+		if uitem.prev != nil {
+			uitem.prev.next = uitem.next
+		}
+		if uitem.next != nil {
+			uitem.next.prev = uitem.prev
+		}
+
+		if uitem == l.front {
+			l.front = uitem.prev
+		}
+
 		uitem.next = l.back
+		uitem.prev = nil
 		if l.back != nil {
 			l.back.prev = uitem
 		} else {
@@ -76,7 +103,8 @@ func (l *LinkedList) Remove(e ListItem) {
 			pr.next = nxt
 			nxt.prev = pr
 		}
-
+		uitem.prev = nil
+		uitem.next = nil
 		l.stack = append(l.stack, uitem.idx)
 	}
 }
@@ -171,21 +199,21 @@ func (l *LinkedItem) SetColor(clr tcell.Color, idx int) {
 
 func (l *LinkedItem) Next() ListItem {
 	val := l.next
-	if val != nil {
-		return val
-
+	if val == nil || val.parent == nil || val.parent.back == val {
+		return nil
 	}
-	return nil
+	return val
 }
 
 func (l *LinkedItem) Prev() ListItem {
 	val := l.prev
-	if val != nil {
-		return val
+	if val == nil || val.parent == nil || val.parent.front == val {
+		return nil
 	}
-	return nil
+	return val
 }
 
+// val.parent.front == val
 func (l *LinkedItem) IsNil() bool { // if interface is not nil but interface value is
 	return l == nil
 }

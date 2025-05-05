@@ -31,9 +31,9 @@ func (c *Chat) PreLoadNavigation() {
 		{f: MultOption, title: "RoomUsers"},
 		{f: OneOption, title: "Allow or not"},
 	}
-
+	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 1")
 	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title)
+		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title, c.Logger)
 	}
 
 	c.Lists[1].Items = list.NewLinkedList(250)
@@ -42,8 +42,10 @@ func (c *Chat) PreLoadNavigation() {
 
 	c.MainFlex = tview.NewFlex()
 
+	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 2")
 	ll := c.Lists[0].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Events", ""))
+	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 21")
 	ll = c.Lists[0].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Menu", ""))
 
@@ -57,6 +59,7 @@ func (c *Chat) PreLoadNavigation() {
 	ll = c.Lists[9].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", ""))
 
+	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 3")
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if c.IsInputActive {
 			switch event.Key() {
@@ -97,6 +100,7 @@ func (c *Chat) PreLoadNavigation() {
 		}
 		return event
 	})
+	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ")
 	c.App = tview.NewApplication()
 	c.AddItemMainFlex()
 }
@@ -119,24 +123,35 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 		if len(key.MainText) == 0 {
 			l := ev.targets[0]
 			sel := []list.Content{}
+			c.Logger.Println("yes nil3", l)
 			if l >= 0 {
 				sel = c.Lists[l].GetSelected()
 				if len(sel) < 1 {
+					c.Logger.Println("yes nil2")
 					return
 				}
 			}
+
+			c.Logger.Println("yes nil7")
+
 			str1 := ""
 			if c.CurrentRoom != nil {
 				str1 = strconv.FormatUint(c.CurrentRoom.RoomId, 10)
 			}
+			c.Logger.Println("yes nil8")
 			it := c.Lists[3].Items.GetBack()
 			if it == nil || it.IsNil() {
+				c.Logger.Println("yes nil")
 				return
 			}
+
+			c.Logger.Println("yes nil9")
 			str2 := it.GetMainText()
 			sel = append(sel, list.Content{MainText: str1, SecondaryText: str2})
 			/* by default always adds-
 			the current room's id and input area text*/
+			c.Logger.Println("yes nilnnn")
+
 			ev.Kind(sel, ev.targets[1:]...)
 			c.Logger.Println(sel, ev.targets[1:], "option event func")
 			return
@@ -158,12 +173,10 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		return
 	}
 	rm, ok := c.RoomMsgs[v]
-	c.Logger.Println("LOGOPT1")
 	if ok {
 		c.CurrentRoom = rm
 		c.Lists[8].Items.Clear()
 
-		c.Logger.Println("LOGOPT2")
 		for _, v := range c.CurrentRoom.Users {
 			navitem := c.Lists[8].Items.NewItem(
 				[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
@@ -172,7 +185,6 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 			)
 			c.Lists[8].Items.MoveToBack(navitem)
 		}
-		c.Logger.Println("LOGOPT3")
 		if c.CurrentRoom.IsGroup {
 			if c.CurrentRoom.IsAdmin {
 				c.Lists[0].Items.GetFront().SetMainText("This Group Room(Admin)", 0)
@@ -182,8 +194,10 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		} else {
 			c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
 		}
-		c.Logger.Println("LOGOPT4")
+
 		c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
+		l := c.Lists[3].Items.(*list.LinkedList)
+		l.MoveToFront(l.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Send Message"))
 	}
 }
 
@@ -211,12 +225,16 @@ func (c *Chat) OptionInput(item list.ListItem) {
 	}
 	c.IsInputActive = true
 	c.Lists[3].Items.GetBack().SetSecondaryText("Type The Text")
+	it := c.Lists[3].Items.GetFront()
+	if it != nil && it.GetSecondaryText() == "Send Message" && c.Lists[3].Current == it {
+		c.OptionEvent(it)
+	}
 }
 func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 
 	itemio := c.Lists[3].Items.GetBack()
 	if itemio != nil && !itemio.IsNil() {
-		itemio.SetSecondaryText("Press Enter Here To Type Text")
+		// itemio.SetSecondaryText("Press Enter Here To Type Text")
 
 		c.MainFlex.Clear()
 		c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
@@ -226,9 +244,21 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 			c.Logger.Println(v, "in prmtvs additemmainflex")
 			c.MainFlex.AddItem(v, 0, 2, false)
 		}
-		// c.NavState = 0
-		c.IsInputActive = false
+
+		c.InputToDefault()
+		c.UserBuf = c.UserBuf[:0]
+		for _, v := range c.DuoUsers {
+			c.UserBuf = append(c.UserBuf, v)
+		}
+		c.FillUsers(c.UserBuf, 6)
+
 	} else {
 		panic("this shouldnt happen")
 	}
+}
+func (c *Chat) InputToDefault() {
+	c.Lists[3].Items.Clear()
+	c.IsInputActive = false
+	l := c.Lists[3].Items.(*list.LinkedList)
+	l.MoveToBack(l.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Press Enter Here To Type Text"))
 }

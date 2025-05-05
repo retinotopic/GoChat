@@ -82,6 +82,7 @@ func NewChat(username, url string, maxMsgsOnPage int, debug bool, logger *log.Lo
 }
 
 func (c *Chat) Run() {
+	c.Logger.Println("App started")
 	go c.ProcessEvents()
 	c.errch <- c.App.SetRoot(c.MainFlex, true).Run()
 }
@@ -109,25 +110,23 @@ func (c *Chat) ProcessEvents() {
 		case <-c.errch:
 			return
 		default:
-			if c.state.InProgressCount.Load() > 0 {
-				c.App.QueueUpdateDraw(func() {
+			c.App.QueueUpdateDraw(func() {
+				if c.state.InProgressCount.Load() > 0 {
 					spinChar := c.state.spinner[i%len(c.state.spinner)]
 					text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
 					item := c.Lists[0].Items.GetBack()
 					item.SetSecondaryText(text)
 					item.SetColor(tcell.ColorRed, 1)
-				})
-				i++
-				if i == len(c.state.spinner) {
-					i = 0
-				}
-			} else {
-				c.App.QueueUpdateDraw(func() {
+					i++
+					if i == len(c.state.spinner) {
+						i = 0
+					}
+				} else {
 					item := c.Lists[0].Items.GetBack()
 					item.SetSecondaryText("")
 					item.SetColor(tcell.ColorGrey, 1)
-				})
-			}
+				}
+			})
 		}
 	}
 }
@@ -138,38 +137,36 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 	}
 	rm, ok := c.RoomMsgs[msgsv[0].RoomId]
 	if ok {
-		c.App.QueueUpdate(func() {
-			ll := list.NewArrayList(c.MaxMsgsOnPage)
-			rm.MsgPageIdBack--
-			prevpgn := ll.NewItem(
-				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-				"Prev Page",
-				strconv.Itoa(rm.MsgPageIdBack-1),
+		ll := list.NewArrayList(c.MaxMsgsOnPage)
+		rm.MsgPageIdBack--
+		prevpgn := ll.NewItem(
+			[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+			"Prev Page",
+			strconv.Itoa(rm.MsgPageIdBack-1),
+		)
+
+		ll.MoveToBack(prevpgn)
+
+		for i := range len(msgsv) {
+			rm.LastMessageID = msgsv[i].MessageId
+
+			e := ll.NewItem(
+				[2]tcell.Color{tcell.ColorWhite, tcell.ColorGray},
+				rm.Users[msgsv[i].UserId].Username+": "+msgsv[i].MessagePayload,
+				strconv.FormatUint(msgsv[i].UserId, 10),
 			)
+			ll.MoveToBack(e)
+		}
 
-			ll.MoveToBack(prevpgn)
+		nextpgn := ll.NewItem(
+			[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+			"Next Page",
+			strconv.Itoa(rm.MsgPageIdBack+1),
+		)
 
-			for i := range len(msgsv) {
-				rm.LastMessageID = msgsv[i].MessageId
-
-				e := ll.NewItem(
-					[2]tcell.Color{tcell.ColorWhite, tcell.ColorGray},
-					rm.Users[msgsv[i].UserId].Username+": "+msgsv[i].MessagePayload,
-					strconv.FormatUint(msgsv[i].UserId, 10),
-				)
-				ll.MoveToBack(e)
-			}
-
-			nextpgn := ll.NewItem(
-				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-				"Next Page",
-				strconv.Itoa(rm.MsgPageIdBack+1),
-			)
-
-			ll.MoveToBack(nextpgn)
-			l := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdBack))
-			rm.Messages[rm.MsgPageIdBack] = l
-		})
+		ll.MoveToBack(nextpgn)
+		l := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdBack), c.Logger)
+		rm.Messages[rm.MsgPageIdBack] = l
 	}
 
 }
@@ -177,64 +174,64 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 func (c *Chat) NewMessageEvent(msg Message) {
 	rm, ok := c.RoomMsgs[msg.RoomId]
 	if ok {
-		c.App.QueueUpdate(func() {
-			l, ok2 := rm.Messages[rm.MsgPageIdFront]
-			if ok2 {
-				if l.Items.Len() >= c.MaxMsgsOnPage {
-					rm.MsgPageIdFront++
-					nextpgn := l.Items.NewItem(
-						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-						"Next Page",
-						strconv.Itoa(rm.MsgPageIdFront),
-					)
-					l.Items.MoveToBack(nextpgn)
-					///// OLD PAGE
+		l, ok2 := rm.Messages[rm.MsgPageIdFront]
+		if ok2 {
+			if l.Items.Len() >= c.MaxMsgsOnPage {
+				rm.MsgPageIdFront++
+				nextpgn := l.Items.NewItem(
+					[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+					"Next Page",
+					strconv.Itoa(rm.MsgPageIdFront),
+				)
+				l.Items.MoveToBack(nextpgn)
+				///// OLD PAGE
 
-					//// NEW PAGE
-					ll := list.NewArrayList(c.MaxMsgsOnPage)
-					prevpgn := ll.NewItem(
-						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-						"Prev Page",
-						strconv.Itoa(rm.MsgPageIdFront-1),
-					)
-					ll.MoveToBack(prevpgn)
-
-					lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront))
-					rm.Messages[rm.MsgPageIdFront] = lst
-
-				} else {
-					msg := l.Items.NewItem(
-						[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-						rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
-						strconv.FormatUint(msg.UserId, 10),
-					)
-					l.Items.MoveToBack(msg)
-
-				}
-				// set room at the top
-				c.Lists[1].Items.MoveToBack(rm.RoomItem)
-			} else {
+				//// NEW PAGE
 				ll := list.NewArrayList(c.MaxMsgsOnPage)
 				prevpgn := ll.NewItem(
 					[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
 					"Prev Page",
-					strconv.Itoa(rm.MsgPageIdFront),
+					strconv.Itoa(rm.MsgPageIdFront-1),
 				)
 				ll.MoveToBack(prevpgn)
-				lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront))
-				rm.Messages[rm.MsgPageIdFront] = lst
-			}
-		})
-	}
 
+				lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+				rm.Messages[rm.MsgPageIdFront] = lst
+
+			} else {
+				msg := l.Items.NewItem(
+					[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+					rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
+					strconv.FormatUint(msg.UserId, 10),
+				)
+				l.Items.MoveToBack(msg)
+
+			}
+			// set room at the top
+			c.Lists[1].Items.MoveToBack(rm.RoomItem)
+			c.Logger.Println(c.Lists[1].Items.Len())
+		} else {
+			ll := list.NewArrayList(c.MaxMsgsOnPage)
+			prevpgn := ll.NewItem(
+				[2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+				"Prev Page",
+				strconv.Itoa(rm.MsgPageIdFront),
+			)
+			ll.MoveToBack(prevpgn)
+			lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+			rm.Messages[rm.MsgPageIdFront] = lst
+		}
+	}
 }
+
 func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 	for _, rmsv := range rmsvs {
 		rm, ok := c.RoomMsgs[rmsv.RoomId]
 		if ok {
+			c.Logger.Println(rm)
 			rm.RoomName = rmsv.RoomName
 			isKicked := false
-			c.UserBuf = c.UserBuf[:0]
+
 			for i, u := range rmsv.Users {
 				if u.RoomToggle {
 					if !rm.IsGroup {
@@ -254,10 +251,6 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 				clear(rm.Messages)
 				delete(c.RoomMsgs, rmsv.RoomId)
 			}
-			for _, v := range c.DuoUsers {
-				c.UserBuf = append(c.UserBuf, v)
-			}
-			c.FillUsers(c.UserBuf, 6)
 
 		} else {
 			c.AddRoom(rmsv)
@@ -266,33 +259,36 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 }
 
 func (c *Chat) AddRoom(rmsv RoomServer) {
-	c.App.QueueUpdate(func() {
 
-		c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User),
-			Messages: make(map[int]*list.List), RoomName: rmsv.RoomName,
-			RoomId: rmsv.RoomId}
+	c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User),
+		Messages: make(map[int]*list.List), RoomName: rmsv.RoomName,
+		RoomId: rmsv.RoomId}
 
-		rm := c.RoomMsgs[rmsv.RoomId]
-		//fill room with users
-		for _, u := range rmsv.Users {
-			rm.Users[u.UserId] = u
-			if u.UserId != c.UserId && !rmsv.IsGroup {
-				c.DuoUsers[u.UserId] = u
-			}
+	rm := c.RoomMsgs[rmsv.RoomId]
+	//fill room with users
+	for _, u := range rmsv.Users {
+		rm.Users[u.UserId] = u
+		if u.UserId != c.UserId && !rmsv.IsGroup {
+			c.DuoUsers[u.UserId] = u
 		}
-		// set new room at the top
-		rmitem := c.Lists[1].Items.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
-			rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
-		c.Lists[1].Items.MoveToBack(rmitem)
-		rm.RoomItem = rmitem
+	}
 
-		if rmsv.CreatedByUserId == c.UserId {
-			rm.IsAdmin = true
-		}
-		if rmsv.IsGroup {
-			rm.RoomType = "Group"
-		} else {
-			rm.RoomType = "Duo"
-		}
-	})
+	ll := list.NewArrayList(c.MaxMsgsOnPage)
+	lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+	rm.Messages[0] = lst
+
+	// set new room at the top
+	rmitem := c.Lists[1].Items.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue},
+		rm.RoomName, strconv.FormatUint(rm.RoomId, 10))
+	c.Lists[1].Items.MoveToBack(rmitem)
+	rm.RoomItem = rmitem
+
+	if rmsv.CreatedByUserId == c.UserId {
+		rm.IsAdmin = true
+	}
+	if rmsv.IsGroup {
+		rm.RoomType = "Group"
+	} else {
+		rm.RoomType = "Duo"
+	}
 }

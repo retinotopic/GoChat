@@ -1,6 +1,7 @@
 package list
 
 import (
+	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -13,7 +14,7 @@ type Content struct {
 	SecondaryText string
 }
 
-func NewList(items ListItems, option func(ListItem), title string) *List {
+func NewList(items ListItems, option func(ListItem), title string, log *log.Logger) *List {
 	box := tview.NewBox().SetBorder(true)
 	box.SetTitle(title)
 	return &List{
@@ -23,11 +24,13 @@ func NewList(items ListItems, option func(ListItem), title string) *List {
 		lines:       make([]string, 0, 1000),
 		selectedBuf: make([]Content, 0, 100),
 		Current:     nil,
+		Logger:      log,
 	}
 }
 
 type List struct {
 	*tview.Box
+	Logger      *log.Logger
 	lines       []string
 	offset      int // scroll offset
 	selectedBuf []Content
@@ -84,7 +87,6 @@ func (l *List) Draw(screen tcell.Screen) {
 	}
 	row := 0
 	for element != nil && !element.IsNil() && row < height {
-
 		mainText := element.GetMainText()
 		lines := l.splitTextIntoLines(mainText, width)
 		for lineIndex, line := range lines {
@@ -176,7 +178,6 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 }
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-
 		if l.Current == nil && l.Items.Len() > 0 {
 			l.Current = l.Items.GetBack()
 		}

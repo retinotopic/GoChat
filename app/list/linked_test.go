@@ -1,6 +1,7 @@
 package list_test
 
 import (
+	"log"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -91,6 +92,42 @@ func Test_LinkedList(t *testing.T) {
 			t.Errorf("consistency list validation failed")
 		}
 		item = item.Next()
+		i += 1
+	}
+	li = list.List{}
+	listLength = 30
+	arr = list.NewLinkedList(listLength)
+	li.Items = arr
+
+	clrs = [2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}
+
+	l0 = arr.NewItem(clrs, "SampleText1", "SampleText")
+	arr.MoveToBack(l0)
+	l1 = arr.NewItem(clrs, "SampleText2", "SampleText")
+	arr.MoveToBack(l1)
+	arr.MoveToBack(l0)
+	arr.MoveToBack(l1)
+	arr.MoveToBack(l1)
+
+	it := arr.GetBack()
+	i = 0
+	for it != nil && !it.IsNil() {
+		if i > 1 {
+			t.Errorf("consistency list validation failed")
+		}
+		log.Println(it.GetMainText())
+		it = it.Next()
+		i += 1
+	}
+
+	it = arr.GetFront()
+	i = 0
+	for it != nil && !it.IsNil() {
+		if i > 1 {
+			t.Errorf("consistency list validation failed")
+		}
+		log.Println(it.GetMainText())
+		it = it.Prev()
 		i += 1
 	}
 
