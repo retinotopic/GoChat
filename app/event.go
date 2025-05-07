@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log"
 	"strconv"
 
 	json "github.com/bytedance/sonic"
@@ -24,6 +25,7 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 	}
 	ll, ok := c.Lists[trg[0]].Items.(*list.ArrayList)
 	if ok {
+		c.Logger.Println("yeah it does")
 		for i := range cnt {
 			a := ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
 				cnt[i].MainText, cnt[i].SecondaryText)
@@ -31,10 +33,19 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 		}
 		for i := range trg {
 			lists = append(lists, c.Lists[trg[i]])
-			c.Logger.Println(c.Lists[trg[i]], "event ui")
+			c.Logger.Println(trg[i], "event ui list id")
 		}
+
+		c.UserBuf = c.UserBuf[:0]
+		for _, v := range c.DuoUsers {
+			c.UserBuf = append(c.UserBuf, v)
+
+		}
+		c.FillUsers(c.UserBuf, 6)
+
 		c.AddItemMainFlex(lists...)
 	}
+	c.Logger.Println("yeah it doesnt")
 }
 
 // Room SendEvents
@@ -45,10 +56,10 @@ func (r Room) AddDeleteUsersInRoom(args []list.Content, trg ...int) {
 		return
 	}
 	r.RoomIds = append(r.RoomIds, n)
-	for i := range args {
+	for i := range len(args) - 1 {
 		n, err = strconv.ParseUint(args[i].SecondaryText, 10, 64)
 		if err != nil {
-			return
+			log.Fatalln(err)
 		}
 		r.UserIds = append(r.UserIds, n)
 	}
@@ -86,11 +97,11 @@ func (r Room) CreateGroupRoom(args []list.Content, trg ...int) {
 	// should be: len(r.RoomName) == 0 || len(r.UserIds) == 0
 	var err error
 	r.RoomName = args[len(args)-1].SecondaryText
-	for i := range args {
+	for i := range len(args) - 1 {
 		var n uint64
 		n, err = strconv.ParseUint(args[i].SecondaryText, 10, 64)
 		if err != nil {
-			return
+			log.Fatalln(err)
 		}
 		r.UserIds = append(r.UserIds, n)
 	}
@@ -101,7 +112,11 @@ func (r Room) CreateGroupRoom(args []list.Content, trg ...int) {
 
 func (r Room) ChangeRoomName(args []list.Content, trg ...int) {
 	// should be:  len(r.RoomIds) == 0 || len(r.RoomName) == 0
-	//r.RoomIds = []uint64{strconv.ParseUint(args[1], 10, 64)}
+	n, err := strconv.ParseUint(args[len(args)-1].MainText, 10, 64)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	r.RoomIds = []uint64{n}
 	r.RoomName = args[len(args)-1].SecondaryText
 	if data, err := json.Marshal(r); err == nil {
 		r.SendCh <- EventInfo{Data: data, Type: 2, Event: "Change Room Name"}

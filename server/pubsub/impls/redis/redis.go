@@ -39,7 +39,7 @@ func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, peri
 func (r *Redis) PublishWithSubscriptions(ctx context.Context, UserChs []string, PublishChs []string, kind string) (err error) {
 	for i := range UserChs {
 		for j := range PublishChs {
-			id := "$"
+			id := "0-0"
 			info, err := r.Client.XInfoStream(ctx, PublishChs[j]).Result()
 			if err != nil {
 				if err.Error() != "ERR no such key" {

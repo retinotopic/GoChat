@@ -37,7 +37,7 @@ type RoomRequest struct {
 type User struct {
 	UserId     uint64 `json:"UserId"`
 	Username   string `json:"Username" `
-	RoomToggle bool   `json:"Bool" `
+	RoomToggle bool   `json:"RoomToggle" `
 }
 
 type Message struct {

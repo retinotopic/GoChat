@@ -17,6 +17,14 @@ type Content struct {
 func NewList(items ListItems, option func(ListItem), title string, log *log.Logger) *List {
 	box := tview.NewBox().SetBorder(true)
 	box.SetTitle(title)
+	box.SetBackgroundColor(tcell.ColorDarkSlateGray)
+	box.SetBorderColor(tcell.ColorSlateGray)
+	box.SetFocusFunc(func() {
+		box.SetBorderColor(tcell.ColorWhite)
+	})
+	box.SetBlurFunc(func() {
+		box.SetBorderColor(tcell.ColorSlateGray)
+	})
 	return &List{
 		Option:      option,
 		Items:       items,
@@ -27,6 +35,8 @@ func NewList(items ListItems, option func(ListItem), title string, log *log.Logg
 		Logger:      log,
 	}
 }
+
+var highlight = tcell.Style{}.Foreground(tcell.ColorAquaMarine).Background(tcell.ColorMidnightBlue)
 
 type List struct {
 	*tview.Box
@@ -96,7 +106,7 @@ func (l *List) Draw(screen tcell.Screen) {
 			tview.Print(screen, line, x, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
 			if element == l.Current {
 				for i, r := range []rune(line) {
-					screen.SetContent(x+i, y+row+lineIndex, r, nil, tcell.Style{}.Background(tcell.ColorBrown))
+					screen.SetContent(x+i, y+row+lineIndex, r, nil, highlight)
 				}
 			}
 		}
@@ -112,7 +122,7 @@ func (l *List) Draw(screen tcell.Screen) {
 					width, tview.AlignLeft, element.GetColor(1))
 				if element == l.Current {
 					for i, r := range []rune(line) {
-						screen.SetContent(x+i, y+startY+lineIndex, r, nil, tcell.Style{}.Background(tcell.ColorBrown))
+						screen.SetContent(x+i, y+startY+lineIndex, r, nil, highlight)
 					}
 				}
 			}
@@ -178,6 +188,7 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 }
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+
 		if l.Current == nil && l.Items.Len() > 0 {
 			l.Current = l.Items.GetBack()
 		}
@@ -201,6 +212,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				l.Option(l.Current)
 			}
 		}
+
 		return
 	})
 }

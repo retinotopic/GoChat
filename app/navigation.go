@@ -38,7 +38,6 @@ func (c *Chat) PreLoadNavigation() {
 
 	c.Lists[1].Items = list.NewLinkedList(250)
 	c.Lists[3].Items = list.NewLinkedList(3)
-	c.Lists[6].Items = list.NewLinkedList(250)
 
 	c.MainFlex = tview.NewFlex()
 
@@ -162,7 +161,7 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 }
 
 func (c *Chat) OptionRoom(item list.ListItem) {
-	if item == nil {
+	if item == nil || item.IsNil() {
 		return
 	}
 	main := item.GetSecondaryText()
@@ -179,9 +178,9 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 
 		for _, v := range c.CurrentRoom.Users {
 			navitem := c.Lists[8].Items.NewItem(
-				[2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
-				strconv.FormatUint(v.UserId, 10),
+				[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
 				v.Username,
+				strconv.FormatUint(v.UserId, 10),
 			)
 			c.Lists[8].Items.MoveToBack(navitem)
 		}
@@ -194,10 +193,12 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		} else {
 			c.Lists[0].Items.GetFront().SetMainText("This Duo Room", 0)
 		}
+		item.SetColor(tcell.ColorBlue, 0)
+		item.SetColor(tcell.ColorWhite, 1)
 
 		c.AddItemMainFlex(rm.Messages[rm.MsgPageIdFront], c.Lists[3])
 		l := c.Lists[3].Items.(*list.LinkedList)
-		l.MoveToFront(l.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Send Message"))
+		l.MoveToFront(l.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, "", "Send Message"))
 	}
 }
 
@@ -244,13 +245,14 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 			c.Logger.Println(v, "in prmtvs additemmainflex")
 			c.MainFlex.AddItem(v, 0, 2, false)
 		}
-
 		c.InputToDefault()
-		c.UserBuf = c.UserBuf[:0]
-		for _, v := range c.DuoUsers {
-			c.UserBuf = append(c.UserBuf, v)
-		}
-		c.FillUsers(c.UserBuf, 6)
+		c.NavState = 0
+		prm := c.MainFlex.GetItem(c.NavState)
+		c.App.SetFocus(prm)
+		l := prm.(*list.List)
+		l.Current = l.Items.GetBack()
+
+		c.Logger.Println(c.NavState, "navstatte")
 
 	} else {
 		panic("this shouldnt happen")
@@ -260,5 +262,5 @@ func (c *Chat) InputToDefault() {
 	c.Lists[3].Items.Clear()
 	c.IsInputActive = false
 	l := c.Lists[3].Items.(*list.LinkedList)
-	l.MoveToBack(l.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Press Enter Here To Type Text"))
+	l.MoveToBack(l.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, "", "Press Enter Here To Type Text"))
 }

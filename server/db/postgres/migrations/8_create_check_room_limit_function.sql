@@ -7,7 +7,6 @@ CREATE FUNCTION public.check_room_limit() RETURNS trigger
     current_room_count INTEGER;
 BEGIN	
 	IF TG_OP = 'INSERT' THEN
-
         SELECT count_rooms INTO current_user_count FROM users WHERE user_id = NEW.user_id FOR UPDATE;
         IF current_user_count >= 250 THEN
             RAISE EXCEPTION 'User already has 250 rooms';

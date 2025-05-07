@@ -45,6 +45,7 @@ func ChangePrivacyDirect(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	if err != nil {
 		return err
 	}
+	event.Type = 4
 	return err
 }
 func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
@@ -59,6 +60,7 @@ func ChangePrivacyGroup(ctx context.Context, tx pgx.Tx, event *models.EventMetad
 	if err != nil {
 		return err
 	}
+	event.Type = 4
 	return err
 }
 func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
@@ -88,7 +90,7 @@ func FindUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 }
 func GetBlockedUsers(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
 	rows, err := tx.Query(ctx,
-		`SELECT u.user_name,b.blocked_user_id FROM blocked_users b JOIN users u ON u.user_id = b.blocked_user_id WHERE blocked_by_user_id = $1`, event.UserId)
+		`SELECT u.user_name,u.user_id FROM blocked_users b JOIN users u ON u.user_id = b.blocked_user_id WHERE blocked_by_user_id = $1`, event.UserId)
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,6 @@ type EventInfo struct {
 	Event    string                `json:"Event"`
 	ErrorMsg string                `json:"ErrorMsg"`
 	UserId   uint64                `json:"UserId"`
-	Username string                `json:"Username"`
 	Type     int                   `json:"Type"`
 	Data     json.NoCopyRawMessage `json:"Data"`
 }
@@ -70,13 +69,20 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 }
 func (c *Chat) FillUsers(usrs []User, idx int) {
 	c.Lists[idx].Items.Clear()
+	if idx == 6 {
+		c.Logger.Println(len(usrs), " 6 6 6 6 6 ")
+	}
 	for _, v := range usrs {
-		c.Lists[idx].Items.MoveToBack(list.ArrayItem{MainText: v.Username,
-			SecondaryText: strconv.FormatUint(v.UserId, 10)})
+		if idx == 6 {
+			c.Logger.Println("dobavil 6", v.Username, " aboba ", strconv.FormatUint(v.UserId, 10))
+		}
+		lst := c.Lists[idx].Items
+		lst.MoveToBack(lst.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
+			v.Username, strconv.FormatUint(v.UserId, 10)))
 	}
 }
 
-func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
+func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
 	c.Logger.Println("NEW DONE")
 	addinfo := " "
 	if e.UserId == c.UserId {
@@ -87,8 +93,11 @@ func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
 	errstr := "Success"
 	if len(e.ErrorMsg) != 0 {
 		errstr = "Error: " + e.ErrorMsg
-		isErr = true
+		isSkip = true
 		c.Logger.Println(errstr)
+	}
+	if e.Type == 4 {
+		isSkip = true
 	}
 	en := ll.NewItem(
 		[2]tcell.Color{tcell.ColorBlue, tcell.ColorRed},
@@ -97,7 +106,7 @@ func (c *Chat) NewEventNotification(e EventInfo) (isErr bool) {
 	)
 	c.Lists[4].Items.MoveToBack(en)
 	c.Logger.Println(en, "event:", e, "new event notification")
-	return isErr
+	return isSkip
 }
 
 func (c *Chat) ProcessIncomingEvent(b []byte) {
@@ -117,8 +126,8 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 		if err != nil {
 			return
 		}
-		isErr := c.NewEventNotification(e)
-		if isErr {
+		isSkip := c.NewEventNotification(e)
+		if isSkip {
 			return
 		}
 
@@ -176,6 +185,14 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 				return
 			}
 			c.ProcessRoom(rm)
+		case 3:
+			usr := User{}
+			err := json.Unmarshal(e.Data, &usr)
+			if err != nil {
+				log.Fatalln(err)
+				return
+			}
+			c.Username = usr.Username
 		}
 	})
 }

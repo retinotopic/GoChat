@@ -110,6 +110,7 @@ func (p *PubSub) ProcessEvent(event *models.EventMetadata, conn *websocket.Conn)
 	defer cancel()
 
 	err := p.Db.FuncApi(ctx, event)
+
 	if err != nil {
 		event.ErrorMsg = err.Error()
 		event.OrderCmd[0] = 0

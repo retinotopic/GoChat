@@ -89,6 +89,12 @@ func (l *LinkedList) GetBack() ListItem {
 func (l *LinkedList) Remove(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
 	if ok && uitem != nil && uitem.parent == l {
+		if uitem != l.back && uitem != l.front {
+			pr := uitem.prev
+			nxt := uitem.next
+			pr.next = nxt
+			nxt.prev = pr
+		}
 		if uitem == l.front {
 			pr := uitem.prev
 			l.front = pr
@@ -96,12 +102,6 @@ func (l *LinkedList) Remove(e ListItem) {
 		if uitem == l.back {
 			nxt := uitem.next
 			l.back = nxt
-		}
-		if uitem != l.back && uitem != l.front {
-			pr := uitem.prev
-			nxt := uitem.next
-			pr.next = nxt
-			nxt.prev = pr
 		}
 		uitem.prev = nil
 		uitem.next = nil
