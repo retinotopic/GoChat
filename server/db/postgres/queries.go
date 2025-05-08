@@ -35,3 +35,12 @@ AND room_id IN (
 SELECT de.user_id,u.user_name,de.room_id,r.room_name,r.is_group FROM delusers de JOIN users u ON de.user_id = u.user_id JOIN rooms r ON de.room_id = r.room_id`
 
 var CreateRoom = "INSERT INTO rooms (room_name,is_group,created_by_user_id) VALUES ($1,$2,$3) RETURNING room_id"
+
+var OldMessages = "message_id < $2"
+var NewMessages = "message_id > $2"
+
+var getMessagesFromRoom = `SELECT message_payload,user_id,message_id,room_id
+FROM messages WHERE room_id = $1 AND %s ORDER BY message_id DESC LIMIT 40`
+
+var getOldMessages = fmt.Sprintf(getMessagesFromRoom, OldMessages)
+var getNewMessages = fmt.Sprintf(getMessagesFromRoom, NewMessages)

@@ -350,7 +350,8 @@ func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	if tag.RowsAffected() == 0 {
 		return errors.New("'change room name' hasn't changed")
 	}
-	event.Data, err = json.Marshal(r)
+	rm := []RoomClient{{RoomName: r.RoomName, RoomId: r.RoomIds[0]}}
+	event.Data, err = json.Marshal(rm)
 	if err != nil {
 		return err
 	}

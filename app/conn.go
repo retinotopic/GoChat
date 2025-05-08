@@ -69,13 +69,7 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 }
 func (c *Chat) FillUsers(usrs []User, idx int) {
 	c.Lists[idx].Items.Clear()
-	if idx == 6 {
-		c.Logger.Println(len(usrs), " 6 6 6 6 6 ")
-	}
 	for _, v := range usrs {
-		if idx == 6 {
-			c.Logger.Println("dobavil 6", v.Username, " aboba ", strconv.FormatUint(v.UserId, 10))
-		}
 		lst := c.Lists[idx].Items
 		lst.MoveToBack(lst.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
 			v.Username, strconv.FormatUint(v.UserId, 10)))
@@ -83,7 +77,7 @@ func (c *Chat) FillUsers(usrs []User, idx int) {
 }
 
 func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
-	c.Logger.Println("NEW DONE")
+	c.Logger.Println("NEW EVENT NOTIFICATION")
 	addinfo := " "
 	if e.UserId == c.UserId {
 		c.state.InProgressCount.Add(-1)

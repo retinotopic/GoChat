@@ -234,7 +234,6 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 			c.Logger.Println(rm)
 			rm.RoomName = rmsv.RoomName
 			isKicked := false
-
 			for _, u := range rmsv.Users {
 				if u.RoomToggle {
 					if !rm.IsGroup {
@@ -255,6 +254,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 				clear(rm.Messages)
 				delete(c.RoomMsgs, rmsv.RoomId)
 			}
+			rm.RoomItem.SetMainText(rm.RoomName, 0)
 		} else {
 			c.AddRoom(rmsv)
 		}
