@@ -31,7 +31,6 @@ func (c *Chat) PreLoadNavigation() {
 		{f: MultOption, title: "RoomUsers"},
 		{f: OneOption, title: "Allow or not"},
 	}
-	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 1")
 	for i := range len(c.Lists) {
 		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title, c.Logger)
 	}
@@ -41,10 +40,8 @@ func (c *Chat) PreLoadNavigation() {
 
 	c.MainFlex = tview.NewFlex()
 
-	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 2")
 	ll := c.Lists[0].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Events", ""))
-	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 21")
 	ll = c.Lists[0].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Menu", ""))
 
@@ -58,7 +55,6 @@ func (c *Chat) PreLoadNavigation() {
 	ll = c.Lists[9].Items.(*list.ArrayList)
 	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", ""))
 
-	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ 3")
 	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if c.IsInputActive {
 			switch event.Key() {
@@ -99,13 +95,12 @@ func (c *Chat) PreLoadNavigation() {
 		}
 		return event
 	})
-	c.Logger.Println("AIODJFOPFJODIPFJOPIDJ")
 	c.App = tview.NewApplication()
 	c.AddItemMainFlex()
 }
 
 /*
-one of the most important methods, pressing a functional option either changes the state of the current UI
+pressing a functional option either changes the state of the current UI
 or sends a request to the server
 */
 func (c *Chat) OptionEvent(item list.ListItem) {
@@ -118,45 +113,36 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 	key.SecondaryText = item.GetSecondaryText()
 	ev, ok := c.EventMap[key]
 	if ok {
-		c.Logger.Println(ev, "option event start")
+		c.Logger.Println("Event", ev.targets, "option event start")
 		if len(key.MainText) == 0 {
 			l := ev.targets[0]
 			sel := []list.Content{}
-			c.Logger.Println("yes nil3", l)
 			if l >= 0 {
 				sel = c.Lists[l].GetSelected()
 				if len(sel) < 1 {
-					c.Logger.Println("yes nil2")
 					return
 				}
 			}
-
-			c.Logger.Println("yes nil7")
 
 			str1 := ""
 			if c.CurrentRoom != nil {
 				str1 = strconv.FormatUint(c.CurrentRoom.RoomId, 10)
 			}
-			c.Logger.Println("yes nil8")
 			it := c.Lists[3].Items.GetBack()
 			if it == nil || it.IsNil() {
-				c.Logger.Println("yes nil")
 				return
 			}
 
-			c.Logger.Println("yes nil9")
 			str2 := it.GetMainText()
 			sel = append(sel, list.Content{MainText: str1, SecondaryText: str2})
 			/* by default always adds-
 			the current room's id and input area text*/
-			c.Logger.Println("yes nilnnn")
 
 			ev.Kind(sel, ev.targets[1:]...)
-			c.Logger.Println(sel, ev.targets[1:], "option event func")
 			return
 		}
 		ev.Kind(ev.content, ev.targets...)
-		c.Logger.Println(ev.content, ev.targets, "option event UI")
+		c.Logger.Println("Event", ev.targets, "option event UI")
 	}
 }
 
@@ -210,6 +196,9 @@ func (c *Chat) OptionPagination(item list.ListItem) {
 	l, ok := c.CurrentRoom.Messages[v]
 	if ok {
 		c.AddItemMainFlex(l, c.Lists[3])
+		l.Current = l.Items.GetBack()
+		li := c.Lists[3].Items.(*list.LinkedList)
+		li.MoveToFront(li.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, "", "Send Message"))
 	} else {
 		ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
 
@@ -242,7 +231,6 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 		c.MainFlex.AddItem(c.Lists[1], 0, 1, false)
 
 		for _, v := range prmtvs {
-			c.Logger.Println(v, "in prmtvs additemmainflex")
 			c.MainFlex.AddItem(v, 0, 2, false)
 		}
 		c.InputToDefault()
@@ -252,7 +240,7 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 		l := prm.(*list.List)
 		l.Current = l.Items.GetBack()
 
-		c.Logger.Println(c.NavState, "navstatte")
+		c.Logger.Println("Event", c.NavState, "navstatte")
 
 	} else {
 		panic("this shouldnt happen")

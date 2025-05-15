@@ -60,7 +60,6 @@ var InitMapText = []string{
 // parse InitMapText and fill c.EventMap
 func (c *Chat) ParseAndInitUI() {
 	c.SendEventCh = make(chan EventInfo, 100)
-	c.errch = make(chan error, 2)
 
 	SendEventKind := map[string]any{
 		"Room":    &Room{SendCh: c.SendEventCh},
@@ -123,12 +122,7 @@ func (c *Chat) ParseAndInitUI() {
 		}
 		laststr = v
 	}
-	c.state = LoadingState{
-		message: "In Progress",
-		spinner: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-		color:   "yellow",
-	}
-	c.state.InProgressCount.Store(0)
+	c.InProgressCount.Store(0)
 }
 
 func (c *Chat) isNumber(v string, target []int, targetStr []string) ([]int, []string) {

@@ -7,6 +7,7 @@ import (
 
 	// "log"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -65,67 +66,54 @@ type Chat struct {
 	IsInputActive bool
 	UserBuf       []User
 
-	state       LoadingState
-	Logger      *log.Logger
-	errch       chan error
-	SendEventCh chan EventInfo
+	keyIdent        string
+	url             string
+	InProgressCount atomic.Int32
+	Logger          *log.Logger
+	errch           chan error
+	SendEventCh     chan EventInfo
 }
 
-func NewChat(username, url string, maxMsgsOnPage int, debug bool, logger *log.Logger) (chat *Chat, err <-chan error) {
-	c := &Chat{Logger: logger}
+func NewChat(keyIdent, url string, maxMsgsOnPage int, debug bool, logger *log.Logger) (chat *Chat) {
+	c := &Chat{Logger: logger, url: url, keyIdent: keyIdent}
 	c.MaxMsgsOnPage = maxMsgsOnPage
 	c.ParseAndInitUI()
-	c.PreLoadNavigation()
-	err = c.TryConnect(username, url)
-	return c, err
+	return c
 }
 
-func (c *Chat) Run() {
-	c.Logger.Println("App started")
-	go c.ProcessEvents()
-	c.errch <- c.App.SetRoot(c.MainFlex, true).Run()
+func (c *Chat) TryConnect() <-chan error {
+	c.PreLoadNavigation()
+	errch := c.Connect(c.keyIdent, c.url)
+	return errch
 }
 
 func (c *Chat) ProcessEvents() {
-	i := 0
+	c.Logger.Println("Event", "App started")
+	go func() {
+		err := c.App.SetRoot(c.MainFlex, true).Run()
+		if err != nil {
+			c.Conn.CloseNow()
+		}
+	}()
 	for {
 		select {
 		case e := <-c.SendEventCh:
 			b, err := json.Marshal(e)
 			if err != nil {
-				c.Logger.Println(err, "process events marshal")
+				c.Logger.Println("Event", err, "process events marshal")
 				continue
 
-			} else if c.state.InProgressCount.Load() < 15 {
-
-				c.state.InProgressCount.Add(1)
+			} else if c.InProgressCount.Load() < 15 {
+				c.InProgressCount.Add(1)
 				go func() {
 					err := WriteTimeout(time.Second*15, c.Conn, b)
 					if err != nil {
-						c.state.InProgressCount.Add(-1)
+						c.InProgressCount.Add(-1)
 					}
 				}()
 			}
 		case <-c.errch:
 			return
-		default:
-			c.App.QueueUpdateDraw(func() {
-				if c.state.InProgressCount.Load() > 0 {
-					spinChar := c.state.spinner[i%len(c.state.spinner)]
-					text := spinChar + " " + strconv.Itoa(int(c.state.InProgressCount.Load())) + " " + c.state.message
-					item := c.Lists[0].Items.GetBack()
-					item.SetSecondaryText(text)
-					item.SetColor(tcell.ColorRed, 1)
-					i++
-					if i == len(c.state.spinner) {
-						i = 0
-					}
-				} else {
-					item := c.Lists[0].Items.GetBack()
-					item.SetSecondaryText("")
-					item.SetColor(tcell.ColorGrey, 1)
-				}
-			})
 		}
 	}
 }
@@ -147,10 +135,10 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 
 		for i := range len(msgsv) {
 			rm.LastMessageID = msgsv[i].MessageId
-
+			mssg := strconv.FormatUint(msgsv[i].Username, 10)
 			e := ll.NewItem(
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
-				rm.Users[msgsv[i].UserId].Username+": "+msgsv[i].MessagePayload,
+				mssg+": "+msgsv[i].MessagePayload,
 				strconv.FormatUint(msgsv[i].UserId, 10),
 			)
 			ll.MoveToBack(e)
@@ -199,20 +187,21 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
+				mssg := strconv.FormatUint(msg.Username, 10)
 				item := l.Items.NewItem(
 					[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
-					rm.Users[msg.UserId].Username+": "+msg.MessagePayload,
+					mssg+": "+msg.MessagePayload,
 					strconv.FormatUint(msg.UserId, 10),
 				)
 				l.Items.MoveToBack(item)
-				c.Logger.Println(msg.UserId, rm.RoomId, "newmsg")
+				c.Logger.Println("Event", msg.UserId, rm.RoomId, "newmsg")
 
 			}
 			// set room at the top
 			c.Lists[1].Items.MoveToBack(rm.RoomItem)
 			it := c.Lists[1].Items.GetBack()
 			it.SetColor(tcell.ColorLightYellow, 0)
-			c.Logger.Println(c.Lists[1].Items.Len())
+			c.Logger.Println("Event", c.Lists[1].Items.Len())
 		} else {
 			ll := list.NewArrayList(c.MaxMsgsOnPage)
 			prevpgn := ll.NewItem(
@@ -231,7 +220,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 	for _, rmsv := range rmsvs {
 		rm, ok := c.RoomMsgs[rmsv.RoomId]
 		if ok {
-			c.Logger.Println(rm)
+			c.Logger.Println("Event", rm.RoomId)
 			rm.RoomName = rmsv.RoomName
 			isKicked := false
 			for _, u := range rmsv.Users {
@@ -248,7 +237,7 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 				}
 			}
 			if isKicked {
-				c.Logger.Println(rm == nil, rm.RoomItem == nil, rm.RoomItem)
+				c.Logger.Println("Event", rm == nil, rm.RoomItem == nil, rm.RoomItem.GetMainText())
 				c.Lists[1].Items.Remove(rm.RoomItem)
 				clear(rm.Users)
 				clear(rm.Messages)
@@ -270,9 +259,9 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 	rm := c.RoomMsgs[rmsv.RoomId]
 	//fill room with users
 	for _, u := range rmsv.Users {
-		c.Logger.Println(u.Username, "username::::")
+		c.Logger.Println("Event", u.Username, "username::::")
 		rm.Users[u.UserId] = u
-		c.Logger.Println(rmsv.RoomId, " roomid ", " user ", u.Username, u.UserId)
+		c.Logger.Println("Event", rmsv.RoomId, " roomid ", " user ", u.Username, u.UserId)
 		if u.UserId != c.UserId && !rmsv.IsGroup {
 			c.DuoUsers[u.UserId] = u
 		}

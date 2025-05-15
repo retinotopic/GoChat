@@ -84,11 +84,9 @@ func (r *Redis) Channel(user string) <-chan []byte {
 	m := map[string]string{user: "$"}
 	resultCh := make(chan []byte, 10)
 	strmnids := make([]string, 0, 100)
-	r.Log.Error("here we are chan", errors.New(user))
 	go func() (err error) {
 		defer func() {
 			close(resultCh)
-			r.Log.Error("here we are::::::", err)
 		}()
 		for {
 			strmnids = strmnids[:0]
@@ -110,17 +108,14 @@ func (r *Redis) Channel(user string) <-chan []byte {
 				return err
 			}
 			if len(res) != 0 {
-				r.Log.Error(user, errors.New("WAT"))
 				for i := range res {
 					for _, v := range res[i].Messages {
 						switch res[i].Stream {
 						case user:
 							i, ok := v.Values["Action"]
-							r.Log.Error("val"+user, errors.New("333"))
 							if ok {
 								b, ok := i.(string)
 								if ok {
-									r.Log.Error("val indeed"+user, errors.New("333"))
 									a := Action{}
 									err = json.UnmarshalString(b, &a)
 									if err != nil {
@@ -137,9 +132,7 @@ func (r *Redis) Channel(user string) <-chan []byte {
 							}
 						default:
 							i, ok := v.Values["Data"]
-							r.Log.Error("val"+user, errors.New("123"))
 							if ok {
-								r.Log.Error("val indeed"+user, errors.New("123"))
 								b, ok := i.(string)
 								if ok {
 									resultCh <- []byte(b)

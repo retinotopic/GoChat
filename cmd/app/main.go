@@ -4,18 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"log"
+	"time"
 
 	// "log"
-	"os"
-
+	// "flag"
 	"github.com/retinotopic/GoChat/app"
+	"os"
 )
 
 func main() {
-	f, err := os.Create("logs")
-	if err != nil {
-		panic(err)
-	}
+	// idk := flag.String("identKey", "user1493key3051example", "identity key")
+	// flag.Parse()
 	bufstr := bytes.NewBuffer(make([]byte, 0, 50))
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -35,10 +34,27 @@ func main() {
 	if len(appport) == 0 {
 		appport = "8080"
 	}
-	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
-	chat, errch := app.NewChat(bufstr.String(), wsUrl, 30, true, log.New(f, "app log: ", log.LstdFlags))
-	go chat.Run()
-	for err := range errch {
+	f, err := os.OpenFile(bufstr.String(), os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
 		panic(err)
+	}
+	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
+	chat := app.NewChat(bufstr.String(), wsUrl, 20, true, log.New(f, bufstr.String(), 0))
+	errch := chat.TryConnect()
+	recnct := 0
+	go chat.ProcessEvents()
+	for {
+		select {
+		case _, ok := <-errch:
+			if !ok && recnct < 10 {
+				chat.App.Stop()
+				errch = chat.TryConnect()
+				log.Println("trying to reconnect...")
+				time.Sleep(time.Second * 3)
+				go chat.ProcessEvents()
+			} else {
+				log.Fatalln("Max Reconnect tries exceeded")
+			}
+		}
 	}
 }

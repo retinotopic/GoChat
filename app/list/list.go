@@ -63,6 +63,7 @@ type ListItem interface {
 	Prev() ListItem
 	IsNil() bool
 }
+
 type ListItems interface {
 	NewItem([2]tcell.Color, string, string) ListItem
 	MoveToFront(ListItem)
@@ -87,6 +88,7 @@ func (l *List) GetSelected() []Content {
 	}
 	return l.selectedBuf
 }
+
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
 	x, y, width, height := l.GetInnerRect()
@@ -133,6 +135,7 @@ func (l *List) Draw(screen tcell.Screen) {
 		element = element.Next()
 	}
 }
+
 func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
 		return []string{text}
@@ -186,11 +189,21 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 
 	return l.lines
 }
+
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 
 		if l.Current == nil && l.Items.Len() > 0 {
 			l.Current = l.Items.GetBack()
+		}
+
+		if l.Logger != nil {
+			i1 := int16(event.Key())
+			if i1 == 256 { // rune
+				l.Logger.Println("Rune:", event.Rune())
+			} else { // key
+				l.Logger.Println("Key:", tcell.Key(i1))
+			}
 		}
 		switch event.Key() {
 		case tcell.KeyUp:

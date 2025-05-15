@@ -28,11 +28,12 @@ type EventInfo struct {
 	Data     json.NoCopyRawMessage `json:"Data"`
 }
 
-func (c *Chat) TryConnect(username, url string) <-chan error {
+func (c *Chat) Connect(keyIdent, url string) <-chan error {
+	c.errch = make(chan error)
 	hd := http.Header{}
 	cookie := http.Cookie{
 		Name:     "username",
-		Value:    username,
+		Value:    keyIdent,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
@@ -48,15 +49,19 @@ func (c *Chat) TryConnect(username, url string) <-chan error {
 	opts := &websocket.DialOptions{HTTPHeader: hd}
 	c.Conn, _, err = websocket.Dial(ctx, url, opts)
 	if err != nil {
-		log.Fatalln(err)
+		close(c.errch)
+		c.Logger.Println("Event", err)
+		return c.errch
 	}
 
 	go func() {
 		for {
 			msgType, b, err := c.Conn.Read(context.TODO())
 			if err != nil {
-				c.errch <- err
+				c.Logger.Println("Event", err)
+				close(c.errch)
 				c.Conn.CloseNow()
+				return
 			}
 			if msgType == websocket.MessageText && len(b) > 0 {
 				c.ProcessIncomingEvent(b)
@@ -77,10 +82,10 @@ func (c *Chat) FillUsers(usrs []User, idx int) {
 }
 
 func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
-	c.Logger.Println("NEW EVENT NOTIFICATION")
+	c.Logger.Println("Event", "NEW EVENT NOTIFICATION")
 	addinfo := " "
 	if e.UserId == c.UserId {
-		c.state.InProgressCount.Add(-1)
+		c.InProgressCount.Add(-1)
 		addinfo = " by me: " + c.Username
 	}
 	ll := c.Lists[4].Items.(*list.ArrayList)
@@ -88,7 +93,7 @@ func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
 	if len(e.ErrorMsg) != 0 {
 		errstr = "Error: " + e.ErrorMsg
 		isSkip = true
-		c.Logger.Println(errstr)
+		c.Logger.Println("Event", errstr)
 	}
 	if e.Type == 4 {
 		isSkip = true
@@ -99,7 +104,6 @@ func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
 		errstr,
 	)
 	c.Lists[4].Items.MoveToBack(en)
-	c.Logger.Println(en, "event:", e, "new event notification")
 	return isSkip
 }
 
@@ -109,12 +113,12 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 			u := User{}
 			err := json.Unmarshal(b, &u)
 			if err != nil {
-				c.errch <- err
+				panic(err)
 			}
 			c.Username = u.Username
 			c.UserId = u.UserId
 		}
-		c.Logger.Println(b, "CONN READ")
+		c.Logger.Println("Event", b, "CONN READ")
 		e := EventInfo{}
 		err := json.Unmarshal(b, &e)
 		if err != nil {
@@ -140,7 +144,7 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 			if err != nil {
 				return
 			}
-			c.Logger.Println(e, "Find Users")
+			c.Logger.Println("Event", e.Type, "Find Users")
 			c.FillUsers(usrs, 5)
 			return
 		case "Get Blocked Users":
@@ -149,7 +153,7 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 			if err != nil {
 				return
 			}
-			c.Logger.Println(e, "Get Blocked Users")
+			c.Logger.Println("Event", e.Type, "Get Blocked Users")
 			c.FillUsers(usrs, 7)
 			return
 		case "Change Username":

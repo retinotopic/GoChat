@@ -25,7 +25,7 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 	}
 	ll, ok := c.Lists[trg[0]].Items.(*list.ArrayList)
 	if ok {
-		c.Logger.Println("yeah it does")
+		c.Logger.Println("Event", "Correct Branch")
 		for i := range cnt {
 			a := ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
 				cnt[i].MainText, cnt[i].SecondaryText)
@@ -33,7 +33,7 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 		}
 		for i := range trg {
 			lists = append(lists, c.Lists[trg[i]])
-			c.Logger.Println(trg[i], "event ui list id")
+			c.Logger.Println("Event", trg[i], "event ui list id")
 		}
 
 		c.UserBuf = c.UserBuf[:0]
@@ -45,7 +45,6 @@ func (c *Chat) EventUI(cnt []list.Content, trg ...int) {
 
 		c.AddItemMainFlex(lists...)
 	}
-	c.Logger.Println("yeah it doesnt")
 }
 
 // Room SendEvents
@@ -126,6 +125,7 @@ func (r Room) ChangeRoomName(args []list.Content, trg ...int) {
 type Message struct {
 	SendCh         chan EventInfo `json:"-"`
 	MessagePayload string         `json:"MessagePayload"`
+	Username       uint64         `json:"Username" `
 	MessageId      uint64         `json:"MessageId" `
 	RoomId         uint64         `json:"RoomId" `
 	UserId         uint64         `json:"UserId" `

@@ -43,6 +43,7 @@ type User struct {
 type Message struct {
 	MessagePayload string `json:"MessagePayload"`
 	MessageId      uint64 `json:"MessageId" `
+	Username       uint64 `json:"Username" `
 	RoomId         uint64 `json:"RoomId" `
 	UserId         uint64 `json:"UserId" `
 }
