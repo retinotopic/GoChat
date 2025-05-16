@@ -34,12 +34,16 @@ func main() {
 	if len(appport) == 0 {
 		appport = "8080"
 	}
-	f, err := os.OpenFile(bufstr.String(), os.O_RDWR|os.O_CREATE, 0644)
+	dir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	f, err := os.OpenFile(dir+"/logs/logs", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		panic(err)
 	}
 	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
-	chat := app.NewChat(bufstr.String(), wsUrl, 20, true, log.New(f, bufstr.String(), 0))
+	chat := app.NewChat(bufstr.String(), wsUrl, 20, true, log.New(f, bufstr.String()+" ", 0))
 	errch := chat.TryConnect()
 	recnct := 0
 	go chat.ProcessEvents()

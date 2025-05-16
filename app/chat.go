@@ -135,10 +135,9 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 
 		for i := range len(msgsv) {
 			rm.LastMessageID = msgsv[i].MessageId
-			mssg := strconv.FormatUint(msgsv[i].Username, 10)
 			e := ll.NewItem(
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
-				mssg+": "+msgsv[i].MessagePayload,
+				msgsv[i].Username+": "+msgsv[i].MessagePayload,
 				strconv.FormatUint(msgsv[i].UserId, 10),
 			)
 			ll.MoveToBack(e)
@@ -187,10 +186,9 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
-				mssg := strconv.FormatUint(msg.Username, 10)
 				item := l.Items.NewItem(
 					[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
-					mssg+": "+msg.MessagePayload,
+					msg.Username+": "+msg.MessagePayload,
 					strconv.FormatUint(msg.UserId, 10),
 				)
 				l.Items.MoveToBack(item)
@@ -259,7 +257,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 	rm := c.RoomMsgs[rmsv.RoomId]
 	//fill room with users
 	for _, u := range rmsv.Users {
-		c.Logger.Println("Event", u.Username, "username::::")
+		c.Logger.Println("Event", "username: ", u.Username)
 		rm.Users[u.UserId] = u
 		c.Logger.Println("Event", rmsv.RoomId, " roomid ", " user ", u.Username, u.UserId)
 		if u.UserId != c.UserId && !rmsv.IsGroup {

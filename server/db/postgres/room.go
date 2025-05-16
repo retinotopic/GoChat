@@ -377,7 +377,6 @@ func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
 	var currentroom uint64
 	defer rows.Close()
 	for rows.Next() {
-		log.Println("yep")
 		r, err := pgx.RowToStructByNameLax[RoomClient](rows)
 		if err != nil {
 			return nil, err

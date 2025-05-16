@@ -35,7 +35,12 @@ func main() {
 	client := redis.NewClient(&redis.Options{
 		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
 	})
+	dbgrd := false
+	if os.Getenv("REDIS_DEBUG") == "true" {
+		dbgrd = true
+	}
 	rds := &rd.Redis{
+		Debug:   dbgrd,
 		Client:  client,
 		Log:     log,
 		Limiter: redis_rate.NewLimiter(client),

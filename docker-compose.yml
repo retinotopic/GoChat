@@ -38,6 +38,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SSL_ENABLE=${SSL_ENABLE}
+        REDIS_DEBUG=${REDIS_DEBUG}
       - APP_PORT=8080
     networks:
       - public

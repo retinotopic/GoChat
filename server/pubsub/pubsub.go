@@ -62,7 +62,6 @@ func (p *PubSub) WsHandle(userid uint64, conn *websocket.Conn) {
 	for {
 		msgType, b, err := conn.Read(context.TODO()) // incoming client user requests
 		if err != nil {
-			log.Println("HUH?", err)
 			return
 		}
 		if msgType == websocket.MessageText && len(b) > 0 {

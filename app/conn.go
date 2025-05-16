@@ -156,14 +156,14 @@ func (c *Chat) ProcessIncomingEvent(b []byte) {
 			c.Logger.Println("Event", e.Type, "Get Blocked Users")
 			c.FillUsers(usrs, 7)
 			return
-		case "Change Username":
-			u := User{}
-			err := json.Unmarshal(e.Data, &u)
-			if err != nil {
-				return
-			}
-			c.Username = u.Username
-			return
+			// case "Change Username":
+			// 	u := User{}
+			// 	err := json.Unmarshal(e.Data, &u)
+			// 	if err != nil {
+			// 		return
+			// 	}
+			// 	c.Username = u.Username
+			// 	return
 		}
 
 		switch e.Type {

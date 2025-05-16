@@ -125,7 +125,7 @@ func (r Room) ChangeRoomName(args []list.Content, trg ...int) {
 type Message struct {
 	SendCh         chan EventInfo `json:"-"`
 	MessagePayload string         `json:"MessagePayload"`
-	Username       uint64         `json:"Username" `
+	Username       string         `json:"Username" `
 	MessageId      uint64         `json:"MessageId" `
 	RoomId         uint64         `json:"RoomId" `
 	UserId         uint64         `json:"UserId" `

@@ -22,7 +22,9 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 		err = errors.New("you have no permission to send messages to this room")
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO messages (message_payload,user_id,room_id) VALUES ($1,$2,$3)`, m.MessagePayload, event.UserId, m.RoomId)
+	err = tx.QueryRow(ctx, `WITH msg AS (INSERT INTO messages (message_payload,user_id,room_id) VALUES ($1,$2,$3)
+		returning user_id)
+		SELECT u.user_name FROM msg m JOIN users u ON u.user_id = m.user_id`, m.MessagePayload, event.UserId, m.RoomId).Scan(&m.Username)
 	if err != nil {
 		return err
 	}

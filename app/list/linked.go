@@ -2,16 +2,16 @@ package list
 
 import (
 	"bytes"
-	"unicode/utf8"
-
 	"github.com/gdamore/tcell/v2"
+	"unicode/utf8"
 )
 
 func NewLinkedList(lenl int) *LinkedList {
 	ll := &LinkedList{}
 	ll.items = make([]LinkedItem, lenl)
 	ll.stack = make([]int, lenl)
-
+	ll.root.next = &ll.root
+	ll.root.prev = &ll.root
 	for i := range ll.items {
 		ll.items[i].idx = i
 		ll.items[i].parent = ll
@@ -21,99 +21,80 @@ func NewLinkedList(lenl int) *LinkedList {
 }
 
 type LinkedList struct {
-	front *LinkedItem
-	back  *LinkedItem
+	root  LinkedItem
 	stack []int
 	items []LinkedItem
 }
 
-func (l *LinkedList) MoveToFront(e ListItem) {
-	uitem, ok := e.(*LinkedItem)
-	if ok && uitem != nil && uitem.parent == l && uitem != l.front {
-
-		if uitem.prev != nil {
-			uitem.prev.next = uitem.next
-		}
-		if uitem.next != nil {
-			uitem.next.prev = uitem.prev
-		}
-
-		if uitem == l.back {
-			l.back = uitem.next
-		}
-
-		uitem.prev = l.front
-		uitem.next = nil
-		if l.front != nil {
-			l.front.next = uitem
-		} else {
-			l.back = uitem
-		}
-		l.front = uitem
-	}
-}
-
 func (l *LinkedList) MoveToBack(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
-	if ok && uitem != nil && uitem.parent == l && uitem != l.back {
-
-		if uitem.prev != nil {
-			uitem.prev.next = uitem.next
-		}
-		if uitem.next != nil {
-			uitem.next.prev = uitem.prev
-		}
-
-		if uitem == l.front {
-			l.front = uitem.prev
-		}
-
-		uitem.next = l.back
-		uitem.prev = nil
-		if l.back != nil {
-			l.back.prev = uitem
-		} else {
-			l.front = uitem
-		}
-		l.back = uitem
+	if !ok || uitem.parent != l || l.root.next == uitem {
+		return
 	}
+	l.move(uitem, &l.root)
+
+}
+func (l *LinkedList) MoveToFront(e ListItem) {
+	uitem, ok := e.(*LinkedItem)
+	if !ok || uitem.parent != l || l.root.prev == uitem {
+		return
+	}
+	l.move(uitem, l.root.prev)
+
 }
 
-func (l *LinkedList) GetFront() ListItem {
-	return l.front
+func (l *LinkedList) move(e, at *LinkedItem) {
+	if e == at {
+		return
+	}
+	if e.prev == nil || e.next == nil {
+		e.prev = at
+		e.next = at.next
+		e.prev.next = e
+		e.next.prev = e
+		return
+	}
+	e.prev.next = e.next
+	e.next.prev = e.prev
+
+	e.prev = at
+	e.next = at.next
+	e.prev.next = e
+	e.next.prev = e
 }
+
 func (l *LinkedList) GetBack() ListItem {
-	return l.back
+	if len(l.items)-len(l.stack) == 0 {
+		return nil
+	}
+	return l.root.next
+}
+func (l *LinkedList) GetFront() ListItem {
+	if len(l.items)-len(l.stack) == 0 {
+		return nil
+	}
+	return l.root.prev
 }
 
 func (l *LinkedList) Remove(e ListItem) {
 	uitem, ok := e.(*LinkedItem)
-	if ok && uitem != nil && uitem.parent == l {
-		if uitem != l.back && uitem != l.front {
-			pr := uitem.prev
-			nxt := uitem.next
-			pr.next = nxt
-			nxt.prev = pr
-		}
-		if uitem == l.front {
-			pr := uitem.prev
-			l.front = pr
-		} // item can be both front and back simultaneously
-		if uitem == l.back {
-			nxt := uitem.next
-			l.back = nxt
-		}
-		uitem.prev = nil
+	if ok && uitem.parent == l {
+		uitem.prev.next = uitem.next
+		uitem.next.prev = uitem.prev
 		uitem.next = nil
+		uitem.prev = nil
 		l.stack = append(l.stack, uitem.idx)
 	}
 }
 
 func (l *LinkedList) Clear() {
-	l.front = nil
-	l.back = nil
+
+	l.root.next = &l.root
+	l.root.prev = &l.root
 	l.stack = l.stack[:0]
 	for i := range l.items {
+		l.items[i].next = nil
+		l.items[i].prev = nil
 		l.stack = append(l.stack, i)
 	}
 }
@@ -143,8 +124,7 @@ type LinkedItem struct {
 	MainTextBuf *bytes.Buffer /* by default is nil,
 	only used if item changing often*/
 	SecondaryText string
-	next          *LinkedItem
-	prev          *LinkedItem
+	next, prev    *LinkedItem
 }
 
 func (l *LinkedItem) GetParent() ListItems {
@@ -198,19 +178,17 @@ func (l *LinkedItem) SetColor(clr tcell.Color, idx int) {
 }
 
 func (l *LinkedItem) Next() ListItem {
-	val := l.next
-	if val == nil || val.parent == nil || val.parent.back == val {
-		return nil
+	if p := l.next; l.parent != nil && p != &l.parent.root {
+		return p
 	}
-	return val
+	return nil
 }
 
 func (l *LinkedItem) Prev() ListItem {
-	val := l.prev
-	if val == nil || val.parent == nil || val.parent.front == val {
-		return nil
+	if p := l.prev; l.parent != nil && p != &l.parent.root {
+		return p
 	}
-	return val
+	return nil
 }
 
 // val.parent.front == val

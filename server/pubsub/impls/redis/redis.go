@@ -12,6 +12,7 @@ import (
 )
 
 type Redis struct {
+	Debug   bool
 	Client  *redis.Client
 	Log     logger.Logger
 	Limiter *redis_rate.Limiter
@@ -23,6 +24,9 @@ type Action struct {
 }
 
 func (r *Redis) Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error) {
+	if r.Debug {
+		return nil
+	}
 	res, err := r.Limiter.Allow(context.Background(), key, redis_rate.Limit{
 		Rate:   rate,
 		Burst:  burst,
