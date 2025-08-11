@@ -7,14 +7,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-redis/redis_rate/v10"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	"github.com/redis/go-redis/v9"
 	db "github.com/retinotopic/GoChat/server/db/postgres"
 	"github.com/retinotopic/GoChat/server/logger/loggers/zerolog"
-	rd "github.com/retinotopic/GoChat/server/pubsub/impls/redis"
 	"github.com/retinotopic/GoChat/server/router"
+	"github.com/valkey-io/valkey-go"
+	"github.com/valkey-io/valkey-go/valkeylimiter"
 )
 
 func main() {
@@ -32,24 +31,23 @@ func main() {
 		"user=%s password=%s host=%s port=%s dbname=%s sslmode=%s ",
 		pgUser, pgPassword, pgHost, pgPort, pgDB, pgSSL,
 	)
-	client := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
-	})
+	vkoptions := valkey.ClientOption{
+		InitAddress: []string{os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")}}
+
 	dbgrd := false
 	if os.Getenv("REDIS_DEBUG") == "true" {
 		dbgrd = true
 	}
-	rds := &rd.Redis{
-		Debug:   dbgrd,
-		Client:  client,
-		Log:     log,
-		Limiter: redis_rate.NewLimiter(client),
+	limiter, err := valkeylimiter.NewRateLimiter(
+		valkeylimiter.RateLimiterOption{ClientOption: vkoptions, Window: time.Second * 1, Limit: 1})
+	if err != nil {
+		panic(err)
 	}
-	pgclient, err := db.NewPgClient(ctx, dsn, rds)
+	pgclient, err := db.NewPgClient(ctx, dsn, limiter, dbgrd)
 	if err != nil {
 		log.Fatal("db new pool:", err)
 	}
-
+	// for debugging
 	FetchUser := func(w http.ResponseWriter, r *http.Request) (string, error) {
 		c, err := r.Cookie("username")
 		if err != nil {
@@ -67,7 +65,7 @@ func main() {
 	if err := dbs.Close(); err != nil {
 		log.Fatal("close db conn for migrations:", err)
 	}
-	srv := router.NewRouter("0.0.0.0:"+os.Getenv("APP_PORT"), FetchUser, rds, pgclient, log)
+	srv := router.NewRouter("0.0.0.0:"+os.Getenv("APP_PORT"), FetchUser, pgclient, log)
 	err = srv.Run(ctx)
 	if err != nil {
 		log.Fatal("server run:", err)

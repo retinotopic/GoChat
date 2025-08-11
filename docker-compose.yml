@@ -8,17 +8,27 @@ services:
         cmd_app: ./cmd/app
       dockerfile: ./cmd/app/Dockerfile
     environment:
-      - APP_HOST=backend
-      - APP_PORT=8080
-      - SSL_ENABLE=${SSL_ENABLE}
+      - APP_HOST=proxy
+      - APP_PORT=80
     stdin_open: true
     tty: true
     networks:
       - public
+    depends_on: 
+      - proxy
+  proxy:
+    image: nginx:1.29.0
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    restart: always
+    networks:
+      - public
+      - private
+    ports:
+      - "80:80"
     depends_on:
-      - backend
-
-
+      backend:
+        condition: service_healthy
   backend:
     image: backendimage
     build:
@@ -37,28 +47,31 @@ services:
       - PG_SSLMODE=prefer
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SSL_ENABLE=${SSL_ENABLE}
-        REDIS_DEBUG=${REDIS_DEBUG}
+      - REDIS_DEBUG=${REDIS_DEBUG}
       - APP_PORT=8080
-    networks:
-      - public
-      - private
-    ports:
-      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl http://backend:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - private
 
   redis:
-    image: redis:7.4.2-alpine3.21
+    image: valkey/valkey:8.1-alpine
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      interval: 1s
-      timeout: 2s
-      retries: 10
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     networks:
       - private
 
@@ -77,16 +90,16 @@ services:
       - pg_password
     healthcheck:
       test: [ "CMD", "pg_isready" ]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 3s
       retries: 5
+      start_period: 15s
     networks:
       - private
       
 secrets:
   pg_password:
     file: ./cmd/secrets/pg_password.txt
-    
 networks:
   public:
   private:

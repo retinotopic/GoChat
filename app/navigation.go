@@ -3,6 +3,8 @@ package app
 import (
 	// "log"
 	"log"
+	"maps"
+	"slices"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
@@ -24,15 +26,15 @@ func (c *Chat) PreLoadNavigation() {
 		{f: c.OptionRoom, title: "Rooms"},
 		{f: c.OptionEvent, title: "Menu"},
 		{f: c.OptionInput, title: "Input"},
-		{f: OneOption, title: "Events"},
-		{f: OneOption, title: "FoundUsers"},
-		{f: MultOption, title: "DuoUsers"},
-		{f: OneOption, title: "BlockedUsers"},
-		{f: MultOption, title: "RoomUsers"},
-		{f: OneOption, title: "Allow or not"},
+		{f: c.OneOption, title: "Events"},
+		{f: c.OneOption, title: "FoundUsers"},
+		{f: c.MultOption, title: "DuoUsers"},
+		{f: c.OneOption, title: "BlockedUsers"},
+		{f: c.MultOption, title: "RoomUsers"},
+		{f: c.OneOption, title: "Allow or not"},
 	}
 	for i := range len(c.Lists) {
-		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title, c.Logger)
+		c.Lists[i] = list.NewList(list.NewArrayList(c.MaxMsgsOnPage), options[i].f, options[i].title, c.TestLogger)
 	}
 
 	c.Lists[1].Items = list.NewLinkedList(250)
@@ -41,61 +43,31 @@ func (c *Chat) PreLoadNavigation() {
 	c.MainFlex = tview.NewFlex()
 
 	ll := c.Lists[0].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Events", ""))
-	ll = c.Lists[0].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "Menu", ""))
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"Events", ""))
 
 	ll = c.Lists[0].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "This Room (Not Selected)", ""))
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"Menu", ""))
+
+	ll = c.Lists[0].Items.(*list.ArrayList)
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"This Room (Not Selected)", ""))
 
 	l2 := c.Lists[3].Items.(*list.LinkedList)
-	l2.MoveToBack(l2.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "", "Press Enter Here To Type Text"))
+	l2.MoveToBack(l2.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"", "Press Enter Here To Type Text"))
+
 	ll = c.Lists[9].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "true", ""))
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"true", ""))
+
 	ll = c.Lists[9].Items.(*list.ArrayList)
-	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite}, "false", ""))
+	ll.MoveToBack(ll.NewItem([2]tcell.Color{tcell.ColorWhite, tcell.ColorWhite},
+		"false", ""))
 
-	c.MainFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if c.IsInputActive {
-			switch event.Key() {
-			case tcell.KeyRune: // write letter via buffer.WriteString
-				txt := c.Lists[3].Items.GetBack().GetMainText()
-				if len([]rune(txt)) <= 300 {
-					r := event.Rune()
-					c.Lists[3].Items.GetBack().SetMainText(string(r), 1)
-				}
-			case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
-				main := c.Lists[3].Items.GetBack().GetMainText()
-				mr := []rune(main)
-				if len(mr) != 0 {
-					mr = mr[:len(mr)]
-					c.Lists[3].Items.GetBack().SetMainText(string(mr), 2)
-				}
-			}
-		}
-		switch event.Key() {
-		case tcell.KeyLeft:
-			if c.NavState > 0 && c.MainFlex.GetItemCount() > 0 {
-				c.NavState -= 1
-				prm := c.MainFlex.GetItem(c.NavState)
-				c.App.SetFocus(prm)
-				l := prm.(*list.List)
-				l.Current = l.Items.GetBack()
+	c.MainFlex.SetInputCapture(c.MainFlexNavigation)
 
-			}
-		case tcell.KeyRight:
-			if c.NavState < c.MainFlex.GetItemCount()-1 {
-				c.NavState += 1
-				prm := c.MainFlex.GetItem(c.NavState)
-				c.App.SetFocus(prm)
-				l := prm.(*list.List)
-				l.Current = l.Items.GetBack()
-
-			}
-		}
-		return event
-	})
-	c.App = tview.NewApplication()
 	c.AddItemMainFlex()
 }
 
@@ -113,36 +85,8 @@ func (c *Chat) OptionEvent(item list.ListItem) {
 	key.SecondaryText = item.GetSecondaryText()
 	ev, ok := c.EventMap[key]
 	if ok {
-		c.Logger.Println("Event", ev.targets, "option event start")
-		if len(key.MainText) == 0 {
-			l := ev.targets[0]
-			sel := []list.Content{}
-			if l >= 0 {
-				sel = c.Lists[l].GetSelected()
-				if len(sel) < 1 {
-					return
-				}
-			}
-
-			str1 := ""
-			if c.CurrentRoom != nil {
-				str1 = strconv.FormatUint(c.CurrentRoom.RoomId, 10)
-			}
-			it := c.Lists[3].Items.GetBack()
-			if it == nil || it.IsNil() {
-				return
-			}
-
-			str2 := it.GetMainText()
-			sel = append(sel, list.Content{MainText: str1, SecondaryText: str2})
-			/* by default always adds-
-			the current room's id and input area text*/
-
-			ev.Kind(sel, ev.targets[1:]...)
-			return
-		}
-		ev.Kind(ev.content, ev.targets...)
-		c.Logger.Println("Event", ev.targets, "option event UI")
+		c.Logger.Println("Event", "option event start")
+		ev.ExecEvent()
 	}
 }
 
@@ -151,8 +95,6 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 		return
 	}
 	main := item.GetSecondaryText()
-	/*When changing a room, add current users to the list for current users of
-	the room of the selected room (it does not allocate anything, just copies it).*/
 	v, err := strconv.ParseUint(main, 10, 64)
 	if err != nil {
 		return
@@ -161,8 +103,9 @@ func (c *Chat) OptionRoom(item list.ListItem) {
 	if ok {
 		c.CurrentRoom = rm
 		c.Lists[8].Items.Clear()
-
-		for _, v := range c.CurrentRoom.Users {
+		sortedKeys := slices.Sorted(maps.Keys(c.CurrentRoom.Users))
+		for _, k := range sortedKeys {
+			v := c.CurrentRoom.Users[k]
 			navitem := c.Lists[8].Items.NewItem(
 				[2]tcell.Color{tcell.ColorBlue, tcell.ColorWhite},
 				v.Username,
@@ -201,11 +144,7 @@ func (c *Chat) OptionPagination(item list.ListItem) {
 		li.MoveToFront(li.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, "", "Send Message"))
 	} else {
 		ev := c.EventMap[list.Content{SecondaryText: "Get Messages From Room"}]
-
-		str1 := strconv.FormatUint(c.CurrentRoom.RoomId, 10)
-		str2 := c.Lists[3].Items.GetBack().GetMainText()
-		ev.Kind([]list.Content{{MainText: strconv.FormatUint(c.CurrentRoom.LastMessageID, 10)},
-			{MainText: str1, SecondaryText: str2}})
+		ev.ExecEvent()
 	}
 }
 
@@ -224,7 +163,6 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 
 	itemio := c.Lists[3].Items.GetBack()
 	if itemio != nil && !itemio.IsNil() {
-		// itemio.SetSecondaryText("Press Enter Here To Type Text")
 
 		c.MainFlex.Clear()
 		c.MainFlex.AddItem(c.Lists[0], 0, 1, true)
@@ -237,6 +175,7 @@ func (c *Chat) AddItemMainFlex(prmtvs ...tview.Primitive) {
 		c.NavState = 0
 		prm := c.MainFlex.GetItem(c.NavState)
 		c.App.SetFocus(prm)
+
 		l := prm.(*list.List)
 		l.Current = l.Items.GetBack()
 
@@ -251,4 +190,44 @@ func (c *Chat) InputToDefault() {
 	c.IsInputActive = false
 	l := c.Lists[3].Items.(*list.LinkedList)
 	l.MoveToBack(l.NewItem([2]tcell.Color{tcell.ColorBlue, tcell.ColorBlue}, "", "Press Enter Here To Type Text"))
+}
+
+func (c *Chat) MainFlexNavigation(event *tcell.EventKey) *tcell.EventKey {
+	if c.IsInputActive {
+		switch event.Key() {
+		case tcell.KeyRune: // write letter via buffer.WriteString
+			txt := c.Lists[3].Items.GetBack().GetMainText()
+			if len([]rune(txt)) <= 300 {
+				r := event.Rune()
+				c.Lists[3].Items.GetBack().SetMainText(string(r), 1)
+			}
+		case tcell.KeyBackspace, tcell.KeyBackspace2: // trimming via buffer.truncate
+			main := c.Lists[3].Items.GetBack().GetMainText()
+			if len(main) != 0 {
+				c.Lists[3].Items.GetBack().SetMainText("", 2)
+			}
+		}
+	}
+	switch event.Key() {
+	case tcell.KeyLeft:
+		if c.NavState > 0 && c.MainFlex.GetItemCount() > 0 {
+			c.NavState -= 1
+			prm := c.MainFlex.GetItem(c.NavState)
+			c.App.SetFocus(prm)
+
+			l := prm.(*list.List)
+			l.Current = l.Items.GetBack()
+
+		}
+	case tcell.KeyRight:
+		if c.NavState < c.MainFlex.GetItemCount()-1 {
+			c.NavState += 1
+			prm := c.MainFlex.GetItem(c.NavState)
+			c.App.SetFocus(prm)
+
+			l := prm.(*list.List)
+			l.Current = l.Items.GetBack()
+		}
+	}
+	return event
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 
 	json "github.com/bytedance/sonic"
@@ -13,57 +12,27 @@ import (
 	"github.com/retinotopic/GoChat/server/models"
 )
 
-type RoomRequest struct {
-	Event    string   `json:"Event" `
-	UserIds  []uint64 `json:"UserIds" `
-	RoomIds  []uint64 `json:"RoomIds" `
-	RoomName string   `json:"RoomName" `
-	IsGroup  bool     `json:"IsGroup" `
-	Type     int      `json:"Type" `
-}
-
-func (r RoomRequest) GetName() string {
-	return r.Event
-}
-
-type RoomClient struct {
-	RoomId          uint64        `json:"RoomId" `
-	RoomName        string        `json:"RoomName" `
-	IsGroup         bool          `json:"IsGroup" `
-	CreatedByUserId uint64        `json:"CreatedByUserId" `
-	Users           []models.User `json:"Users" `
-	Username        string        `json:"-" `
-	UserId          uint64        `json:"-" `
-}
-
-func GetAllRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (err error) {
+func GetUserRooms(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) (err error) {
 	rows, err := tx.Query(ctx,
 		`SELECT ru.room_id,ru.user_id,r.room_name,r.is_group,r.created_by_user_id,u.user_name
 		FROM room_users_info ru JOIN rooms r ON ru.room_id = r.room_id JOIN users u ON ru.user_id = u.user_id
-		WHERE ru.user_id = $1 ORDER BY r.last_activity DESC, r.room_id;`, event.UserId)
+		WHERE ru.room_id IN (SELECT room_id FROM room_users_info WHERE user_id = $1)
+		ORDER BY r.last_activity DESC, r.room_id`, event.UserId)
 	if err != nil {
 		return err
 	}
-	resp, err := NormalizeRoom(rows, false)
+	resp, err := NormalizeRoom(rows, 0)
 	if err != nil {
 		return err
 	}
 	if len(resp) == 0 {
 		return errors.New("no rooms found")
 	}
-
-	log.Println(resp, "CHECK RESP GET ALL R")
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
 		return err
 	}
-	event.OrderCmd[0] = 2
-	event.OrderCmd[1] = 0
-	event.Kind = "1"
-	event.UserChs = []string{strconv.Itoa(int(event.UserId))}
-	for _, room := range resp {
-		event.PublishChs = append(event.PublishChs, "room"+strconv.Itoa(int(room.RoomId)))
-	}
+	event.OrderCmd[1] = 3
 	return err
 }
 
@@ -82,11 +51,11 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 		first, second = event.UserId, r.UserIds[0]
 	}
 	r.UserIds = append(r.UserIds, event.UserId)
-	userstr := ConvertUint64ToString(r.UserIds)
+	userstr := models.ConvertUint64ToString(r.UserIds)
 
 	row := tx.QueryRow(ctx, `SELECT room_id
 		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2)`, first, second)
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) FOR UPDATE`, first, second)
 
 	err = row.Scan(&r.RoomIds[0])
 	if err != nil && err != pgx.ErrNoRows {
@@ -108,19 +77,23 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 			return err
 		}
 	}
-	rows, err = tx.Query(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, false, event.UserId) // bool param is is_group
+	tag, err := tx.Exec(ctx, addUsersToRoomDirect, r.RoomIds[0], r.UserIds, false, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	resp, err := NormalizeRoom(rows, false)
+	if int(tag.RowsAffected()) != len(r.UserIds) {
+		return errors.New("no users added")
+	}
+	rows, err = tx.Query(ctx, getRoomUsers, r.RoomIds[0]) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := NormalizeRoom(rows, 0)
 	if err != nil {
 		return err
 	}
 	if len(resp) == 0 {
 		return errors.New("no users added")
-	}
-	if len(r.UserIds) != len(resp[0].Users) {
-		return errors.New("not all users are compliant (blocking policy or privacy policy)")
 	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
@@ -129,9 +102,8 @@ func CreateDuoRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) 
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
 	event.UserChs = userstr
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-	log.Println(event.UserChs, event.PublishChs, "here we are")
-	event.Kind = "1"
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = true
 	return err
 }
 
@@ -145,25 +117,29 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 		return errors.New("malformed json")
 	}
 	r.UserIds = append(r.UserIds, event.UserId)
-	userstr := ConvertUint64ToString(r.UserIds)
+	userstr := models.ConvertUint64ToString(r.UserIds)
 	// create new room and return room id
 	err = tx.QueryRow(ctx, CreateRoom, r.RoomName, true, event.UserId).Scan(&r.RoomIds[0]) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	tag, err := tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	resp, err := NormalizeRoom(rows, false)
+	if int(tag.RowsAffected()) != len(r.UserIds) {
+		return errors.New("no users added")
+	}
+	rows, err := tx.Query(ctx, getRoomUsers, r.RoomIds[0]) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := NormalizeRoom(rows, 0)
 	if err != nil {
 		return err
 	}
 	if len(resp) == 0 {
 		return errors.New("no users added")
-	}
-	if len(r.UserIds) != len(resp[0].Users) {
-		return errors.New("not all users are compliant (blocking policy or privacy policy)")
 	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
@@ -172,8 +148,8 @@ func CreateGroupRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
 	event.UserChs = userstr
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-	event.Kind = "1"
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = true
 	return err
 }
 func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
@@ -184,23 +160,27 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	if len(r.RoomIds) == 0 || len(r.UserIds) == 0 {
 		return errors.New("malformed json")
 	}
-	if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2 FOR UPDATE`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
 		err = errors.New("you have no permission to add users to this room")
 		return err
 	}
-	rows, err := tx.Query(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
+	tag, err := tx.Exec(ctx, addUsersToRoomGroup, r.RoomIds[0], r.UserIds, true, event.UserId) // bool param is is_group
 	if err != nil {
 		return err
 	}
-	resp, err := NormalizeRoom(rows, false)
+	if int(tag.RowsAffected()) != len(r.UserIds) {
+		return errors.New("no users added")
+	}
+	rows, err := tx.Query(ctx, getRoomUsers, r.RoomIds[0]) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	resp, err := NormalizeRoom(rows, 0)
 	if err != nil {
 		return err
 	}
 	if len(resp) == 0 {
 		return errors.New("no users added")
-	}
-	if len(r.UserIds) != len(resp[0].Users) {
-		return errors.New("not all users are compliant (blocking policy or privacy policy)")
 	}
 	event.Data, err = json.Marshal(resp)
 	if err != nil {
@@ -208,9 +188,9 @@ func AddUsersToRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	}
 	event.OrderCmd[0] = 2
 	event.OrderCmd[1] = 1
-	event.UserChs = ConvertUint64ToString(r.UserIds)
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-	event.Kind = "1"
+	event.UserChs = models.ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = true
 	return err
 }
 func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) error {
@@ -222,19 +202,27 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 		return errors.New("malformed json")
 	}
 	if len(r.UserIds) != 1 || r.UserIds[0] != event.UserId { // if the user wants to remove themselves from the room skip this check
-		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2`, r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT 1 FROM rooms WHERE room_id = $1 AND created_by_user_id = $2 FOR UPDATE`,
+			r.RoomIds[0], event.UserId).Scan(new(int)); err != nil {
 			err = errors.New("you have no permission to delete users from this room")
 			if err != nil {
 				return err
 			}
 		}
 	}
-	rows, err := tx.Query(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], true) // bool param is is_group
+	tag, err := tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], true) // bool param is is_group
+	if err != nil {
+		return err
+	}
+	if int(tag.RowsAffected()) != len(r.UserIds) {
+		return errors.New("no users added")
+	}
+	rows, err := tx.Query(ctx, getRoomUsers, r.RoomIds[0]) // bool param is is_group
 	if err != nil {
 		return err
 	}
 
-	resp, err := NormalizeRoom(rows, true)
+	resp, err := NormalizeRoom(rows, r.RoomIds[0])
 	if err != nil {
 		return err
 	}
@@ -247,9 +235,9 @@ func DeleteUsersFromRoom(ctx context.Context, tx pgx.Tx, event *models.EventMeta
 	}
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
-	event.UserChs = ConvertUint64ToString(r.UserIds)
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-	event.Kind = "0"
+	event.UserChs = models.ConvertUint64ToString(r.UserIds)
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = false
 	return err
 }
 
@@ -268,21 +256,33 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 		first, second = event.UserId, r.UserIds[0]
 	}
 	r.UserIds = append(r.UserIds, event.UserId)
-	userstr := ConvertUint64ToString(r.UserIds)
+	userstr := models.ConvertUint64ToString(r.UserIds)
 
 	row := tx.QueryRow(ctx, `SELECT room_id
 		FROM duo_rooms
-		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2)`, first, second)
+		WHERE (user_id1 = $1 AND user_id2 = $2) OR (user_id2 = $1 AND user_id1 = $2) FOR UPDATE`, first, second)
 
 	err = row.Scan(&r.RoomIds[0])
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
-	rows, err := tx.Query(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
+	tag, err := tx.Exec(ctx, deleteUsersFromRoom, r.UserIds, r.RoomIds[0], false) // bool param is is_group
+	if int(tag.RowsAffected()) != len(r.UserIds) || err != nil {
+		return errors.New("no users added: " + err.Error())
+	}
+	t, err := tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
+		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
 	if err != nil {
 		return err
 	}
-	resp, err := NormalizeRoom(rows, true)
+	if t.RowsAffected() == 0 {
+		return errors.New("no users blocked")
+	}
+	rows, err := tx.Query(ctx, getRoomUsers, r.RoomIds[0])
+	if err != nil {
+		return err
+	}
+	resp, err := NormalizeRoom(rows, r.RoomIds[0])
 	if err != nil {
 		return err
 	}
@@ -296,17 +296,9 @@ func BlockUser(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) erro
 	event.OrderCmd[0] = 1
 	event.OrderCmd[1] = 2
 	event.UserChs = userstr
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
-	event.Kind = "0"
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
+	event.Kind = false
 
-	t, err := tx.Exec(ctx, `INSERT INTO blocked_users (blocked_by_user_id, blocked_user_id)
-		VALUES ($1, $2)`, event.UserId, r.UserIds[0])
-	if err != nil {
-		return err
-	}
-	if t.RowsAffected() == 0 {
-		return errors.New("no users blocked")
-	}
 	return err
 }
 
@@ -350,51 +342,42 @@ func ChangeRoomname(ctx context.Context, tx pgx.Tx, event *models.EventMetadata)
 	if tag.RowsAffected() == 0 {
 		return errors.New("'change room name' hasn't changed")
 	}
-	rm := []RoomClient{{RoomName: r.RoomName, RoomId: r.RoomIds[0]}}
+	rm := []models.RoomClient{{RoomName: r.RoomName, RoomId: r.RoomIds[0]}}
 	event.Data, err = json.Marshal(rm)
 	if err != nil {
 		return err
 	}
 	event.OrderCmd[0] = 1
-	event.OrderCmd[1] = -1
-	event.PublishChs = []string{"room" + strconv.Itoa(int(r.RoomIds[0]))}
+	event.PublishChs = []string{strconv.Itoa(int(r.RoomIds[0]))}
 	return err
 }
-func ConvertUint64ToString(ids []uint64) []string {
-	if len(ids) == 0 {
-		return []string{}
-	}
 
-	strIds := make([]string, len(ids)+1)
-	for i, id := range ids {
-		strIds[i] = strconv.FormatUint(uint64(id), 10)
-	}
-	return strIds
-}
-func NormalizeRoom(rows pgx.Rows, userDelete bool) ([]RoomClient, error) {
-	var rms []RoomClient
+func NormalizeRoom(rows pgx.Rows, roomIdOpt uint64) ([]models.RoomClient, error) {
+	var rms []models.RoomClient
 	var err error
 	var currentroom uint64
 	defer rows.Close()
 	for rows.Next() {
-		r, err := pgx.RowToStructByNameLax[RoomClient](rows)
+		r, err := pgx.RowToStructByNameLax[models.RoomClient](rows)
 		if err != nil {
 			return nil, err
 		}
-
 		if r.RoomId == currentroom {
 			last := len(rms) - 1
-			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
+			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username})
 		} else {
 			rms = append(rms, r)
 			last := len(rms) - 1
 			rms[last].Users = make([]models.User, 0, 3)
-			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username, RoomToggle: userDelete})
+			rms[last].Users = append(rms[last].Users, models.User{UserId: r.UserId, Username: r.Username})
 			currentroom = r.RoomId
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if len(rms) == 0 && roomIdOpt != 0 { // if room exist but room have no users
+		rms = append(rms, models.RoomClient{RoomId: roomIdOpt})
 	}
 	return rms, err
 }

@@ -2,32 +2,47 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"strconv"
 	"time"
 
 	json "github.com/bytedance/sonic"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/retinotopic/GoChat/server/models"
+	"github.com/valkey-io/valkey-go/valkeylimiter"
 )
 
 type PgClient struct {
 	*pgxpool.Pool
-	Lm      Limiter
+	Limiter valkeylimiter.RateLimiterClient
+	IsDebug bool
 	UserApi map[string]FuncLimiter
 }
-type Limiter interface {
-	Allow(ctx context.Context, key string, rate int, burst int, period time.Duration) (err error)
-}
+
 type FuncLimiter struct {
 	fn     func(context.Context, pgx.Tx, *models.EventMetadata) error
-	rate   int
-	burst  int
-	period time.Duration
+	limit  int
+	window time.Duration
 }
 
-func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error) {
+func (p *PgClient) Allow(ctx context.Context, key string, limit int, window time.Duration) (err error) {
+	if p.IsDebug {
+		return nil
+	}
+	options := valkeylimiter.WithCustomRateLimit(limit, window)
+	res, err := p.Limiter.Allow(ctx, key, options)
+	if err != nil {
+		return err
+	}
+	if res.Allowed {
+		return nil
+	}
+	return errors.New("limit exceeded, retry after " + strconv.FormatUint(uint64(res.Remaining), 10))
+}
+
+func NewPgClient(ctx context.Context, addr string, lm valkeylimiter.RateLimiterClient, isdebug bool) (*PgClient, error) {
 	var err error
 	pl, err := pgxpool.New(ctx, addr)
 	if err != nil {
@@ -35,23 +50,24 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 	}
 	pg := &PgClient{}
 	pg.Pool = pl
-	pg.Lm = lm
+	pg.IsDebug = isdebug
+	pg.Limiter = lm
 	pg.UserApi = map[string]FuncLimiter{
-		"Get All Rooms":          {GetAllRooms, 1, 1, time.Second},
-		"Change Room Name":       {ChangeRoomname, 1, 1, time.Second},
-		"Get Blocked Users":      {GetBlockedUsers, 1, 1, time.Second},
-		"Get Messages From Room": {GetMessagesFromRoom, 1, 1, time.Second},
-		"Find Users":             {FindUsers, 1, 1, time.Second},
-		"Send Message":           {SendMessage, 1, 1, time.Second},
-		"Change Username":        {ChangeUsername, 1, 1, time.Hour * 24 * 7},
-		"Change Privacy Direct":  {ChangePrivacyDirect, 1, 1, time.Second},
-		"Change Privacy Group":   {ChangePrivacyGroup, 1, 1, time.Second},
-		"Create Duo Room":        {CreateDuoRoom, 5, 25, time.Minute * 5},
-		"Create Group Room":      {CreateGroupRoom, 5, 25, time.Minute * 5},
-		"Add Users To Room":      {AddUsersToRoom, 5, 25, time.Minute * 5},
-		"Delete Users From Room": {DeleteUsersFromRoom, 5, 25, time.Minute * 5},
-		"Block User":             {BlockUser, 5, 25, time.Minute * 5},
-		"Unblock User":           {UnblockUser, 5, 25, time.Minute * 5},
+		"Get All Rooms":          {GetUserRooms, 1, time.Second},
+		"Change Room Name":       {ChangeRoomname, 1, time.Second},
+		"Get Blocked Users":      {GetBlockedUsers, 1, time.Second},
+		"Get Messages From Room": {GetMessagesFromRoom, 1, time.Second},
+		"Find Users":             {FindUsers, 1, time.Second},
+		"Send Message":           {SendMessage, 1, time.Second},
+		"Change Username":        {ChangeUsername, 1, time.Hour * 24 * 7},
+		"Change Privacy Direct":  {ChangePrivacyDirect, 1, time.Second},
+		"Change Privacy Group":   {ChangePrivacyGroup, 1, time.Second},
+		"Create Duo Room":        {CreateDuoRoom, 20, time.Minute * 5},
+		"Create Group Room":      {CreateGroupRoom, 20, time.Minute * 5},
+		"Add Users To Room":      {AddUsersToRoom, 20, time.Minute * 5},
+		"Delete Users From Room": {DeleteUsersFromRoom, 20, time.Minute * 5},
+		"Block User":             {BlockUser, 20, time.Minute * 5},
+		"Unblock User":           {UnblockUser, 20, time.Minute * 5},
 	}
 	return pg, nil
 }
@@ -67,7 +83,7 @@ func NewPgClient(ctx context.Context, addr string, lm Limiter) (*PgClient, error
 func (p *PgClient) FuncApi(ctx context.Context, event *models.EventMetadata) error {
 	fn, ok := p.UserApi[event.Event]
 	if ok {
-		err := p.Lm.Allow(ctx, event.Event, fn.rate, fn.burst, fn.period)
+		err := p.Allow(ctx, event.Event, fn.limit, fn.window)
 		if err != nil {
 			return err
 		}
@@ -84,9 +100,6 @@ func (p *PgClient) FuncApi(ctx context.Context, event *models.EventMetadata) err
 		if err != nil {
 			return err
 		}
-	} else {
-		log.Println("i hate this")
-
 	}
 	return nil
 }

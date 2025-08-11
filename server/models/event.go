@@ -1,6 +1,8 @@
 package models
 
 import (
+	"strconv"
+
 	json "github.com/bytedance/sonic"
 )
 
@@ -20,7 +22,7 @@ type EventMetadata struct {
 	UserId     uint64                `json:"UserId"`
 	Type       int                   `json:"Type"`
 	Data       json.NoCopyRawMessage `json:"Data"` // data to be sent over connection
-	Kind       string                `json:"-"`    // subscribe or unsubscribe, "0" means unsubscribe, "1" means subscribe
+	Kind       bool                  `json:"-"`    // subscribe or unsubscribe, "false" means unsubscribe, "true" means subscribe
 	PublishChs []string              `json:"-"`    // a rooms channels to publish to
 	UserChs    []string              `json:"-"`    /* a user channels to publish to, publish in user channels
 	most of the time means subscribe/unsubscribe to other rooms */
@@ -32,6 +34,16 @@ type RoomRequest struct {
 	RoomIds  []uint64 `json:"RoomIds" `
 	RoomName string   `json:"RoomName" `
 	IsGroup  bool     `json:"IsGroup" `
+}
+
+type RoomClient struct {
+	RoomId          uint64 `json:"RoomId" `
+	RoomName        string `json:"RoomName" `
+	IsGroup         bool   `json:"IsGroup" `
+	CreatedByUserId uint64 `json:"CreatedByUserId" `
+	Users           []User `json:"Users" `
+	Username        string `json:"-" `
+	UserId          uint64 `json:"-" `
 }
 
 type User struct {
@@ -46,4 +58,15 @@ type Message struct {
 	Username       string `json:"Username" `
 	RoomId         uint64 `json:"RoomId" `
 	UserId         uint64 `json:"UserId" `
+}
+
+func ConvertUint64ToString(ids []uint64) []string {
+	if len(ids) == 0 {
+		return []string{}
+	}
+	strIds := make([]string, len(ids))
+	for i, id := range ids {
+		strIds[i] = strconv.FormatUint(uint64(id), 10)
+	}
+	return strIds
 }

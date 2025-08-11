@@ -2,12 +2,19 @@ package app
 
 import (
 	"context"
-	json "github.com/bytedance/sonic"
-	"github.com/gdamore/tcell/v2"
+
+	// "github.com/rogpeppe/go-internal/lockedfile"
 	"log"
 	"net/http"
+
+	// "os"
 	"strconv"
 	"time"
+
+	"encoding/base64"
+
+	json "github.com/bytedance/sonic"
+	"github.com/gdamore/tcell/v2"
 
 	"github.com/coder/websocket"
 	"github.com/retinotopic/GoChat/app/list"
@@ -29,6 +36,7 @@ type EventInfo struct {
 }
 
 func (c *Chat) Connect(keyIdent, url string) <-chan error {
+
 	c.errch = make(chan error)
 	hd := http.Header{}
 	cookie := http.Cookie{
@@ -56,16 +64,26 @@ func (c *Chat) Connect(keyIdent, url string) <-chan error {
 
 	go func() {
 		for {
-			msgType, b, err := c.Conn.Read(context.TODO())
+			_, b, err := c.Conn.Read(context.TODO())
 			if err != nil {
-				c.Logger.Println("Event", err)
+				c.Logger.Println("Event read", err)
 				close(c.errch)
 				c.Conn.CloseNow()
 				return
 			}
-			if msgType == websocket.MessageText && len(b) > 0 {
-				c.ProcessIncomingEvent(b)
+			c.Logger.Println("New event", b)
+			// if msgType == websocket.MessageText && len(b) > 0 {
+			if c.WaitForTest {
+				c.Mtx.Lock()
+				c.ProcIncomingEv(b)
+				c.Mtx.Unlock()
+				<-c.TestCh
+			} else {
+				c.App.QueueUpdateDraw(func() {
+					c.ProcIncomingEv(b)
+				})
 			}
+			// }
 		}
 	}()
 
@@ -81,12 +99,11 @@ func (c *Chat) FillUsers(usrs []User, idx int) {
 	}
 }
 
-func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
+func (c *Chat) NewEventNotification(e EventInfo, data []byte) (isSkip bool) {
 	c.Logger.Println("Event", "NEW EVENT NOTIFICATION")
 	addinfo := " "
 	if e.UserId == c.UserId {
-		c.InProgressCount.Add(-1)
-		addinfo = " by me: " + c.Username
+		addinfo = e.Event + " by me: " + c.Username
 	}
 	ll := c.Lists[4].Items.(*list.ArrayList)
 	errstr := "Success"
@@ -98,99 +115,111 @@ func (c *Chat) NewEventNotification(e EventInfo) (isSkip bool) {
 	if e.Type == 4 {
 		isSkip = true
 	}
+
 	en := ll.NewItem(
 		[2]tcell.Color{tcell.ColorBlue, tcell.ColorRed},
-		e.Event+addinfo,
+		addinfo,
 		errstr,
 	)
+
+	if c.IsDebug {
+		c.Hash.Reset()
+		c.Hash.Write(data)
+		checksum := base64.StdEncoding.EncodeToString(c.Hash.Sum(nil))
+
+		c.Checksums = append(c.Checksums, checksum, ":", e.Event, ":")
+
+		if c.TestLogger != nil {
+			c.TestLogger.Println("Sgn:", checksum)
+		}
+
+	}
 	c.Lists[4].Items.MoveToBack(en)
+
 	return isSkip
 }
 
-func (c *Chat) ProcessIncomingEvent(b []byte) {
-	c.App.QueueUpdateDraw(func() {
-		if c.UserId == 0 {
-			u := User{}
-			err := json.Unmarshal(b, &u)
-			if err != nil {
-				panic(err)
-			}
-			c.Username = u.Username
-			c.UserId = u.UserId
+func (c *Chat) ProcIncomingEv(b []byte) {
+	c.Logger.Println("still here")
+	if c.UserId == 0 {
+		u := User{}
+		err := json.Unmarshal(b, &u)
+		if err != nil {
+			panic(err)
 		}
-		c.Logger.Println("Event", b, "CONN READ")
-		e := EventInfo{}
-		err := json.Unmarshal(b, &e)
+		c.Username = u.Username
+		c.UserId = u.UserId
+
+	}
+	c.Logger.Println("still here1")
+
+	e := EventInfo{}
+	err := json.Unmarshal(b, &e)
+	if err != nil {
+		c.Logger.Println(err)
+		return
+	}
+	c.Logger.Println("still here2")
+	isSkip := c.NewEventNotification(e, b)
+	if isSkip {
+		return
+	}
+	c.Logger.Println("still here3")
+
+	switch e.Event {
+	case "Get Messages From Room":
+		var msgs []Message
+		err = json.Unmarshal(e.Data, &msgs)
 		if err != nil {
 			return
 		}
-		isSkip := c.NewEventNotification(e)
-		if isSkip {
+		c.LoadMessagesEvent(msgs)
+		return
+	case "Find Users":
+		var usrs []User
+		err := json.Unmarshal(e.Data, &usrs)
+		if err != nil {
 			return
 		}
+		c.Logger.Println("Event", e.Type, "Find Users")
+		c.FillUsers(usrs, 5)
+		return
+	case "Get Blocked Users":
+		var usrs []User
+		err := json.Unmarshal(e.Data, &usrs)
+		if err != nil {
+			return
+		}
+		c.Logger.Println("Event", e.Type, "Get Blocked Users")
+		c.FillUsers(usrs, 7)
+		return
+	}
 
-		switch e.Event {
-		case "Get Messages From Room":
-			var msgs []Message
-			err = json.Unmarshal(e.Data, &msgs)
-			if err != nil {
-				return
-			}
-			c.LoadMessagesEvent(msgs)
+	switch e.Type {
+	case 1:
+		msg := Message{}
+		err := json.Unmarshal(e.Data, &msg)
+		if err != nil {
 			return
-		case "Find Users":
-			var usrs []User
-			err := json.Unmarshal(e.Data, &usrs)
-			if err != nil {
-				return
-			}
-			c.Logger.Println("Event", e.Type, "Find Users")
-			c.FillUsers(usrs, 5)
-			return
-		case "Get Blocked Users":
-			var usrs []User
-			err := json.Unmarshal(e.Data, &usrs)
-			if err != nil {
-				return
-			}
-			c.Logger.Println("Event", e.Type, "Get Blocked Users")
-			c.FillUsers(usrs, 7)
-			return
-			// case "Change Username":
-			// 	u := User{}
-			// 	err := json.Unmarshal(e.Data, &u)
-			// 	if err != nil {
-			// 		return
-			// 	}
-			// 	c.Username = u.Username
-			// 	return
 		}
-
-		switch e.Type {
-		case 1:
-			msg := Message{}
-			err := json.Unmarshal(e.Data, &msg)
-			if err != nil {
-				return
-			}
-			c.NewMessageEvent(msg)
+		c.NewMessageEvent(msg)
+		return
+	case 2:
+		rm := []RoomServer{}
+		err := json.Unmarshal(e.Data, &rm)
+		if err != nil {
+			log.Fatalln(err)
 			return
-		case 2:
-			rm := []RoomServer{}
-			err := json.Unmarshal(e.Data, &rm)
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-			c.ProcessRoom(rm)
-		case 3:
-			usr := User{}
-			err := json.Unmarshal(e.Data, &usr)
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-			c.Username = usr.Username
 		}
-	})
+		c.Logger.Println("EventUX", rm)
+		c.ProcessRoom(rm)
+	case 3:
+		usr := User{}
+		err := json.Unmarshal(e.Data, &usr)
+		if err != nil {
+			log.Fatalln(err)
+			return
+		}
+		c.Username = usr.Username
+	}
 }

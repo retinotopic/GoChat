@@ -29,24 +29,24 @@ func NewList(items ListItems, option func(ListItem), title string, log *log.Logg
 		Option:      option,
 		Items:       items,
 		Box:         box,
-		lines:       make([]string, 0, 1000),
-		selectedBuf: make([]Content, 0, 100),
+		Lines:       make([]string, 0, 1000),
+		SelectedBuf: make([]Content, 0, 100),
 		Current:     nil,
+		Style:       tcell.Style{}.Foreground(tcell.ColorAquaMarine).Background(tcell.ColorMidnightBlue),
 		Logger:      log,
 	}
 }
 
-var highlight = tcell.Style{}.Foreground(tcell.ColorAquaMarine).Background(tcell.ColorMidnightBlue)
-
 type List struct {
 	*tview.Box
 	Logger      *log.Logger
-	lines       []string
-	offset      int // scroll offset
-	selectedBuf []Content
+	Lines       []string
+	Offset      int // scroll offset
+	SelectedBuf []Content
+	Style       tcell.Style
 	Option      func(ListItem)
 	Items       ListItems
-	Current     ListItem // type Room
+	Current     ListItem
 }
 
 type ListItem interface {
@@ -78,15 +78,15 @@ type ListItems interface {
 func (l *List) GetSelected() []Content {
 	front := l.Items.GetBack()
 
-	l.selectedBuf = l.selectedBuf[:0]
+	l.SelectedBuf = l.SelectedBuf[:0]
 	for front != nil && !front.IsNil() {
 		cnt := Content{MainText: front.GetMainText(), SecondaryText: front.GetSecondaryText()}
 		if front.GetColor(0) == tcell.ColorRed {
-			l.selectedBuf = append(l.selectedBuf, cnt)
+			l.SelectedBuf = append(l.SelectedBuf, cnt)
 		}
 		front = front.Next()
 	}
-	return l.selectedBuf
+	return l.SelectedBuf
 }
 
 func (l *List) Draw(screen tcell.Screen) {
@@ -94,28 +94,28 @@ func (l *List) Draw(screen tcell.Screen) {
 	x, y, width, height := l.GetInnerRect()
 
 	element := l.Items.GetBack()
-	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
+	for i := 0; i < l.Offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
 	}
 	row := 0
 	for element != nil && !element.IsNil() && row < height {
 		mainText := element.GetMainText()
-		lines := l.splitTextIntoLines(mainText, width)
-		for lineIndex, line := range lines {
+		Lines := l.splitTextIntoLines(mainText, width)
+		for lineIndex, line := range Lines {
 			if row+lineIndex >= height {
 				break
 			}
 			tview.Print(screen, line, x, y+row+lineIndex, width, tview.AlignLeft, element.GetColor(0))
 			if element == l.Current {
 				for i, r := range []rune(line) {
-					screen.SetContent(x+i, y+row+lineIndex, r, nil, highlight)
+					screen.SetContent(x+i, y+row+lineIndex, r, nil, l.Style)
 				}
 			}
 		}
 
 		if len(element.GetSecondaryText()) > 0 && width > 3 {
 			secondaryLines := l.splitTextIntoLines(element.GetSecondaryText(), width-2)
-			startY := row + len(lines)
+			startY := row + len(Lines)
 			for lineIndex, line := range secondaryLines {
 				if startY+lineIndex >= height {
 					break
@@ -124,13 +124,13 @@ func (l *List) Draw(screen tcell.Screen) {
 					width, tview.AlignLeft, element.GetColor(1))
 				if element == l.Current {
 					for i, r := range []rune(line) {
-						screen.SetContent(x+i, y+startY+lineIndex, r, nil, highlight)
+						screen.SetContent(x+i, y+startY+lineIndex, r, nil, l.Style)
 					}
 				}
 			}
-			row += len(lines) + len(secondaryLines)
+			row += len(Lines) + len(secondaryLines)
 		} else {
-			row += len(lines)
+			row += len(Lines)
 		}
 		element = element.Next()
 	}
@@ -143,7 +143,7 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 	if l.Current == nil && l.Items.Len() > 0 {
 		l.Current = l.Items.GetBack()
 	}
-	l.lines = l.lines[:0]
+	l.Lines = l.Lines[:0]
 	words := strings.Fields(text)
 	currentLine := ""
 	for _, word := range words {
@@ -151,7 +151,7 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 
 		if wordWidth > maxWidth {
 			if len(currentLine) > 0 {
-				l.lines = append(l.lines, currentLine)
+				l.Lines = append(l.Lines, currentLine)
 				currentLine = ""
 			}
 
@@ -161,7 +161,7 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 				if end > len(runes) {
 					end = len(runes)
 				}
-				l.lines = append(l.lines, string(runes[i:end]))
+				l.Lines = append(l.Lines, string(runes[i:end]))
 			}
 			continue
 		}
@@ -177,61 +177,60 @@ func (l *List) splitTextIntoLines(text string, maxWidth int) []string {
 			currentLine += word
 		} else {
 			if len(currentLine) > 0 {
-				l.lines = append(l.lines, currentLine)
+				l.Lines = append(l.Lines, currentLine)
 			}
 			currentLine = word
 		}
 	}
 
 	if len(currentLine) > 0 {
-		l.lines = append(l.lines, currentLine)
+		l.Lines = append(l.Lines, currentLine)
 	}
 
-	return l.lines
+	return l.Lines
+}
+func (l *List) InputHandlerRaw(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+	if l.Current == nil && l.Items.Len() > 0 {
+		l.Current = l.Items.GetBack()
+	}
+	if l.Logger != nil {
+		i1 := int16(event.Key())
+		if i1 == 256 { // rune
+			l.Logger.Println("Run:", event.Rune())
+		} else { // key
+			l.Logger.Println("Key:", tcell.Key(i1))
+		}
+	}
+	switch event.Key() {
+	case tcell.KeyUp:
+		if l.Current != nil && !l.Current.IsNil() && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
+			if l.Current == l.getFirstVisibleElement() {
+				l.Offset--
+			}
+			l.Current = l.Current.Prev()
+		}
+	case tcell.KeyDown:
+		if l.Current != nil && !l.Current.IsNil() && l.Current.Next() != nil && !l.Current.Next().IsNil() {
+			if l.isLastVisibleElement(l.Current) {
+				l.Offset++
+			}
+			l.Current = l.Current.Next()
+		}
+	case tcell.KeyEnter:
+		if l.Option != nil {
+			l.Option(l.Current)
+		}
+	}
+	return
 }
 
 func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-	return l.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+	return l.InputHandlerRaw
 
-		if l.Current == nil && l.Items.Len() > 0 {
-			l.Current = l.Items.GetBack()
-		}
-
-		if l.Logger != nil {
-			i1 := int16(event.Key())
-			if i1 == 256 { // rune
-				l.Logger.Println("Rune:", event.Rune())
-			} else { // key
-				l.Logger.Println("Key:", tcell.Key(i1))
-			}
-		}
-		switch event.Key() {
-		case tcell.KeyUp:
-			if l.Current != nil && !l.Current.IsNil() && l.Current.Prev() != nil && !l.Current.Prev().IsNil() {
-				if l.Current == l.getFirstVisibleElement() {
-					l.offset--
-				}
-				l.Current = l.Current.Prev()
-			}
-		case tcell.KeyDown:
-			if l.Current != nil && !l.Current.IsNil() && l.Current.Next() != nil && !l.Current.Next().IsNil() {
-				if l.isLastVisibleElement(l.Current) {
-					l.offset++
-				}
-				l.Current = l.Current.Next()
-			}
-		case tcell.KeyEnter:
-			if l.Option != nil {
-				l.Option(l.Current)
-			}
-		}
-
-		return
-	})
 }
 func (l *List) getFirstVisibleElement() ListItem {
 	element := l.Items.GetBack()
-	for i := 0; i < l.offset && element != nil && !element.IsNil(); i++ {
+	for i := 0; i < l.Offset && element != nil && !element.IsNil(); i++ {
 		element = element.Next()
 	}
 	return element
