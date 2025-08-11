@@ -22,10 +22,6 @@ func main() {
 		bufstr.WriteString(token)
 		break
 	}
-	wsstr := "ws"
-	if os.Getenv("SSL_ENABLE") == "true" {
-		wsstr = "wss"
-	}
 	apphost := os.Getenv("APP_HOST")
 	if len(apphost) == 0 {
 		apphost = "localhost"
@@ -38,12 +34,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	f, err := os.OpenFile(dir+"/logs/logs", os.O_RDWR|os.O_CREATE, 0644)
+	logs, err := os.OpenFile(dir+"/logs/logs", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		panic(err)
 	}
-	wsUrl := wsstr + "://" + apphost + ":" + appport + "/connect"
-	chat := app.NewChat(bufstr.String(), wsUrl, 20, true, log.New(f, bufstr.String()+" ", 0))
+	testlogs, err := os.OpenFile(dir+"/logs/testlogs", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	// wsUrl := "ws://" + apphost + ":" + appport + "/connect"
+	wsUrl := "ws://" + "localhost" + ":" + "80" + "/connect"
+	chat := app.NewChat(bufstr.String(), wsUrl, 20, true, false, log.New(logs, bufstr.String()+" ", 0), log.New(testlogs, bufstr.String()+" ", 0))
 	errch := chat.TryConnect()
 	recnct := 0
 	go chat.ProcessEvents()

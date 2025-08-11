@@ -1,6 +1,4 @@
 {
-  description = "A Nix-flake-based Go 1.22 development environment";
-
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.*.tar.gz";
 
   outputs = { self, nixpkgs }:
@@ -22,16 +20,17 @@
 
       devShells = forEachSupportedSystem ({ pkgs }: {
         default = pkgs.mkShell {
+          hardeningDisable = [ "all" ];
           packages = with pkgs; [
             # go (version is specified by overlay)
             go
             postgresql
             docker
             delve
+            gdlv
             # goimports, godoc, etc.
             gotools
             gopls
-            # https://github.com/golangci/golangci-lint
             golangci-lint
           ];
         };

@@ -5,7 +5,7 @@ import (
 	"github.com/retinotopic/GoChat/app/list"
 )
 
-func MultOption(item list.ListItem) {
+func (c *Chat) MultOption(item list.ListItem) {
 	if item == nil {
 		return
 	}
@@ -18,10 +18,11 @@ func MultOption(item list.ListItem) {
 	}
 }
 
-func OneOption(item list.ListItem) {
+func (c *Chat) OneOption(item list.ListItem) {
 	if item == nil {
 		return
 	}
+
 	item.SetColor(tcell.ColorRed, 0)
 	bi := item
 	fi := item

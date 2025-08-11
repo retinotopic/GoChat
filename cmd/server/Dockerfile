@@ -1,27 +1,34 @@
-FROM golang:1.24.2-alpine3.21 AS builder
-RUN apk add --no-cache git
+# FROM golang:1.24.3-alpine3.21 AS builder
+# RUN apk add --no-cache git
 
+# RUN go mod tidy
+# RUN go mod download
+# RUN CGO_ENABLED=0 GOOS=linux go build -o /main main.go
+
+FROM nixos/nix:latest AS builder
 WORKDIR /build
 COPY --from=cmd_server . .
 COPY go.mod go.sum .
-COPY /server ./server/
-RUN go mod tidy
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o /main main.go
+COPY /server ./server
 
-FROM alpine/mkcert@sha256:a8f4f5af61908b4c79c2e9d1e5f23e747f29de174649209ebafcab03d4f6d5fd AS certs
-RUN mkcert -install && \
-    mkcert -key-file key.pem -cert-file cert.pem 0.0.0.0 localhost backend 127.0.0.1 ::1
+RUN nix \
+    --extra-experimental-features "nix-command flakes" \
+    --option filter-syscalls false \
+    build
+RUN mkdir /tmp/nix-store-closure
+RUN cp -R $(nix-store -qR result/) /tmp/nix-store-closure
+
+
 
 FROM alpine:3.21
-
-RUN apk add --no-cache ca-certificates
-COPY --from=certs /key.pem /etc/ssl/private/
-COPY --from=certs /cert.pem /etc/ssl/certs/
-COPY --from=certs /root/.local/share/mkcert/rootCA.pem /usr/local/share/ca-certificates/mkcert-ca.crt
-RUN update-ca-certificates
-
+WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=builder /build/server/db/postgres/migrations /bin/maindir/migrations
-COPY --from=builder main /bin/maindir
+COPY --from=builder /tmp/nix-store-closure /nix/store
+COPY --from=builder /build/result/ /app
+# RUN echo $(ls -a /app)
+# RUN echo $(ls -a /app/bin)
+
+# COPY --from=builder main /bin/maindir
 # COPY --from=certs /key.pem /cert.pem /bin/maindir
-ENTRYPOINT ["/bin/maindir/main"]
+ENTRYPOINT ["/app/bin/GoChat"]

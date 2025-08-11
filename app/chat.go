@@ -1,13 +1,16 @@
 package app
 
 import (
+	"hash"
 	"log"
+	"sync"
 
 	json "github.com/bytedance/sonic"
-
 	// "log"
+	"crypto/hmac"
+	"crypto/sha256"
 	"strconv"
-	"sync/atomic"
+
 	"time"
 
 	"github.com/coder/websocket"
@@ -52,32 +55,42 @@ type Chat struct {
 	MaxMsgsOnPage int
 
 	RoomMsgs map[uint64]*RoomInfo // room id to room
-	EventMap map[list.Content]Event
+	EventMap map[list.Content]EventExecer
 	DuoUsers map[uint64]User
 
 	Lists [10]*list.List /* sidebar[0],rooms[1],menu[2]
 	input[3],Events[4],FoundUsers[5],DuoUsers[6]
 	BlockedUsers[7],RoomUsers[8],Boolean[9]*/
 
-	CurrentRoom *RoomInfo // current selected Room
-	CurrentText string    // current text for user search || set room name || message
-
+	CurrentRoom   *RoomInfo // current selected Room
 	NavState      int
 	IsInputActive bool
 	UserBuf       []User
 
-	keyIdent        string
-	url             string
-	InProgressCount atomic.Int32
-	Logger          *log.Logger
-	errch           chan error
-	SendEventCh     chan EventInfo
+	keyIdent    string
+	url         string
+	Logger      *log.Logger
+	errch       chan error
+	SendEventCh chan EventInfo
+
+	IsDebug     bool
+	WaitForTest bool
+	Checksums   []string
+	TestCh      chan struct{}
+	Mtx         sync.Mutex
+	TestLogger  *log.Logger
+	Hash        hash.Hash
 }
 
-func NewChat(keyIdent, url string, maxMsgsOnPage int, debug bool, logger *log.Logger) (chat *Chat) {
-	c := &Chat{Logger: logger, url: url, keyIdent: keyIdent}
+func NewChat(keyIdent, url string, maxMsgsOnPage int, debug bool, wft bool,
+	logger *log.Logger, testlogger *log.Logger) (chat *Chat) {
+
+	c := &Chat{Logger: logger, TestLogger: testlogger,
+		url: url, keyIdent: keyIdent, IsDebug: debug, WaitForTest: wft}
+	c.App = tview.NewApplication()
+	c.Hash = hmac.New(sha256.New, []byte(DebugKey))
 	c.MaxMsgsOnPage = maxMsgsOnPage
-	c.ParseAndInitUI()
+	c.InitEvents()
 	return c
 }
 
@@ -90,7 +103,11 @@ func (c *Chat) TryConnect() <-chan error {
 func (c *Chat) ProcessEvents() {
 	c.Logger.Println("Event", "App started")
 	go func() {
-		err := c.App.SetRoot(c.MainFlex, true).Run()
+		c.App.SetRoot(c.MainFlex, true)
+		if c.WaitForTest {
+			return
+		}
+		err := c.App.Run()
 		if err != nil {
 			c.Conn.CloseNow()
 		}
@@ -102,16 +119,8 @@ func (c *Chat) ProcessEvents() {
 			if err != nil {
 				c.Logger.Println("Event", err, "process events marshal")
 				continue
-
-			} else if c.InProgressCount.Load() < 15 {
-				c.InProgressCount.Add(1)
-				go func() {
-					err := WriteTimeout(time.Second*15, c.Conn, b)
-					if err != nil {
-						c.InProgressCount.Add(-1)
-					}
-				}()
 			}
+			go WriteTimeout(time.Second*15, c.Conn, b)
 		case <-c.errch:
 			return
 		}
@@ -150,11 +159,10 @@ func (c *Chat) LoadMessagesEvent(msgsv []Message) {
 		)
 
 		ll.MoveToBack(nextpgn)
-		l := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdBack), c.Logger)
+		l := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdBack), c.TestLogger)
 		rm.Messages[rm.MsgPageIdBack] = l
 		rm.MsgPageIdBack--
 	}
-
 }
 
 func (c *Chat) NewMessageEvent(msg Message) {
@@ -182,7 +190,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				)
 				ll.MoveToBack(prevpgn)
 
-				lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+				lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.TestLogger)
 				rm.Messages[rm.MsgPageIdFront] = lst
 
 			} else {
@@ -208,7 +216,7 @@ func (c *Chat) NewMessageEvent(msg Message) {
 				strconv.Itoa(rm.MsgPageIdFront),
 			)
 			ll.MoveToBack(prevpgn)
-			lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+			lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.TestLogger)
 			rm.Messages[rm.MsgPageIdFront] = lst
 		}
 	}
@@ -218,21 +226,20 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 	for _, rmsv := range rmsvs {
 		rm, ok := c.RoomMsgs[rmsv.RoomId]
 		if ok {
-			c.Logger.Println("Event", rm.RoomId)
-			rm.RoomName = rmsv.RoomName
-			isKicked := false
+			c.Logger.Println("Event NEWIX", rm.RoomId, "lenusers: ", len(rmsv.Users), "roomname: ", rmsv.RoomName)
+			if len(rmsv.RoomName) != 0 && len(rmsv.Users) == 0 {
+				rm.RoomName = rmsv.RoomName
+				rm.RoomItem.SetMainText(rm.RoomName, 0)
+				continue
+			}
+
+			isKicked := true
+			clear(rm.Users)
 			for _, u := range rmsv.Users {
-				if u.RoomToggle {
-					if !rm.IsGroup {
-						delete(c.DuoUsers, u.UserId)
-					}
-					if u.UserId == c.UserId {
-						isKicked = true
-					}
-					delete(rm.Users, u.UserId)
-				} else {
-					rm.Users[u.UserId] = u
+				if u.UserId == c.UserId {
+					isKicked = false
 				}
+				rm.Users[u.UserId] = u
 			}
 			if isKicked {
 				c.Logger.Println("Event", rm == nil, rm.RoomItem == nil, rm.RoomItem.GetMainText())
@@ -249,7 +256,10 @@ func (c *Chat) ProcessRoom(rmsvs []RoomServer) {
 }
 
 func (c *Chat) AddRoom(rmsv RoomServer) {
-
+	if len(rmsv.Users) == 0 {
+		return
+	}
+	c.Logger.Println("Room Name: ", rmsv.RoomName)
 	c.RoomMsgs[rmsv.RoomId] = &RoomInfo{Users: make(map[uint64]User),
 		Messages: make(map[int]*list.List), RoomName: rmsv.RoomName,
 		RoomId: rmsv.RoomId, IsGroup: rmsv.IsGroup}
@@ -257,7 +267,6 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 	rm := c.RoomMsgs[rmsv.RoomId]
 	//fill room with users
 	for _, u := range rmsv.Users {
-		c.Logger.Println("Event", "username: ", u.Username)
 		rm.Users[u.UserId] = u
 		c.Logger.Println("Event", rmsv.RoomId, " roomid ", " user ", u.Username, u.UserId)
 		if u.UserId != c.UserId && !rmsv.IsGroup {
@@ -266,7 +275,7 @@ func (c *Chat) AddRoom(rmsv RoomServer) {
 	}
 
 	ll := list.NewArrayList(c.MaxMsgsOnPage)
-	lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.Logger)
+	lst := list.NewList(ll, c.OptionPagination, strconv.Itoa(rm.MsgPageIdFront), c.TestLogger)
 	rm.Messages[0] = lst
 	rm.MsgPageIdBack--
 

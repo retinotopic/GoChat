@@ -13,30 +13,38 @@ import (
 type router struct {
 	Addr string
 	Auth middleware.Fetcher
-	pb   pubsub.Publisher
 	db   pubsub.Databaser
 	log  logger.Logger
 }
 
-func NewRouter(addr string, au middleware.Fetcher, pb pubsub.Publisher, db pubsub.Databaser, lg logger.Logger) *router {
-	return &router{Addr: addr, Auth: au, pb: pb, db: db, log: lg}
+func (rt *router) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
-func (r *router) Run(ctx context.Context) error {
 
-	middleware := middleware.UserMiddleware{Fetcher: r.Auth}
+func NewRouter(addr string, au middleware.Fetcher, db pubsub.Databaser, lg logger.Logger) *router {
+	return &router{Addr: addr, Auth: au, db: db, log: lg}
+}
+
+func (rt *router) Run(ctx context.Context) error {
+
+	middleware := middleware.UserMiddleware{Fetcher: rt.Auth}
 	mux := http.NewServeMux()
 	pubsub := pubsub.PubSub{
-		Db:  r.db,
-		Pb:  r.pb,
-		Log: r.log,
+		Db:  rt.db,
+		Log: rt.log,
 	}
+	pubsub.InitPS(5000)
+
 	connect := http.HandlerFunc(pubsub.Connect)
 
 	mux.Handle("/connect", middleware.GetUserMW(connect))
+	mux.HandleFunc("/health", rt.HealthCheckHandler)
+
 	switch os.Getenv("SSL_ENABLE") {
 	case "true":
-		return http.ListenAndServeTLS(r.Addr, "/etc/ssl/certs/cert.pem", "/etc/ssl/private/key.pem", mux)
+		return http.ListenAndServeTLS(rt.Addr, "/etc/ssl/certs/cert.pem", "/etc/ssl/private/key.pem", mux)
 	default:
-		return http.ListenAndServe(r.Addr, mux)
+		return http.ListenAndServe(rt.Addr, mux)
 	}
 }

@@ -18,7 +18,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 	if len(m.MessagePayload) == 0 || m.RoomId == 0 {
 		return errors.New("malformed json")
 	}
-	if err := tx.QueryRow(ctx, `SELECT 1 FROM room_users_info WHERE room_id = $1 AND user_id = $2`, m.RoomId, event.UserId).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM room_users_info WHERE room_id = $1 AND user_id = $2 FOR UPDATE`, m.RoomId, event.UserId).Scan(new(int)); err != nil {
 		err = errors.New("you have no permission to send messages to this room")
 		return err
 	}
@@ -34,8 +34,7 @@ func SendMessage(ctx context.Context, tx pgx.Tx, event *models.EventMetadata) er
 		return err
 	}
 	event.OrderCmd[0] = 1
-	event.OrderCmd[1] = -1
-	event.PublishChs = []string{"room" + strconv.Itoa(int(m.RoomId))}
+	event.PublishChs = []string{strconv.Itoa(int(m.RoomId))}
 	return err
 }
 

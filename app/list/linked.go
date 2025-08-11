@@ -93,6 +93,9 @@ func (l *LinkedList) Clear() {
 	l.root.prev = &l.root
 	l.stack = l.stack[:0]
 	for i := range l.items {
+		if l.items[i].MainTextBuf != nil {
+			l.items[i].MainTextBuf.Reset()
+		}
 		l.items[i].next = nil
 		l.items[i].prev = nil
 		l.stack = append(l.stack, i)
@@ -162,7 +165,7 @@ func (l *LinkedItem) SetMainText(str string, mode uint8) {
 	case 2:
 		if l.MainTextBuf != nil {
 			_, size := utf8.DecodeLastRuneInString(l.MainTextBuf.String())
-			l.MainTextBuf.Truncate(len(l.MainTextBuf.String()) - size)
+			l.MainTextBuf.Truncate(l.MainTextBuf.Len() - size)
 		}
 	}
 }
